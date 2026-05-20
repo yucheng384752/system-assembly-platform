@@ -1,0 +1,24 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:51:28",
+    "sourcePlan":  "assembly\\db-plan\\db-assembly-plan.json",
+    "engine":  "postgresql",
+    "connectionOwner":  "platform-core-kit",
+    "envVars":  {
+                    "DATABASE_URL":  "required"
+                },
+    "migrations":  [
+                       "backend/alembic"
+                   ],
+    "scripts":  {
+                    "bootstrapModule":  "backend\\app\\core\\generated_db_bootstrap.py",
+                    "checkScript":  "scripts\\check-db.ps1",
+                    "migrateScript":  "scripts\\migrate.ps1"
+                },
+    "behavior":  [
+                     "Import available backend model modules.",
+                     "Use Alembic when backend\\alembic.ini exists.",
+                     "Use SQLAlchemy metadata create_all when Alembic is not present.",
+                     "Run scripts\\check-db.ps1 without -Connect for structural validation.",
+                     "Run scripts\\check-db.ps1 -Connect to verify an actual database connection."
+                 ]
+}

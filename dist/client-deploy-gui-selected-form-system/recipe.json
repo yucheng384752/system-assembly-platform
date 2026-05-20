@@ -1,0 +1,40 @@
+{
+  "recipeVersion": "0.2.0",
+  "name": "gui-selected-form-system",
+  "sourceManifest": "kits/form-analysis.kit-manifest.json",
+  "selectedFlows": [],
+  "enabledKits": [
+    "platform-core-kit",
+    "tenant-auth-kit",
+    "station-data-link-kit",
+    "upload-validation-kit",
+    "import-pipeline-kit",
+    "query-traceability-kit",
+    "analytics-kit",
+    "station-admin-kit",
+    "audit-edit-kit",
+    "logs-ops-kit",
+    "mod-subscription-kit"
+  ],
+  "selectedSubfeatures": {
+    "platform-core-kit": [],
+    "tenant-auth-kit": [],
+    "station-data-link-kit": [],
+    "upload-validation-kit": [],
+    "import-pipeline-kit": [],
+    "query-traceability-kit": [],
+    "analytics-kit": [],
+    "station-admin-kit": [],
+    "audit-edit-kit": [],
+    "logs-ops-kit": [],
+    "mod-subscription-kit": []
+  },
+  "selectedSubfeatureOptions": {},
+  "tableSchemas": [],
+  "featureFlags": {},
+  "database": {
+    "engine": "postgresql",
+    "connectionOwner": "platform-core-kit",
+    "autoGenerateConnection": true
+  }
+}
