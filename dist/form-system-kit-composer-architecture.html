@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Form System Kit Composer 架構圖</title>
+<style>
+  @import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+TC:wght@400;500;700&display=swap");
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --page-bg:#111827;
+    --page-bg-2:#172033;
+    --page-accent:#7ec8ff;
+    --page-accent-2:#3dd6c8;
+  }
+  body[data-theme="cyan"]{
+    --page-bg:#0f3a4a;
+    --page-bg-2:#0b4b5a;
+    --page-accent:#7df0e8;
+    --page-accent-2:#7ec8ff;
+  }
+  body{
+    min-height:100vh;
+    padding:28px 16px 54px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    background:
+      radial-gradient(circle at 18% 0%, color-mix(in srgb, var(--page-accent) 16%, transparent) 0, transparent 28%),
+      linear-gradient(135deg,var(--page-bg) 0%,var(--page-bg-2) 100%);
+    color:#fff;
+    font-family:"Noto Sans TC","Microsoft JhengHei",sans-serif;
+    transition:background .25s ease;
+  }
+  h1{
+    margin-bottom:6px;
+    font-size:23px;
+    font-weight:700;
+    text-align:center;
+    text-shadow:0 2px 8px rgba(0,0,0,.42);
+  }
+  .sub{
+    margin-bottom:20px;
+    color:rgba(255,255,255,.72);
+    font-family:"JetBrains Mono",monospace;
+    font-size:11px;
+    text-align:center;
+  }
+  .legend{
+    width:min(1380px,100%);
+    margin-bottom:20px;
+    display:flex;
+    flex-wrap:wrap;
+    gap:14px;
+    justify-content:center;
+  }
+  .li{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    color:rgba(255,255,255,.84);
+    font-family:"JetBrains Mono","Microsoft JhengHei",monospace;
+    font-size:10.5px;
+  }
+  .ld{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+  svg{
+    width:min(1380px,100%);
+    height:auto;
+    display:block;
+    border-radius:14px;
+    box-shadow:0 8px 40px rgba(0,0,0,.36);
+  }
+  .desc{
+    width:min(1380px,100%);
+    margin-top:24px;
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(310px,1fr));
+    gap:14px;
+  }
+  .desc-card{
+    padding:16px 18px;
+    border:1px solid rgba(255,255,255,.12);
+    border-radius:10px;
+    background:rgba(0,0,0,.25);
+  }
+  .desc-card h3{
+    margin-bottom:10px;
+    color:rgba(255,255,255,.58);
+    font-family:"JetBrains Mono","Microsoft JhengHei",monospace;
+    font-size:11px;
+    letter-spacing:.1em;
+    text-transform:uppercase;
+  }
+  .desc-card ul{
+    display:flex;
+    flex-direction:column;
+    gap:6px;
+    list-style:none;
+  }
+  .desc-card li{
+    position:relative;
+    padding-left:11px;
+    color:rgba(255,255,255,.86);
+    font-family:"JetBrains Mono","Microsoft JhengHei",monospace;
+    font-size:10.5px;
+    line-height:1.6;
+  }
+  .desc-card li::before{
+    content:"·";
+    position:absolute;
+    left:0;
+    color:rgba(255,255,255,.42);
+  }
+  .tag{
+    display:inline-block;
+    margin-right:5px;
+    padding:1px 5px;
+    border-radius:3px;
+    font-size:9.5px;
+  }
+  .tag-blue{background:rgba(74,158,255,.2);color:#7ec8ff}
+  .tag-teal{background:rgba(61,214,200,.2);color:#7df0e8}
+  .tag-gold{background:rgba(251,191,36,.2);color:#ffd86e}
+  .tag-red{background:rgba(248,113,113,.2);color:#ffb0b0}
+  .tag-purple{background:rgba(167,139,250,.2);color:#d0bfff}
+  .tag-green{background:rgba(74,222,128,.2);color:#9fffcb}
+  .mode-switch{
+    position:fixed;
+    z-index:20;
+    right:18px;
+    top:18px;
+    display:flex;
+    gap:4px;
+    padding:5px;
+    border:1px solid rgba(255,255,255,.14);
+    border-radius:999px;
+    background:rgba(0,0,0,.38);
+    box-shadow:0 8px 24px rgba(0,0,0,.26);
+    backdrop-filter:blur(10px);
+  }
+  .mode-switch button{
+    height:30px;
+    padding:0 11px;
+    border:1px solid transparent;
+    border-radius:999px;
+    background:transparent;
+    color:rgba(255,255,255,.72);
+    font-family:"JetBrains Mono","Microsoft JhengHei",monospace;
+    font-size:10.5px;
+    cursor:pointer;
+  }
+  .mode-switch button:hover{
+    color:#fff;
+    border-color:rgba(255,255,255,.18);
+  }
+  body[data-theme="ink"] .mode-switch button[data-theme-choice="ink"],
+  body[data-theme="cyan"] .mode-switch button[data-theme-choice="cyan"]{
+    color:#06131d;
+    background:var(--page-accent);
+    border-color:rgba(255,255,255,.2);
+  }
+</style>
+</head>
+<body data-theme="ink">
+
+<div class="mode-switch" aria-label="背景模式切換">
+  <button type="button" data-theme-choice="ink">墨藍灰</button>
+  <button type="button" data-theme-choice="cyan">深青藍</button>
+</div>
+
+<h1>Form System Kit Composer 系統架構圖</h1>
+<p class="sub">GUI → Kit Manifest → Recipe Resolver → Assembly Engine → Generated System → Runtime Scripts · v1 · 2026-05-09</p>
+
+<div class="legend">
+  <div class="li"><div class="ld" style="background:#4a9eff"></div>GUI 與使用者流程</div>
+  <div class="li"><div class="ld" style="background:#3dd6c8"></div>Manifest、Schema、Recipe</div>
+  <div class="li"><div class="ld" style="background:#fbbf24"></div>Assembly Engine</div>
+  <div class="li"><div class="ld" style="background:#4ade80"></div>Generated Runtime</div>
+  <div class="li"><div class="ld" style="background:#a78bfa"></div>測試與驗證</div>
+  <div class="li"><div class="ld" style="background:#f87171"></div>訂閱授權與風險閘門</div>
+</div>
+
+<svg viewBox="0 0 1380 985" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Form System Kit Composer architecture diagram">
+<defs>
+  <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+    <path d="M40 0H0V40" fill="none" stroke="rgba(0,0,0,.12)" stroke-width="1"/>
+  </pattern>
+  <marker id="arrowBlue" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#4a9eff"/></marker>
+  <marker id="arrowTeal" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#3dd6c8"/></marker>
+  <marker id="arrowGold" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#fbbf24"/></marker>
+  <marker id="arrowGreen" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#4ade80"/></marker>
+  <marker id="arrowPurple" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#a78bfa"/></marker>
+  <marker id="arrowRed" markerWidth="7" markerHeight="7" refX="6" refY="3.5" orient="auto"><path d="M0,.5 L0,6.5 L7,3.5z" fill="#f87171"/></marker>
+  <filter id="glow"><feGaussianBlur stdDeviation="3" result="blur"/><feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+</defs>
+
+<rect width="1380" height="985" fill="#000"/>
+<rect width="1380" height="985" fill="url(#grid)"/>
+
+<rect x="16" y="20" width="402" height="210" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(74,158,255,.3)" stroke-width="1.5"/>
+<text x="34" y="39" font-family="JetBrains Mono" font-size="9.5" fill="#7ec8ff" opacity=".85" letter-spacing=".12em">使用者體驗 · 靜態 GUI</text>
+
+<rect x="446" y="20" width="472" height="360" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(61,214,200,.3)" stroke-width="1.5"/>
+<text x="464" y="39" font-family="JetBrains Mono" font-size="9.5" fill="#7df0e8" opacity=".85" letter-spacing=".12em">套件合約 · Manifest / Schema / Recipe</text>
+
+<rect x="946" y="20" width="418" height="360" rx="11" fill="rgba(0,0,0,.28)" stroke="rgba(251,191,36,.38)" stroke-width="1.5"/>
+<text x="964" y="39" font-family="JetBrains Mono" font-size="9.5" fill="#ffd86e" opacity=".9" letter-spacing=".12em">組裝引擎 · 產生計畫與註冊檔</text>
+
+<rect x="16" y="418" width="860" height="260" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(251,191,36,.3)" stroke-width="1.5"/>
+<text x="34" y="437" font-family="JetBrains Mono" font-size="9.5" fill="#ffd86e" opacity=".85" letter-spacing=".12em">來源抽碼 · 以註冊檔驅動應用程式</text>
+
+<rect x="904" y="418" width="460" height="260" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(74,222,128,.3)" stroke-width="1.5"/>
+<text x="922" y="437" font-family="JetBrains Mono" font-size="9.5" fill="#9fffcb" opacity=".85" letter-spacing=".12em">產生系統 · 可執行外殼</text>
+
+<rect x="16" y="720" width="662" height="184" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(167,139,250,.3)" stroke-width="1.5"/>
+<text x="34" y="739" font-family="JetBrains Mono" font-size="9.5" fill="#d0bfff" opacity=".85" letter-spacing=".12em">驗證 · 測試</text>
+
+<rect x="706" y="720" width="658" height="184" rx="11" fill="rgba(0,0,0,.22)" stroke="rgba(74,158,255,.25)" stroke-width="1.5"/>
+<text x="724" y="739" font-family="JetBrains Mono" font-size="9.5" fill="#7ec8ff" opacity=".85" letter-spacing=".12em">知識庫 · Obsidian Vault</text>
+
+<!-- arrows -->
+<path d="M220,205 H500 V110" fill="none" stroke="#4a9eff" stroke-width="1.8" marker-end="url(#arrowBlue)"/>
+<path d="M220,205 H500 V195" fill="none" stroke="#4a9eff" stroke-width="1.8" stroke-dasharray="4,3" marker-end="url(#arrowBlue)"/>
+<path d="M605,110 H655 V195" fill="none" stroke="#3dd6c8" stroke-width="1.8" marker-end="url(#arrowTeal)"/>
+<path d="M760,195 H1000 V110" fill="none" stroke="#3dd6c8" stroke-width="1.8" marker-end="url(#arrowTeal)"/>
+<path d="M1135,205 V260" fill="none" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#arrowGold)"/>
+<path d="M1060,330 V455" fill="none" stroke="#fbbf24" stroke-width="2" marker-end="url(#arrowGold)"/>
+<path d="M395,535 H545" fill="none" stroke="#fbbf24" stroke-width="1.8" marker-end="url(#arrowGold)"/>
+<path d="M695,535 H935" fill="none" stroke="#fbbf24" stroke-width="2.1" marker-end="url(#arrowGold)" filter="url(#glow)"/>
+<path d="M1035,580 V620" fill="none" stroke="#4ade80" stroke-width="1.8" marker-end="url(#arrowGreen)"/>
+<path d="M1185,580 V620" fill="none" stroke="#4ade80" stroke-width="1.8" marker-end="url(#arrowGreen)"/>
+<path d="M1265,505 H1320 V760 H1185" fill="none" stroke="#f87171" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arrowRed)"/>
+<path d="M1135,678 V745 H520" fill="none" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#arrowPurple)"/>
+<path d="M1135,678 V745 H885" fill="none" stroke="#4a9eff" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arrowBlue)"/>
+<path d="M347,812 H710" fill="none" stroke="#a78bfa" stroke-width="1.8" marker-end="url(#arrowPurple)"/>
+<path d="M740,812 H946 V350" fill="none" stroke="#a78bfa" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arrowPurple)"/>
+<path d="M785,250 H1045 V260" fill="none" stroke="#f87171" stroke-width="1.8" stroke-dasharray="5,3" marker-end="url(#arrowRed)"/>
+
+<!-- user and GUI -->
+<rect x="42" y="62" width="154" height="70" rx="8" fill="#012e1c" stroke="rgba(74,158,255,.52)" stroke-width="1.5"/>
+<text x="119" y="85" text-anchor="middle" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#7ec8ff">使用者</text>
+<text x="119" y="103" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">回答架構問題</text>
+<text x="119" y="118" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#64748b">微調套件選項</text>
+
+<rect x="236" y="62" width="154" height="70" rx="8" fill="#012e1c" stroke="rgba(74,158,255,.52)" stroke-width="1.5"/>
+<text x="313" y="85" text-anchor="middle" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#7ec8ff">GUI</text>
+<text x="313" y="103" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">卡片式流程</text>
+<text x="313" y="118" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#64748b">執行狀態預覽</text>
+
+<rect x="42" y="150" width="348" height="58" rx="8" fill="#012e1c" stroke="rgba(74,158,255,.42)" stroke-width="1.5"/>
+<text x="216" y="173" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#7ec8ff">架構引導問題</text>
+<text x="216" y="191" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">先決定大方向，再進入 Kit Catalog 微調</text>
+
+<!-- contract -->
+<rect x="476" y="62" width="130" height="96" rx="8" fill="#012e1c" stroke="rgba(61,214,200,.52)" stroke-width="1.5"/>
+<text x="541" y="84" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#7df0e8">Kit Manifest</text>
+<text x="491" y="104" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">子功能</text>
+<text x="491" y="119" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">選項</text>
+<text x="491" y="134" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">訂閱授權</text>
+<text x="491" y="149" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">路由註冊</text>
+
+<rect x="646" y="62" width="130" height="96" rx="8" fill="#012e1c" stroke="rgba(61,214,200,.38)" stroke-width="1.5"/>
+<text x="711" y="84" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#7df0e8">Schema</text>
+<text x="711" y="104" text-anchor="middle" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">kit.schema.json</text>
+<text x="711" y="119" text-anchor="middle" font-family="JetBrains Mono" font-size="9.2" fill="#94a3b8">recipe.schema.json</text>
+<text x="711" y="138" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#2d5a3d">先定義合約</text>
+
+<rect x="476" y="195" width="300" height="118" rx="8" fill="#012e1c" stroke="rgba(61,214,200,.52)" stroke-width="1.5"/>
+<text x="626" y="217" text-anchor="middle" font-family="JetBrains Mono" font-size="11.5" font-weight="600" fill="#7df0e8">Recipe</text>
+<text x="492" y="238" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">啟用套件與子功能</text>
+<text x="492" y="254" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">子功能選項與資料庫建議</text>
+<text x="492" y="270" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">後續交給 Resolver 解析依賴</text>
+<rect x="492" y="282" width="268" height="17" rx="4" fill="rgba(248,113,113,.12)" stroke="rgba(248,113,113,.25)" stroke-width="1"/>
+<text x="626" y="295" text-anchor="middle" font-family="JetBrains Mono" font-size="9.2" fill="#ffb0b0">MOD 訂閱與付費功能需明確宣告</text>
+
+<!-- assembly -->
+<rect x="988" y="62" width="294" height="92" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.52)" stroke-width="1.5"/>
+<text x="1135" y="85" text-anchor="middle" font-family="JetBrains Mono" font-size="12" font-weight="600" fill="#ffd86e">Resolver</text>
+<text x="1008" y="106" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">解析依賴順序與缺漏來源</text>
+<text x="1008" y="122" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">收集後端註冊與樣板來源</text>
+<text x="1008" y="138" font-family="JetBrains Mono" font-size="9" fill="#2d5a3d">resolved-plan.json</text>
+
+<rect x="988" y="260" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.42)" stroke-width="1.5"/>
+<text x="1054" y="284" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#ffd86e">後端註冊檔</text>
+<text x="1054" y="304" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">FastAPI 路由</text>
+<text x="1054" y="319" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">註冊檔驅動</text>
+
+<rect x="1140" y="260" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.42)" stroke-width="1.5"/>
+<text x="1206" y="284" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#ffd86e">前端註冊檔</text>
+<text x="1206" y="304" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">分頁與檢視</text>
+<text x="1206" y="319" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">預覽模式</text>
+
+<rect x="988" y="346" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.42)" stroke-width="1.5"/>
+<text x="1054" y="370" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#ffd86e">資料庫計畫</text>
+<text x="1054" y="390" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">資料模型</text>
+<text x="1054" y="405" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">遷移策略</text>
+
+<rect x="1140" y="346" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(248,113,113,.48)" stroke-width="1.5"/>
+<text x="1206" y="370" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#ffb0b0">授權計畫</text>
+<text x="1206" y="390" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">PDFtoCSV</text>
+<text x="1206" y="405" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">客製分析</text>
+
+<!-- extraction -->
+<rect x="46" y="470" width="158" height="88" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.48)" stroke-width="1.5"/>
+<text x="125" y="493" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#ffd86e">成熟來源系統</text>
+<text x="125" y="513" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">使用者提供程式碼</text>
+<text x="125" y="529" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">Form-analysis-server</text>
+<text x="125" y="545" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#2d5a3d">主要來源依據</text>
+
+<rect x="238" y="470" width="158" height="88" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.48)" stroke-width="1.5"/>
+<text x="317" y="493" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#ffd86e">MVP 抽碼</text>
+<text x="317" y="513" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">已複製 50 個來源</text>
+<text x="317" y="529" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">缺漏來源 0</text>
+<text x="317" y="545" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#2d5a3d">支援 dry-run</text>
+
+<rect x="545" y="470" width="150" height="88" rx="8" fill="#011a0c" stroke="rgba(251,191,36,.48)" stroke-width="1.5"/>
+<text x="620" y="493" text-anchor="middle" font-family="JetBrains Mono" font-size="11" font-weight="600" fill="#ffd86e">產生 MVP</text>
+<text x="620" y="513" text-anchor="middle" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">backend / frontend</text>
+<text x="620" y="529" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">main.py 已套用註冊檔</text>
+<text x="620" y="545" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#2d5a3d">以註冊檔驅動</text>
+
+<!-- runtime -->
+<rect x="936" y="470" width="398" height="110" rx="8" fill="#011a0c" stroke="rgba(74,222,128,.52)" stroke-width="1.5"/>
+<text x="1135" y="493" text-anchor="middle" font-family="JetBrains Mono" font-size="12" font-weight="600" fill="#9fffcb">dist/generated-system</text>
+<text x="958" y="515" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">backend / frontend / .env.example</text>
+<text x="958" y="531" font-family="JetBrains Mono" font-size="9.5" fill="#94a3b8">package-manifest.json / dependency-manifest.json</text>
+<rect x="958" y="544" width="354" height="18" rx="4" fill="rgba(74,222,128,.1)" stroke="rgba(74,222,128,.28)" stroke-width="1"/>
+<text x="1135" y="557" text-anchor="middle" font-family="JetBrains Mono" font-size="9.2" fill="#9fffcb">狀態：可執行外殼</text>
+
+<rect x="936" y="620" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(74,222,128,.42)" stroke-width="1.5"/>
+<text x="1002" y="644" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#9fffcb">install.ps1</text>
+<text x="1002" y="664" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">檢查依賴</text>
+<text x="1002" y="679" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">明確失敗訊息</text>
+
+<rect x="1084" y="620" width="132" height="74" rx="8" fill="#011a0c" stroke="rgba(74,222,128,.42)" stroke-width="1.5"/>
+<text x="1150" y="644" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#9fffcb">migrate.ps1</text>
+<text x="1150" y="664" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">有 Alembic 才遷移</text>
+<text x="1150" y="679" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">可改接啟動建表</text>
+
+<rect x="1232" y="620" width="102" height="74" rx="8" fill="#011a0c" stroke="rgba(74,222,128,.42)" stroke-width="1.5"/>
+<text x="1283" y="644" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#9fffcb">start.ps1</text>
+<text x="1283" y="664" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">FastAPI</text>
+<text x="1283" y="679" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">可選前端</text>
+
+<!-- tests -->
+<rect x="44" y="770" width="150" height="78" rx="8" fill="#011a0c" stroke="rgba(167,139,250,.5)" stroke-width="1.5"/>
+<text x="119" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#d0bfff">test-all.ps1</text>
+<text x="119" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">JSON / Schema</text>
+<text x="119" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">註冊檔 / 套件包</text>
+
+<rect x="224" y="770" width="150" height="78" rx="8" fill="#011a0c" stroke="rgba(167,139,250,.5)" stroke-width="1.5"/>
+<text x="299" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#d0bfff">GUI Smoke</text>
+<text x="299" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">靜態與瀏覽器測試</text>
+<text x="299" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">輸出截圖</text>
+
+<rect x="404" y="770" width="150" height="78" rx="8" fill="#011a0c" stroke="rgba(167,139,250,.5)" stroke-width="1.5"/>
+<text x="479" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#d0bfff">驗證工具</text>
+<text x="479" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">產生系統</text>
+<text x="479" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">套件資料夾</text>
+
+<!-- Obsidian -->
+<rect x="744" y="770" width="154" height="78" rx="8" fill="#011a0c" stroke="rgba(74,158,255,.42)" stroke-width="1.5"/>
+<text x="821" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#7ec8ff">Obsidian Vault</text>
+<text x="821" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">文件治理</text>
+<text x="821" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">雙向連結</text>
+
+<rect x="928" y="770" width="154" height="78" rx="8" fill="#011a0c" stroke="rgba(74,158,255,.42)" stroke-width="1.5"/>
+<text x="1005" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#7ec8ff">架構筆記</text>
+<text x="1005" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">嚴格 Mermaid</text>
+<text x="1005" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">HTML 架構圖</text>
+
+<rect x="1112" y="770" width="154" height="78" rx="8" fill="#011a0c" stroke="rgba(74,158,255,.42)" stroke-width="1.5"/>
+<text x="1189" y="793" text-anchor="middle" font-family="JetBrains Mono" font-size="10.5" font-weight="600" fill="#7ec8ff">Skill 規則</text>
+<text x="1189" y="813" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#94a3b8">文件進知識庫</text>
+<text x="1189" y="828" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#64748b">分類與串聯</text>
+
+<!-- labels -->
+<rect x="408" y="197" width="126" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="471" y="209" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#7ec8ff">建立選擇結果</text>
+<rect x="790" y="187" width="128" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="854" y="199" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#7df0e8">驗證並解析</text>
+<rect x="1046" y="206" width="178" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="1135" y="218" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#ffd86e">產生註冊檔與計畫</text>
+<rect x="742" y="527" width="126" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="805" y="539" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#ffd86e">組裝套件包</text>
+<rect x="1176" y="745" width="118" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="1235" y="757" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#ffb0b0">依賴缺口</text>
+<rect x="590" y="804" width="108" height="16" rx="6" fill="rgba(0,20,10,.92)"/>
+<text x="644" y="816" text-anchor="middle" font-family="JetBrains Mono" font-size="9" fill="#d0bfff">測試證據</text>
+
+<rect x="16" y="934" width="1348" height="34" rx="8" fill="rgba(0,0,0,.32)" stroke="rgba(255,255,255,.08)" stroke-width="1"/>
+<rect x="28" y="943" width="240" height="16" rx="4" fill="rgba(61,214,200,.15)" stroke="rgba(61,214,200,.28)" stroke-width="1"/>
+<text x="148" y="955" text-anchor="middle" font-family="JetBrains Mono" font-size="8.8" fill="#7df0e8">K1 · Kit 是業務能力套件</text>
+<rect x="282" y="943" width="246" height="16" rx="4" fill="rgba(251,191,36,.15)" stroke="rgba(251,191,36,.28)" stroke-width="1"/>
+<text x="405" y="955" text-anchor="middle" font-family="JetBrains Mono" font-size="8.8" fill="#ffd86e">A1 · Recipe 先解析再組裝</text>
+<rect x="542" y="943" width="292" height="16" rx="4" fill="rgba(74,222,128,.15)" stroke="rgba(74,222,128,.28)" stroke-width="1"/>
+<text x="688" y="955" text-anchor="middle" font-family="JetBrains Mono" font-size="8.8" fill="#9fffcb">R1 · Script 必須給出可行動錯誤</text>
+<rect x="848" y="943" width="244" height="16" rx="4" fill="rgba(248,113,113,.15)" stroke="rgba(248,113,113,.28)" stroke-width="1"/>
+<text x="970" y="955" text-anchor="middle" font-family="JetBrains Mono" font-size="8.8" fill="#ffb0b0">E1 · 付費與客製功能需授權</text>
+<rect x="1106" y="943" width="246" height="16" rx="4" fill="rgba(74,158,255,.15)" stroke="rgba(74,158,255,.28)" stroke-width="1"/>
+<text x="1229" y="955" text-anchor="middle" font-family="JetBrains Mono" font-size="8.8" fill="#7ec8ff">D1 · 長篇文件放入 Obsidian</text>
+</svg>
+
+<div class="desc">
+  <div class="desc-card">
+    <h3>系統主線</h3>
+    <ul>
+      <li><span class="tag tag-blue">GUI</span>使用者以卡片問題構思系統，再到 Kit Catalog 微調套件、子功能與選項。</li>
+      <li><span class="tag tag-teal">Recipe</span>前端選擇會形成 Recipe，經 Schema 驗證後交給 Resolver。</li>
+      <li><span class="tag tag-gold">Assembly</span>Resolver 產生 resolved plan，驅動後端註冊檔、前端註冊檔、資料庫計畫與授權計畫。</li>
+      <li><span class="tag tag-green">Runtime</span>assemble-system 產生 dist/generated-system，包含環境檔、manifest 與四支 runtime script。</li>
+    </ul>
+  </div>
+
+  <div class="desc-card">
+    <h3>Kit 標準化規則</h3>
+    <ul>
+      <li><span class="tag tag-teal">Manifest</span>每個 Kit 必須宣告業務能力、依賴、子功能、選項與後端路由註冊。</li>
+      <li><span class="tag tag-red">Entitlement</span>PDFtoCSV、表單分析、圖表摘要與客製驗證規則可標示為付費或客製授權。</li>
+      <li><span class="tag tag-green">80%</span>身份登入、租戶邊界、資料庫連線、註冊檔與 runtime scripts 屬於標準化底座。</li>
+      <li><span class="tag tag-gold">20%</span>客製化保留在 adapter、Kit option、subfeature 與 entitlement plan。</li>
+    </ul>
+  </div>
+
+  <div class="desc-card">
+    <h3>解壓即系統</h3>
+    <ul>
+      <li><span class="tag tag-green">check</span>check-prerequisites.ps1 會檢查後端入口、依賴清單與環境檔樣板。</li>
+      <li><span class="tag tag-green">install</span>install.ps1 會安裝依賴；若缺 requirements.txt 或 pyproject.toml，會明確停止。</li>
+      <li><span class="tag tag-green">migrate</span>migrate.ps1 找到 Alembic 時執行 migration，否則提示改用啟動建表策略。</li>
+      <li><span class="tag tag-green">start</span>start.ps1 啟動 FastAPI backend，必要時可加入 WithFrontend 啟動前端。</li>
+    </ul>
+  </div>
+
+  <div class="desc-card">
+    <h3>目前真實缺口</h3>
+    <ul>
+      <li><span class="tag tag-red">Deps</span>抽出的 MVP source 目前缺 backend/requirements.txt 或 backend/pyproject.toml。</li>
+      <li><span class="tag tag-red">Frontend</span>抽出的 frontend 目前缺 package.json，因此前端安裝與啟動還不能完整自動化。</li>
+      <li><span class="tag tag-purple">Next</span>下一步應補 dependency manifest 產生或匯入，再推進 migration/bootstrap。</li>
+    </ul>
+  </div>
+
+  <div class="desc-card">
+    <h3>驗證鏈</h3>
+    <ul>
+      <li><span class="tag tag-purple">test-all</span>涵蓋 JSON、Recipe、Resolver、註冊檔、資料庫計畫、授權計畫、MVP 抽碼與套件驗證。</li>
+      <li><span class="tag tag-purple">GUI</span>browser smoke 會打開 HTML、切換 runtime、preview、generate view，並輸出截圖。</li>
+      <li><span class="tag tag-purple">Package</span>package-system 會帶走工具、Schema、assembly、templates 與 generated source snapshot。</li>
+    </ul>
+  </div>
+
+  <div class="desc-card">
+    <h3>文件治理</h3>
+    <ul>
+      <li><span class="tag tag-blue">Obsidian</span>長篇說明、架構圖、交接紀錄與流程推演統一整理到桌面的 Obsidian vault。</li>
+      <li><span class="tag tag-blue">Wiki</span>新增筆記至少要連回分類主題與相關概念，維持雙向連結。</li>
+      <li><span class="tag tag-teal">Repo</span>repo 內只保留工具、Schema、測試與 package 所需的短版文件。</li>
+    </ul>
+  </div>
+</div>
+
+<script>
+  const savedTheme = localStorage.getItem("fskc-architecture-theme");
+  if (savedTheme === "ink" || savedTheme === "cyan") {
+    document.body.dataset.theme = savedTheme;
+  }
+  document.querySelectorAll("[data-theme-choice]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.body.dataset.theme = button.dataset.themeChoice;
+      localStorage.setItem("fskc-architecture-theme", button.dataset.themeChoice);
+    });
+  });
+</script>
+</body>
+</html>

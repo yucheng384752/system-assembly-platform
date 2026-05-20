@@ -1,0 +1,76 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:49:05",
+    "sourceRecipe":  "form-analysis-original-recomposition",
+    "identityProvider":  "tenant-auth-kit",
+    "checks":  [
+                   {
+                       "kit":  "upload-validation-kit",
+                       "subfeature":  "pdf-to-csv-binding",
+                       "featureKey":  "pdf_to_csv",
+                       "requiredPlan":  "pro",
+                       "description":  "PDF to CSV conversion is a paid/customized capability.",
+                       "backendCheck":  "require_entitlement(\u0027pdf_to_csv\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027pdf_to_csv\u0027)"
+                   },
+                   {
+                       "kit":  "upload-validation-kit",
+                       "subfeature":  "converted-result-ingest-upload-job",
+                       "featureKey":  "pdf_to_csv_ingest",
+                       "requiredPlan":  "pro",
+                       "description":  "Ingesting converted PDF results requires the PDF conversion entitlement.",
+                       "backendCheck":  "require_entitlement(\u0027pdf_to_csv_ingest\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027pdf_to_csv_ingest\u0027)"
+                   },
+                   {
+                       "kit":  "analytics-kit",
+                       "subfeature":  "realtime-analysis",
+                       "featureKey":  "realtime_analysis",
+                       "requiredPlan":  "pro",
+                       "description":  "Realtime form analysis is a paid analytics capability.",
+                       "backendCheck":  "require_entitlement(\u0027realtime_analysis\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027realtime_analysis\u0027)"
+                   },
+                   {
+                       "kit":  "analytics-kit",
+                       "subfeature":  "complaint-analysis",
+                       "featureKey":  "complaint_analysis",
+                       "requiredPlan":  "enterprise",
+                       "description":  "Complaint analysis is usually customized per customer.",
+                       "backendCheck":  "require_entitlement(\u0027complaint_analysis\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027complaint_analysis\u0027)"
+                   },
+                   {
+                       "kit":  "analytics-kit",
+                       "subfeature":  "chart-summary",
+                       "featureKey":  "advanced_chart_summary",
+                       "requiredPlan":  "pro",
+                       "description":  "Advanced chart rendering options require a paid plan.",
+                       "backendCheck":  "require_entitlement(\u0027advanced_chart_summary\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027advanced_chart_summary\u0027)"
+                   },
+                   {
+                       "kit":  "station-admin-kit",
+                       "subfeature":  "validation-rules",
+                       "featureKey":  "custom_validation_rules",
+                       "requiredPlan":  "enterprise",
+                       "description":  "Custom validation rule management is an enterprise capability.",
+                       "backendCheck":  "require_entitlement(\u0027custom_validation_rules\u0027)",
+                       "frontendCheck":  "useEntitlement(\u0027custom_validation_rules\u0027)"
+                   }
+               ],
+    "planMatrix":  {
+                       "free":  [
+
+                                ],
+                       "pro":  [
+                                   "pdf_to_csv",
+                                   "pdf_to_csv_ingest",
+                                   "realtime_analysis",
+                                   "advanced_chart_summary"
+                               ],
+                       "enterprise":  [
+                                          "complaint_analysis",
+                                          "custom_validation_rules"
+                                      ]
+                   }
+}

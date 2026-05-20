@@ -1,0 +1,22 @@
+﻿{
+    "generatedAt":  "2026-05-08T17:42:57",
+    "packageName":  "form-system-generated-package.zip",
+    "purpose":  "Form System Kit Composer generated package",
+    "includedPaths":  [
+                          "README.md",
+                          "TODO.md",
+                          "HANDOFF.md",
+                          "kits\\form-analysis.kit-manifest.json",
+                          "schemas\\kit.schema.json",
+                          "assembly\\form-analysis-original.recipe.json",
+                          "assembly\\mvp-import-flow.recipe.json",
+                          "assembly\\resolved-plan.json",
+                          "assembly\\mvp-resolved-plan.json",
+                          "docs\\product-requirements.zh-TW.md",
+                          "docs\\gui-production-spec.md",
+                          "docs\\kit-expansion-strategy.md",
+                          "docs\\decomposition-process.md",
+                          "docs\\system-decomposition.md",
+                          "generated\\mvp-import-flow"
+                      ]
+}

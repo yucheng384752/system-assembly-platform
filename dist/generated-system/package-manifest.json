@@ -1,0 +1,37 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:51:28",
+    "sourceRecipe":  "mvp-import-flow",
+    "resolvedKitOrder":  [
+                             "platform-core-kit",
+                             "tenant-auth-kit",
+                             "station-data-link-kit",
+                             "upload-validation-kit",
+                             "import-pipeline-kit"
+                         ],
+    "database":  {
+                     "selectedByUserIntent":  {
+                                                  "usageScale":  "team",
+                                                  "dataCriticality":  "production",
+                                                  "needsTenantIsolation":  true,
+                                                  "needsAnalytics":  false,
+                                                  "needsBackgroundJobs":  true
+                                              },
+                     "engine":  "postgresql",
+                     "reasonForNonTechnicalUser":  "MVP 需要租戶隔離、檔案上傳、匯入工作與正式資料表，因此建議使用 PostgreSQL。"
+                 },
+    "scripts":  [
+                    "scripts\\check-prerequisites.ps1",
+                    "scripts\\check-db.ps1",
+                    "scripts\\install.ps1",
+                    "scripts\\migrate.ps1",
+                    "scripts\\smoke-start.ps1",
+                    "scripts\\status.ps1",
+                    "scripts\\stop.ps1",
+                    "scripts\\restart.ps1",
+                    "scripts\\start.ps1"
+                ],
+    "dependencyManifest":  "dependency-manifest.json",
+    "dependencyPlan":  "dependency-plan.json",
+    "dbBootstrapPlan":  "db-bootstrap-plan.json",
+    "status":  "runnable-envelope"
+}

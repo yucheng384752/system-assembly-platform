@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "gui",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["serve", "gui", "-l", "5174", "--no-clipboard"],
+      "port": 5174
+    }
+  ]
+}

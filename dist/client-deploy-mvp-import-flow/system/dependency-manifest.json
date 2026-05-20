@@ -1,0 +1,23 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:04:05",
+    "backend":  {
+                    "appEntry":  "backend\\app\\main.py",
+                    "requirementsTxt":  true,
+                    "pyprojectToml":  false,
+                    "alembicIni":  false,
+                    "migrationDirectory":  false,
+                    "installCommand":  "python -m pip install -r backend\\requirements.txt",
+                    "startCommand":  "python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+                },
+    "frontend":  {
+                     "sourceDirectory":  "frontend",
+                     "packageJson":  true,
+                     "installCommand":  "npm install",
+                     "startCommand":  "npm run dev"
+                 },
+    "notes":  [
+                  "Dependency files are inferred from generated backend/frontend imports when source manifests are missing.",
+                  "If backend requirements.txt or pyproject.toml is missing, install.ps1 stops with an actionable error.",
+                  "If frontend package.json is missing, frontend install/start is skipped unless -WithFrontend is requested."
+              ]
+}

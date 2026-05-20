@@ -1,0 +1,104 @@
+{
+  "recipeVersion": "0.1.0",
+  "name": "mvp-import-flow",
+  "displayName": "MVP Import Flow",
+  "description": "First extraction slice: tenant/auth -> upload/validation -> import pipeline -> production records.",
+  "sourceManifest": "../kits/form-analysis.kit-manifest.json",
+  "database": {
+    "selectedByUserIntent": {
+      "usageScale": "team",
+      "dataCriticality": "production",
+      "needsTenantIsolation": true,
+      "needsAnalytics": false,
+      "needsBackgroundJobs": true
+    },
+    "engine": "postgresql",
+    "reasonForNonTechnicalUser": "MVP 需要租戶隔離、檔案上傳、匯入工作與正式資料表，因此建議使用 PostgreSQL。"
+  },
+  "enabledKits": [
+    "platform-core-kit",
+    "tenant-auth-kit",
+    "station-data-link-kit",
+    "upload-validation-kit",
+    "import-pipeline-kit"
+  ],
+  "featureFlags": {
+    "MULTI_TENANT_ENABLED": true,
+    "AUTH_MODE": "api_key",
+    "AUDIT_EVENTS_ENABLED": false,
+    "USE_GENERIC_SCHEMA": false,
+    "PDF_SERVER_URL": "required"
+  },
+  "frontendNavigation": [
+    {
+      "tab": "register",
+      "labelKey": "tabs.register",
+      "kit": "tenant-auth-kit"
+    },
+    {
+      "tab": "upload",
+      "labelKey": "tabs.upload",
+      "kit": "upload-validation-kit"
+    }
+  ],
+  "previewScenarios": [
+    {
+      "id": "mvp-upload-import",
+      "label": "MVP 上傳到匯入",
+      "kits": [
+        "tenant-auth-kit",
+        "upload-validation-kit",
+        "import-pipeline-kit",
+        "station-data-link-kit"
+      ],
+      "steps": [
+        "登入租戶",
+        "上傳 P1/P2/P3 CSV",
+        "顯示驗證摘要",
+        "建立 import job",
+        "commit 到正式資料表"
+      ]
+    }
+  ],
+  "selectedSubfeatures": {
+    "platform-core-kit": [
+      "app-shell",
+      "configuration-management",
+      "database-connection",
+      "health-check",
+      "api-client-foundation"
+    ],
+    "tenant-auth-kit": [
+      "tenant-list-and-create",
+      "user-login",
+      "api-key-issue",
+      "user-management",
+      "admin-unlock"
+    ],
+    "station-data-link-kit": [
+      "station-data-model",
+      "p123-compatibility-adapter",
+      "new-station-definition",
+      "lot-normalization",
+      "product-id-generation",
+      "generic-record"
+    ],
+    "upload-validation-kit": [
+      "csv-excel-upload-validation",
+      "csv-excel-error-summary",
+      "csv-content-correction",
+      "pdf-upload-option",
+      "pdf-to-csv-binding",
+      "converted-result-ingest-upload-job"
+    ],
+    "import-pipeline-kit": [
+      "create-import-job",
+      "create-import-job-from-upload-job",
+      "staging-row-validation",
+      "import-error-query",
+      "commit-production-records",
+      "cancel-import"
+    ]
+  },
+  "selectedSubfeatureOptions": {}
+}

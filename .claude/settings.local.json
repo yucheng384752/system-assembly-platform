@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(ps1|js|json|md|tsx|py\\)$\")",
+      "Bash(Get-ChildItem -Path \"c:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\" -Recurse -Depth 2)",
+      "Bash(Select-Object FullName)",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\tools\\\\test-upload-page-refactor.ps1\" 2>&1)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\tools\\\\test-all.ps1\" 2>&1)",
+      "PowerShell([Convert]::ToBase64String\\([IO.File]::ReadAllBytes\\(\"C:\\\\Users\\\\gslab\\\\Pictures\\\\logo.png\"\\)\\))",
+      "Bash(python -c ' *)",
+      "Bash(Get-Content \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\frontend\\\\src\\\\pages\\\\upload\\\\UploadPage.tsx\")",
+      "Bash(Measure-Object -Line)",
+      "PowerShell(Get-Content *)",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\generated\" -Recurse -File | Select-Object FullName | Where-Object { $_.FullName -match \"upload|import|schema|csv\" })",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gslab\\\\Desktop\\\\Form-analysis-server-specify-kit\\\\form-analysis-server\\\\backend\" -Recurse -File | Where-Object { $_.Name -match \"upload|import|schema|csv|model|validation\" } | Select-Object FullName | Sort-Object FullName)",
+      "PowerShell([System.IO.Directory]::GetDirectories\\(\"C:\\\\Users\\\\gslab\\\\Desktop\\\\Form-analysis-server-specify-kit\\\\form-analysis-server\\\\backend\"\\))",
+      "PowerShell([System.IO.Directory]::GetDirectories\\(\"C:\\\\Users\\\\gslab\\\\Desktop\\\\Form-analysis-server-specify-kit\\\\form-analysis-server\\\\backend\\\\app\"\\))",
+      "PowerShell(Split-Path *)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\tools\\\\test-dependency-files.ps1\" -ProjectRoot \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\" 2>&1)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\tools\\\\test-gui-static.ps1\" 2>&1)",
+      "PowerShell(powershell -ExecutionPolicy Bypass -File \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\tools\\\\test-all.ps1\" 2>&1 | Select-Object -Last 5)",
+      "PowerShell(Start-Process \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\gui\\\\index.html\")",
+      "Bash(start *)",
+      "Bash(node *)",
+      "PowerShell(python -m py_compile \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\generated\\\\mvp-import-flow\\\\form-analysis-server\\\\backend\\\\app\\\\main.py\" 2>&1; if \\($LASTEXITCODE -eq 0\\) { \"OK main.py\" } else { \"FAIL\" })",
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\dist\\\\generated-system\" -Recurse -Name | Where-Object { $_ -match '\\\\.\\(py|ts\\)$' } | Sort-Object)"
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.form-system-kit-composer/schemas/recipe.schema.json",
+  "title": "System Assembly Recipe",
+  "type": "object",
+  "required": [
+    "recipeVersion",
+    "name",
+    "sourceManifest",
+    "database",
+    "enabledKits"
+  ],
+  "properties": {
+    "recipeVersion": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string",
+      "pattern": "^[a-z0-9-]+$"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "sourceManifest": {
+      "type": "string"
+    },
+    "database": {
+      "type": "object",
+      "required": [
+        "engine"
+      ],
+      "properties": {
+        "selectedByUserIntent": {
+          "type": "object"
+        },
+        "engine": {
+          "type": "string",
+          "enum": [
+            "sqlite",
+            "postgresql",
+            "mysql"
+          ]
+        },
+        "reasonForNonTechnicalUser": {
+          "type": "string"
+        }
+      }
+    },
+    "enabledKits": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+$"
+      },
+      "minItems": 1,
+      "uniqueItems": true
+    },
+    "featureFlags": {
+      "type": "object"
+    },
+    "frontendNavigation": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/frontendNavigationItem"
+      },
+      "default": []
+    },
+    "assemblyOrder": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "default": []
+    },
+    "previewScenarios": {
+      "type": "array",
+      "items": {
+        "type": "object"
+      },
+      "default": []
+    },
+    "selectedSubfeatures": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "uniqueItems": true
+      },
+      "default": {}
+    },
+    "selectedSubfeatureOptions": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object"
+      },
+      "default": {}
+    }
+  },
+  "$defs": {
+    "frontendNavigationItem": {
+      "type": "object",
+      "required": [
+        "tab",
+        "labelKey",
+        "kit"
+      ],
+      "properties": {
+        "tab": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "labelKey": {
+          "type": "string"
+        },
+        "kit": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "visibleWhen": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

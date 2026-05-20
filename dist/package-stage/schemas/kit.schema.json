@@ -1,0 +1,204 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://local.form-system-kit-composer/schemas/kit.schema.json",
+  "title": "System Kit Manifest",
+  "type": "object",
+  "required": [
+    "manifestVersion",
+    "name",
+    "kits"
+  ],
+  "properties": {
+    "manifestVersion": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "displayName": {
+      "type": "string"
+    },
+    "sourceSystem": {
+      "type": "object"
+    },
+    "defaultDatabaseRecommendation": {
+      "type": "object",
+      "required": [
+        "engine",
+        "reason"
+      ],
+      "properties": {
+        "engine": {
+          "type": "string",
+          "enum": [
+            "sqlite",
+            "postgresql",
+            "mysql"
+          ]
+        },
+        "reason": {
+          "type": "string"
+        }
+      }
+    },
+    "kits": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "displayName",
+          "category",
+          "businessCapability",
+          "dependencies"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-z0-9-]+$"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "businessCapability": {
+            "type": "string"
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "optionalDependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "featureFlags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "frontend": {
+            "type": "object"
+          },
+          "backend": {
+            "type": "object"
+          },
+          "api": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "database": {
+            "type": "object"
+          },
+          "permissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "externalServices": {
+            "type": "array"
+          },
+          "preview": {
+            "type": "object",
+            "properties": {
+              "supportsRealtimePreview": {
+                "type": "boolean"
+              },
+              "previewMode": {
+                "type": "string"
+              }
+            }
+          },
+          "subfeatures": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/subfeature"
+            },
+            "default": []
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "externalServiceRequirement": {
+      "type": "object",
+      "required": [
+        "id",
+        "config"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "config": {
+          "type": "string"
+        },
+        "required": {
+          "type": "boolean"
+        }
+      }
+    },
+    "subfeature": {
+      "type": "object",
+      "required": [
+        "id",
+        "displayName",
+        "businessCapability"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "pattern": "^[a-z0-9-]+$"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "businessCapability": {
+          "type": "string"
+        },
+        "defaultSelected": {
+          "type": "boolean"
+        },
+        "required": {
+          "type": "boolean"
+        },
+        "dependencies": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "aliases": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "externalServices": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/externalServiceRequirement"
+          },
+          "default": []
+        }
+      }
+    }
+  }
+}

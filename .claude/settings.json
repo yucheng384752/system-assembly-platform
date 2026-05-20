@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem -Path \"c:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\" -Recurse -Depth 2 -ErrorAction SilentlyContinue | Where-Object {$_.PSIsContainer} | Select-Object -First 30 FullName)",
+      "PowerShell($schema = Get-Content -Raw -Path \"c:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\schemas\\\\recipe.schema.json\" | ConvertFrom-Json; $schema.required)",
+      "Bash(Get-ChildItem -Path \"C:\\\\Users\\\\gslab\\\\Desktop\\\\Form System Kit Composer Obsidian\\\\\" -Recurse -Force | Select-Object FullName | Sort-Object FullName)",
+      "PowerShell(ls -Recurse \"C:\\\\Users\\\\gslab\\\\Desktop\\\\Form System Kit Composer Obsidian\\\\\" 2>$null | % { $_.FullName })",
+      "PowerShell(ls -Recurse \"c:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\kits\\\\\" 2>$null | % { $_.FullName })"
+    ]
+  }
+}

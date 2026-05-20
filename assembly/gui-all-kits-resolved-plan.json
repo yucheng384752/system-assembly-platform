@@ -1,0 +1,448 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:42:45",
+    "recipe":  "gui-selected-form-system",
+    "sourceManifest":  "form-analysis-kit-suite",
+    "database":  {
+                     "engine":  "postgresql",
+                     "connectionOwner":  "platform-core-kit",
+                     "autoGenerateConnection":  true
+                 },
+    "resolvedKitOrder":  [
+                             "platform-core-kit",
+                             "tenant-auth-kit",
+                             "station-data-link-kit",
+                             "upload-validation-kit",
+                             "import-pipeline-kit",
+                             "query-traceability-kit",
+                             "analytics-kit",
+                             "station-admin-kit",
+                             "audit-edit-kit",
+                             "logs-ops-kit",
+                             "mod-subscription-kit"
+                         ],
+    "selectedSubfeatures":  {
+                                "platform-core-kit":  [
+
+                                                      ],
+                                "tenant-auth-kit":  [
+
+                                                    ],
+                                "station-data-link-kit":  [
+
+                                                          ],
+                                "upload-validation-kit":  [
+
+                                                          ],
+                                "import-pipeline-kit":  [
+
+                                                        ],
+                                "query-traceability-kit":  [
+
+                                                           ],
+                                "analytics-kit":  [
+
+                                                  ],
+                                "station-admin-kit":  [
+
+                                                      ],
+                                "audit-edit-kit":  [
+
+                                                   ],
+                                "logs-ops-kit":  [
+
+                                                 ],
+                                "mod-subscription-kit":  [
+
+                                                         ]
+                            },
+    "selectedSubfeatureOptions":  {
+
+                                  },
+    "missing":  [
+
+                ],
+    "enabledApis":  [
+                        "",
+                        "GET /api/auth/whoami",
+                        "POST /api/auth/login",
+                        "POST /api/auth/me/password",
+                        "GET /api/auth/users",
+                        "POST /api/auth/admin/tenant-api-keys",
+                        "GET /api/tenants",
+                        "POST /api/tenants",
+                        "POST /api/upload",
+                        "GET /api/upload/{process_id}/status",
+                        "POST /api/upload/{process_id}/validate",
+                        "PUT /api/upload/{process_id}/content",
+                        "GET /api/upload/pdf/service-status",
+                        "POST /api/upload/pdf/{process_id}/convert",
+                        "POST /api/upload/pdf/{process_id}/convert/ingest",
+                        "POST /api/v2/import/jobs",
+                        "POST /api/v2/import/jobs/from-upload-job",
+                        "GET /api/v2/import/jobs/{job_id}",
+                        "GET /api/v2/import/jobs/{job_id}/errors",
+                        "POST /api/v2/import/jobs/{job_id}/commit",
+                        "POST /api/v2/import/jobs/{job_id}/cancel",
+                        "GET /api/v2/query/lots",
+                        "POST /api/v2/query/advanced",
+                        "POST /api/v2/query/records/dynamic",
+                        "GET /api/v2/query/records/stats",
+                        "GET /api/v2/query/trace/{trace_key}",
+                        "GET /product/{product_id}",
+                        "GET /lot/{lot_no}",
+                        "GET /winder/{lot_no}/{winder_number}",
+                        "GET /api/v2/analytics/flatten/monthly",
+                        "GET /api/v2/analytics/flatten",
+                        "POST /api/v2/analytics/analyze",
+                        "GET /api/v2/analytics/artifacts",
+                        "POST /api/v2/analytics/realtime-analysis",
+                        "POST /api/v2/analytics/complaint-analysis",
+                        "POST /api/v2/analytics/extraction-analysis",
+                        "GET /api/logs/files",
+                        "GET /api/logs/view/{log_type}",
+                        "GET /api/logs/stats",
+                        "GET /api/logs/search",
+                        "DELETE /api/logs/cleanup",
+                        "GET /api/logs/download/{log_type}",
+                        "POST /api/mod/subscriptions/sync",
+                        "POST /api/mod/subscriptions/webhook",
+                        "GET /api/mod/subscriptions/{external_subscription_id}",
+                        "GET /api/mod/subscriptions/{external_subscription_id}/entitlements"
+                    ],
+    "requiredModels":  [
+                           "Tenant",
+                           "TenantUser",
+                           "TenantApiKey",
+                           "P1Record",
+                           "P2Record",
+                           "P2ItemV2",
+                           "P3Record",
+                           "P3ItemV2",
+                           "GenericRecord",
+                           "GenericRecordItem",
+                           "UploadJob",
+                           "UploadError",
+                           "PdfUpload",
+                           "PdfConversionJob",
+                           "ImportJob",
+                           "ImportFile",
+                           "StagingRow",
+                           "TableRegistry",
+                           "SchemaVersion",
+                           "Station",
+                           "StationSchema",
+                           "StationLink",
+                           "ValidationRule",
+                           "AnalyticsMapping",
+                           "EditReason",
+                           "RowEdit",
+                           "AuditEvent",
+                           "ModSubscription",
+                           "ModSubscriptionEvent"
+                       ],
+    "frontendSources":  [
+                            "frontend/src/services/fetchWrapper.ts",
+                            "frontend/src/services/a11y.ts",
+                            "frontend/src/App.tsx",
+                            "frontend/src/main.tsx",
+                            "frontend/src/i18n.ts",
+                            "frontend/src/locales",
+                            "frontend/src/pages/RegisterPage.tsx",
+                            "frontend/src/pages/AdminPage.tsx",
+                            "frontend/src/pages/ManagerPage.tsx",
+                            "frontend/src/services/auth.ts",
+                            "frontend/src/services/adminAuth.ts",
+                            "frontend/src/services/tenant.ts",
+                            "frontend/src/services/tenantMap.ts",
+                            "frontend/src/pages/UploadPage.tsx",
+                            "frontend/src/components/FileUpload.tsx",
+                            "frontend/src/components/CSVEditor.tsx",
+                            "frontend/src/hooks/useUpload.ts",
+                            "frontend/src/services/api.ts",
+                            "frontend/src/pages/QueryPage.tsx",
+                            "frontend/src/components/AdvancedSearch.tsx",
+                            "frontend/src/components/DataQuery.tsx",
+                            "frontend/src/components/TraceabilityFlow.tsx",
+                            "frontend/src/components/GenericTraceabilityFlow.tsx",
+                            "frontend/src/pages/AnalyticsPage.tsx",
+                            "frontend/src/components/analytics",
+                            "frontend/src/services/analyticsArtifacts.ts",
+                            "frontend/src/components/admin/StationManager.tsx",
+                            "frontend/src/components/admin/StationLinkManager.tsx",
+                            "frontend/src/components/admin/ValidationRuleManager.tsx",
+                            "frontend/src/components/admin/AnalyticsMappingManager.tsx",
+                            "frontend/src/services/stationApi.ts",
+                            "frontend/src/components/EditRecordModal.tsx",
+                            "frontend/src/components/SimpleLogViewer.tsx",
+                            "frontend/src/components/LogViewer.tsx",
+                            "frontend/src/services/logService.ts"
+                        ],
+    "backendSources":  [
+                           "backend/app/api/routes_health.py",
+                           "backend/app/main.py",
+                           "backend/app/core/config.py",
+                           "backend/app/core/database.py",
+                           "backend/app/core/logging.py",
+                           "backend/app/core/middleware.py",
+                           "backend/app/api/deps.py",
+                           "backend/app/api/routes_auth.py",
+                           "backend/app/api/routes_tenants.py",
+                           "backend/app/core/auth.py",
+                           "backend/app/core/bootstrap.py",
+                           "backend/app/core/password.py",
+                           "backend/app/core/tenant_resolver.py",
+                           "backend/app/models/core/tenant.py",
+                           "backend/app/models/core/tenant_user.py",
+                           "backend/app/models/core/tenant_api_key.py",
+                           "backend/app/utils/normalization.py",
+                           "backend/app/services/product_id_generator.py",
+                           "backend/app/services/production_date_extractor.py",
+                           "backend/app/models/base_record.py",
+                           "backend/app/models/p1_record.py",
+                           "backend/app/models/p2_record.py",
+                           "backend/app/models/p3_record.py",
+                           "backend/app/models/p2_item_v2.py",
+                           "backend/app/models/p3_item_v2.py",
+                           "backend/app/models/generic_record.py",
+                           "backend/app/models/station.py",
+                           "backend/app/models/validation_rule.py",
+                           "backend/app/models/analytics_mapping.py",
+                           "backend/app/api/routes_upload.py",
+                           "backend/app/api/routes_validate.py",
+                           "backend/app/services/validation.py",
+                           "backend/app/services/pdf_conversion.py",
+                           "backend/app/models/upload_job.py",
+                           "backend/app/models/upload_error.py",
+                           "backend/app/models/pdf_upload.py",
+                           "backend/app/models/pdf_conversion_job.py",
+                           "backend/app/api/routes_import.py",
+                           "backend/app/api/routes_import_v2.py",
+                           "backend/app/services/import_v2.py",
+                           "backend/app/services/csv_field_mapper.py",
+                           "backend/app/services/generic_validator.py",
+                           "backend/app/models/import_job.py",
+                           "backend/app/models/core/schema_registry.py",
+                           "backend/app/api/routes_query_v2.py",
+                           "backend/app/api/traceability.py",
+                           "backend/app/services/traceability_flattener.py",
+                           "backend/app/services/ut_flattener.py",
+                           "backend/app/api/routes_analytics.py",
+                           "backend/app/api/routes_ut.py",
+                           "backend/app/services/analytics_external.py",
+                           "backend/app/services/analytics_data_fetcher.py",
+                           "backend/app/services/analytical_four_adapter.py",
+                           "backend/app/api/routes_stations.py",
+                           "backend/app/services/schema_service.py",
+                           "backend/app/core/seed_stations.py",
+                           "backend/app/api/routes_edit.py",
+                           "backend/app/api/routes_audit_events.py",
+                           "backend/app/services/audit_events.py",
+                           "backend/app/models/core/audit_event.py",
+                           "backend/app/api/routes_logs.py",
+                           "backend/app/api/routes_mod_subscription.py",
+                           "backend/app/services/mod_subscription.py",
+                           "backend/app/models/mod_subscription.py"
+                       ],
+    "templateSources":  [
+
+                        ],
+    "backendRouterRegistrations":  [
+                                       {
+                                           "kit":  "platform-core-kit",
+                                           "module":  "app.api.routes_health",
+                                           "symbol":  "router",
+                                           "prefix":  "/healthz",
+                                           "tags":  [
+                                                        "Health Check"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "tenant-auth-kit",
+                                           "module":  "app.api.routes_auth",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/auth",
+                                           "tags":  [
+                                                        "Authentication"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "tenant-auth-kit",
+                                           "module":  "app.api.routes_tenants",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "Tenants"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "upload-validation-kit",
+                                           "module":  "app.api.routes_upload",
+                                           "symbol":  "router",
+                                           "prefix":  "/api",
+                                           "tags":  [
+                                                        "檔案上傳"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "upload-validation-kit",
+                                           "module":  "app.api.routes_validate",
+                                           "symbol":  "router",
+                                           "prefix":  "/api",
+                                           "tags":  [
+                                                        "驗證結果查詢"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "import-pipeline-kit",
+                                           "module":  "app.api.routes_import",
+                                           "symbol":  "router",
+                                           "prefix":  "/api",
+                                           "tags":  [
+                                                        "資料匯入"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "import-pipeline-kit",
+                                           "module":  "app.api.routes_import_v2",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/v2/import",
+                                           "tags":  [
+                                                        "Import V2"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "query-traceability-kit",
+                                           "module":  "app.api.routes_query_v2",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/v2/query",
+                                           "tags":  [
+                                                        "Query V2"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "query-traceability-kit",
+                                           "module":  "app.api.traceability",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "生產追溯"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "analytics-kit",
+                                           "module":  "app.api.routes_analytics",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "Analytics"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "analytics-kit",
+                                           "module":  "app.api.routes_ut",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "UT Data"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "station-admin-kit",
+                                           "module":  "app.api.routes_stations",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "Stations (Generic)"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  "USE_GENERIC_SCHEMA"
+                                       },
+                                       {
+                                           "kit":  "audit-edit-kit",
+                                           "module":  "app.api.routes_edit",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/edit",
+                                           "tags":  [
+                                                        "Inline Edit"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "audit-edit-kit",
+                                           "module":  "app.api.routes_audit_events",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "Audit Events"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "logs-ops-kit",
+                                           "module":  "app.api.routes_logs",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/logs",
+                                           "tags":  [
+                                                        "日誌管理"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "mod-subscription-kit",
+                                           "module":  "app.api.routes_mod_subscription",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "MOD 訂閱權益"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  "MOD_SUBSCRIPTION_ENABLED"
+                                       }
+                                   ],
+    "externalServices":  [
+                             {
+                                 "id":  "pdf-conversion-service",
+                                 "required":  false,
+                                 "config":  "PDF_SERVER_URL"
+                             },
+                             {
+                                 "id":  "mod-subscription-provider",
+                                 "required":  true,
+                                 "config":  "MOD_API_BASE_URL"
+                             }
+                         ],
+    "selectedExternalServices":  [
+
+                                 ],
+    "featureFlags":  {
+                         "USE_GENERIC_SCHEMA":  true,
+                         "MOD_SUBSCRIPTION_ENABLED":  true
+                     },
+    "frontendNavigation":  null,
+    "previewScenarios":  null
+}

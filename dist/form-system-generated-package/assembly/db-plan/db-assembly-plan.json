@@ -1,0 +1,72 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:49:05",
+    "sourceRecipe":  "form-analysis-original-recomposition",
+    "engine":  "postgresql",
+    "connectionOwner":  "platform-core-kit",
+    "envVars":  {
+                    "DATABASE_URL":  "required"
+                },
+    "models":  [
+                   "Tenant",
+                   "TenantUser",
+                   "TenantApiKey",
+                   "P1Record",
+                   "P2Record",
+                   "P2ItemV2",
+                   "P3Record",
+                   "P3ItemV2",
+                   "GenericRecord",
+                   "GenericRecordItem",
+                   "UploadJob",
+                   "UploadError",
+                   "PdfUpload",
+                   "PdfConversionJob",
+                   "ImportJob",
+                   "ImportFile",
+                   "StagingRow",
+                   "TableRegistry",
+                   "SchemaVersion",
+                   "Station",
+                   "StationSchema",
+                   "StationLink",
+                   "ValidationRule",
+                   "AnalyticsMapping",
+                   "EditReason",
+                   "RowEdit",
+                   "AuditEvent"
+               ],
+    "modelFiles":  [
+                       "backend/app/models/core/tenant.py",
+                       "backend/app/models/core/tenant_user.py",
+                       "backend/app/models/core/tenant_api_key.py",
+                       "backend/app/models/base_record.py",
+                       "backend/app/models/p1_record.py",
+                       "backend/app/models/p2_record.py",
+                       "backend/app/models/p3_record.py",
+                       "backend/app/models/p2_item_v2.py",
+                       "backend/app/models/p3_item_v2.py",
+                       "backend/app/models/generic_record.py",
+                       "backend/app/models/station.py",
+                       "backend/app/models/validation_rule.py",
+                       "backend/app/models/analytics_mapping.py",
+                       "backend/app/models/upload_job.py",
+                       "backend/app/models/upload_error.py",
+                       "backend/app/models/pdf_upload.py",
+                       "backend/app/models/pdf_conversion_job.py",
+                       "backend/app/models/import_job.py",
+                       "backend/app/models/core/schema_registry.py",
+                       "backend/app/models/core/audit_event.py"
+                   ],
+    "migrations":  [
+                       "backend/alembic"
+                   ],
+    "seedRequirements":  [
+                             {
+                                 "kit":  "station-admin-kit",
+                                 "name":  "generic-station-definitions",
+                                 "requiredWhen":  "USE_GENERIC_SCHEMA"
+                             }
+                         ],
+    "initScript":  "scripts\\migrate.ps1",
+    "checkScript":  "scripts\\check-db.ps1"
+}
