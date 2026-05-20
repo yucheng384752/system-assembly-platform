@@ -1,0 +1,91 @@
+﻿{
+    "generatedAt":  "2026-05-21T03:51:28",
+    "systemDirectory":  "dist\\generated-system",
+    "backend":  {
+                    "source":  "inferred-from-python-imports",
+                    "imports":  [
+                                    "__future__",
+                                    "app",
+                                    "asyncio",
+                                    "base64",
+                                    "collections",
+                                    "contextlib",
+                                    "csv",
+                                    "dataclasses",
+                                    "datetime",
+                                    "dotenv",
+                                    "enum",
+                                    "fastapi",
+                                    "functools",
+                                    "hashlib",
+                                    "hmac",
+                                    "httpx",
+                                    "importlib",
+                                    "io",
+                                    "json",
+                                    "logging",
+                                    "math",
+                                    "os",
+                                    "pandas",
+                                    "pathlib",
+                                    "pydantic",
+                                    "pydantic_settings",
+                                    "re",
+                                    "secrets",
+                                    "shutil",
+                                    "sqlalchemy",
+                                    "starlette",
+                                    "structlog",
+                                    "sys",
+                                    "time",
+                                    "typing",
+                                    "unicodedata",
+                                    "uuid",
+                                    "uvicorn",
+                                    "zipfile"
+                                ],
+                    "requirementsPath":  "backend\\requirements.txt",
+                    "requirements":  [
+                                         "asyncpg==0.29.0",
+                                         "fastapi==0.115.0",
+                                         "httpx==0.27.2",
+                                         "openpyxl==3.1.5",
+                                         "pandas==2.2.3",
+                                         "pydantic==2.9.2",
+                                         "pydantic-settings==2.5.2",
+                                         "python-dotenv==1.0.1",
+                                         "python-multipart==0.0.12",
+                                         "sqlalchemy==2.0.36",
+                                         "starlette==0.40.0",
+                                         "structlog==24.4.0",
+                                         "uvicorn[standard]==0.30.6"
+                                     ]
+                },
+    "frontend":  {
+                     "source":  "inferred-from-frontend-imports",
+                     "imports":  [
+                                     "i18next",
+                                     "i18next-browser-languagedetector",
+                                     "lucide-react",
+                                     "react",
+                                     "react-dom",
+                                     "react-i18next"
+                                 ],
+                     "packageJsonPath":  "frontend\\package.json",
+                     "dependencies":  {
+                                          "react":  "18.3.1",
+                                          "react-dom":  "18.3.1",
+                                          "react-i18next":  "15.0.2",
+                                          "i18next":  "23.15.2",
+                                          "i18next-browser-languagedetector":  "8.0.0",
+                                          "lucide-react":  "0.460.0"
+                                      },
+                     "devDependencies":  {
+                                             "@vitejs/plugin-react":  "4.3.3",
+                                             "vite":  "6.0.5",
+                                             "typescript":  "5.7.2",
+                                             "@types/react":  "18.3.12",
+                                             "@types/react-dom":  "18.3.1"
+                                         }
+                 }
+}

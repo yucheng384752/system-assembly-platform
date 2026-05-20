@@ -1,0 +1,1330 @@
+{
+  "app": {
+    "title": "檔案上傳暨資料分析系統",
+    "subtitle": "支援 CSV/PDF 檔案上傳、驗證與資料查詢"
+  },
+  "common": {
+    "clear": "清除",
+    "loading": "讀取中…",
+    "noData": "查無資料",
+    "unknown": "（未知）",
+    "expand": "展開",
+    "collapse": "收起",
+    "ok": "確定",
+    "cancel": "取消",
+    "close": "關閉"
+  },
+  "專有名詞對照表": {
+    "LOT NO.": "批號",
+    "lot no": "批號",
+    "lot": "批次",
+    "Production Date": "製造日期",
+    "year-month-day": "年月日",
+    "Weight": "重量",
+    "Weight(Kg)": "重量(Kg)",
+    "Semi-finished Sheet Width(mm)": "半成品板寬(mm)",
+    "Semi-finished Length(M)": "半成品長度(M)",
+    "Actual Temp_C1": "實際溫度_C1",
+    "Actual Temp_C2": "實際溫度_C2",
+    "Actual Temp_C3": "實際溫度_C3",
+    "Actual Temp_C4": "實際溫度_C4",
+    "Actual Temp_C5": "實際溫度_C5",
+    "Actual Temp_C6": "實際溫度_C6",
+    "Actual Temp_C7": "實際溫度_C7",
+    "Actual Temp_C8": "實際溫度_C8",
+    "Actual Temp_C9": "實際溫度_C9",
+    "Actual Temp_C10": "實際溫度_C10",
+    "Actual Temp_C11": "實際溫度_C11",
+    "Actual Temp_C12": "實際溫度_C12",
+    "Actual Temp_C13": "實際溫度_C13",
+    "Actual Temp_C14": "實際溫度_C14",
+    "Actual Temp_C15": "實際溫度_C15",
+    "Actual Temp_C16": "實際溫度_C16",
+    "Actual Temp_C1(℃)": "實際溫度_C1",
+    "Actual Temp_C2(℃)": "實際溫度_C2",
+    "Actual Temp_C3(℃)": "實際溫度_C3",
+    "Actual Temp_C4(℃)": "實際溫度_C4",
+    "Actual Temp_C5(℃)": "實際溫度_C5",
+    "Actual Temp_C6(℃)": "實際溫度_C6",
+    "Actual Temp_C7(℃)": "實際溫度_C7",
+    "Actual Temp_C8(℃)": "實際溫度_C8",
+    "Actual Temp_C9(℃)": "實際溫度_C9",
+    "Actual Temp_C10(℃)": "實際溫度_C10",
+    "Actual Temp_C11(℃)": "實際溫度_C11",
+    "Actual Temp_C12(℃)": "實際溫度_C12",
+    "Actual Temp_C13(℃)": "實際溫度_C13",
+    "Actual Temp_C14(℃)": "實際溫度_C14",
+    "Actual Temp_C15(℃)": "實際溫度_C15",
+    "Actual Temp_C16(℃)": "實際溫度_C16",
+    "Set Temp_C1": "設定溫度_C1",
+    "Set Temp_C2": "設定溫度_C2",
+    "Set Temp_C3": "設定溫度_C3",
+    "Set Temp_C4": "設定溫度_C4",
+    "Set Temp_C5": "設定溫度_C5",
+    "Set Temp_C6": "設定溫度_C6",
+    "Set Temp_C7": "設定溫度_C7",
+    "Set Temp_C8": "設定溫度_C8",
+    "Set Temp_C9": "設定溫度_C9",
+    "Set Temp_C10": "設定溫度_C10",
+    "Set Temp_C11": "設定溫度_C11",
+    "Set Temp_C12": "設定溫度_C12",
+    "Set Temp_C13": "設定溫度_C13",
+    "Set Temp_C14": "設定溫度_C14",
+    "Set Temp_C15": "設定溫度_C15",
+    "Set Temp_C16": "設定溫度_C16",
+    "Set Temp_C1(℃)": "設定溫度_C1",
+    "Set Temp_C2(℃)": "設定溫度_C2",
+    "Set Temp_C3(℃)": "設定溫度_C3",
+    "Set Temp_C4(℃)": "設定溫度_C4",
+    "Set Temp_C5(℃)": "設定溫度_C5",
+    "Set Temp_C6(℃)": "設定溫度_C6",
+    "Set Temp_C7(℃)": "設定溫度_C7",
+    "Set Temp_C8(℃)": "設定溫度_C8",
+    "Set Temp_C9(℃)": "設定溫度_C9",
+    "Set Temp_C10(℃)": "設定溫度_C10",
+    "Set Temp_C11(℃)": "設定溫度_C11",
+    "Set Temp_C12(℃)": "設定溫度_C12",
+    "Set Temp_C13(℃)": "設定溫度_C13",
+    "Set Temp_C14(℃)": "設定溫度_C14",
+    "Set Temp_C15(℃)": "設定溫度_C15",
+    "Set Temp_C16(℃)": "設定溫度_C16",
+    "Actual Temp_A bucket": "實際溫度_A桶",
+    "Actual Temp_B bucket": "實際溫度_B桶",
+    "Actual Temp_C bucket": "實際溫度_C桶",
+    "Set Temp_A bucket": "設定溫度_A桶",
+    "Set Temp_B bucket": "設定溫度_B桶",
+    "Set Temp_C bucket": "設定溫度_C桶",
+    "Actual Temp_A bucket(℃)": "實際溫度_A桶",
+    "Actual Temp_B bucket(℃)": "實際溫度_B桶",
+    "Actual Temp_C bucket(℃)": "實際溫度_C桶",
+    "Set Temp_A bucket(℃)": "設定溫度_A桶",
+    "Set Temp_B bucket(℃)": "設定溫度_B桶",
+    "Set Temp_C bucket(℃)": "設定溫度_C桶",
+    "Actual Temp_Top": "實際溫度_上輪",
+    "Actual Temp_Mid": "實際溫度_中輪",
+    "Actual Temp_Bottom": "實際溫度_下輪",
+    "Set Temp_Top": "設定溫度_上輪",
+    "Set Temp_Mid": "設定溫度_中輪",
+    "Set Temp_Bottom": "設定溫度_下輪",
+    "Actual Temp_Top(℃)": "實際溫度_上輪",
+    "Actual Temp_Mid(℃)": "實際溫度_中輪",
+    "Actual Temp_Bottom(℃)": "實際溫度_下輪",
+    "Set Temp_Top(℃)": "設定溫度_上輪",
+    "Set Temp_Mid(℃)": "設定溫度_中輪",
+    "Set Temp_Bottom(℃)": "設定溫度_下輪",
+    "Line Speed(M/min)": "線速度(M/min)",
+    "Screw Pressure(psi)": "螺桿壓力(psi)",
+    "Screw Output(%)": "螺桿押出量(%)",
+    "Left Pad Thickness (mm)": "左墊片厚度(mm)",
+    "Right Pad Thickness (mm)": "右墊片厚度(mm)",
+    "Current(A)": "電流量(A)",
+    "Extruder Speed (rpm)": "押出機轉速(rpm)",
+    "Quantitative Pressure(psi)": "定量壓力(psi)",
+    "Quantitative Output(%)": "定量輸出(%)",
+    "Frame (cm)": "車台(cm)",
+    "Filter Pressure(psi)": "濾網壓力(psi)",
+    "P1.Machine_No.": "P1.機台編號",
+    "P1.Material": "P1.材料",
+    "P1.Specification": "P1.規格",
+    "Semi-finished impedance": "半成品阻抗",
+    "Heat gun temperature": "熱風槍溫度",
+    "Rubber wheel gasket thickness (in)": "輸入膠輪墊片厚度",
+    "Rubber wheel gasket thickness (out)": "輸出膠輪墊片厚度",
+    "Rewind torque": "捲收機扭力",
+    "Slitting speed": "分條速度",
+    "Board Width(mm)": "板寬(mm)",
+    "Thickness diff": "厚度高低差",
+    "Thickness High(μm)": "厚度上限(μm)",
+    "Thickness Low(μm)": "厚度下限(μm)",
+    "Thicknessss High(μm)": "厚度上限(μm)",
+    "Thicknessss Low(μm)": "厚度下限(μm)",
+    "Appearance": "外觀",
+    "Rough edge": "毛邊",
+    "Quality inspection": "品檢",
+    "Quality control": "品管",
+    "Slitting machine": "分條機台",
+    "Slitting date": "分條日期",
+    "Winder number": "捲收機號",
+    "Meters completed": "完成米數",
+    "Striped Results": "分條結果",
+    "rough edge": "毛邊",
+    "Qaulity inspecrion": "品檢",
+    "Qaulity control": "品管",
+    "Semi-finished productsLOT NO": "半成品批號",
+    "Semi-finished products impedance": "半成品阻抗",
+    "Material": "材料",
+    "P2.Material": "P2.材料",
+    "format": "規格",
+    "P2.NG_code": "P2.NG代碼",
+    "pasteirontemp": "貼鐵溫度",
+    "blowirontemp": "吹鐵溫度",
+    "paste iron temp": "貼鐵溫度",
+    "blow iron temp": "吹鐵溫度",
+    "EValue": "E值",
+    "E Value": "E值",
+    "10PO": "10PO",
+    "Burr": "毛邊",
+    "Shift": "下膠偏移",
+    "Iron": "烙鐵清潔",
+    "Mold": "模具清潔",
+    "RubberWheel": "膠輪清潔",
+    "Rubber Wheel": "膠輪清潔",
+    "glue": "溢膠處理",
+    "operator": "操作員",
+    "P3.Machine_No.": "P3.機台編號",
+    "Machine NO": "機台編號",
+    "Mold NO": "模具編號",
+    "BottomTape": "下膠編號",
+    "Bottom Tape": "下膠編號",
+    "P3.Specification": "P3.規格",
+    "Mold No.": "模具編號",
+    "P3.NG_code": "P3.NG代碼",
+    "Adjustment Record": "調整紀錄",
+    "Finish": "完成",
+    "first A size": "A尺寸起始",
+    "last A size": "A尺寸結束",
+    "first B size": "B尺寸起始",
+    "last B size": "B尺寸結束"
+  },
+  "roles": {
+    "user": "使用者",
+    "manager": "管理者",
+    "globalAdmin": "全域管理者"
+  },
+  "fields": {
+    "tenantId": "區域 ID",
+    "actorRole": "角色",
+    "apiKeyLabel": "API 金鑰標籤"
+  },
+  "manager": {
+    "title": "場域管理",
+    "subtitle": "使用一般 API 金鑰（不需要管理者金鑰）",
+    "notManager": "目前角色不是管理者，無法管理使用者。",
+    "hint": "註：管理者可管理同場域使用者。",
+    "actions": {
+      "refreshIdentity": "更新身分",
+      "refreshUsers": "刷新使用者",
+      "createUser": "建立使用者",
+      "save": "儲存",
+      "deactivate": "停用"
+    },
+    "labels": {
+      "username": "帳號",
+      "password": "密碼",
+      "role": "角色",
+      "includeInactive": "包含已停用"
+    },
+    "table": {
+      "username": "帳號",
+      "role": "角色",
+      "active": "狀態",
+      "createdAt": "建立時間",
+      "lastLoginAt": "最後登入",
+      "actions": "操作"
+    },
+    "toast": {
+      "whoamiFailed": "讀取身分失敗（尚未登入或權限不足）",
+      "whoamiFailedNetwork": "讀取身分失敗（網路或伺服器未啟動）",
+      "fetchUsersFailedHttp": "取得使用者清單失敗 (HTTP {{status}})",
+      "fetchUsersFailedNetwork": "取得使用者清單失敗（網路或伺服器未啟動）",
+      "usernameRequired": "請輸入帳號",
+      "passwordMin": "密碼至少 8 碼",
+      "createUserFailedHttp": "建立使用者失敗 (HTTP {{status}})",
+      "createUserFailedNetwork": "建立使用者失敗（網路或伺服器未啟動）",
+      "createUserSuccess": "已建立使用者",
+      "updateUserFailedHttp": "更新使用者失敗 (HTTP {{status}})",
+      "updateUserFailedNetwork": "更新使用者失敗（網路或伺服器未啟動）",
+      "updateUserSuccess": "已更新使用者",
+      "deactivateUserFailedHttp": "停用使用者失敗 (HTTP {{status}})",
+      "deactivateUserFailedNetwork": "停用使用者失敗（網路或伺服器未啟動）",
+      "deactivateUserSuccess": "已停用使用者"
+    },
+    "confirm": {
+      "deactivateUser": "確定要停用使用者「{{username}}」嗎？"
+    }
+  },
+  "tabs": {
+    "register": "登入",
+    "upload": "檔案上傳",
+    "query": "資料查詢",
+    "analysis": "資料分析",
+    "manager": "場域管理",
+    "admin": "管理者"
+  },
+  "footer": {
+    "copyright": "© 2024 表單分析系統. All rights reserved.",
+    "version": "版本 {{version}}"
+  },
+  "language": {
+    "label": "語言",
+    "zhTW": "繁體中文",
+    "en": "英文（English）"
+  },
+  "a11y": {
+    "fontSize": {
+      "label": "字體大小",
+      "small": "小",
+      "medium": "中",
+      "large": "大"
+    }
+  },
+  "register": {
+    "title": "登入",
+    "tenantCodeOptional": "區域代碼（可留空）",
+    "tenantCodePlaceholder": "例如：ut",
+    "username": "帳號",
+    "usernamePlaceholder": "請輸入帳號",
+    "password": "密碼",
+    "passwordPlaceholder": "請輸入密碼",
+    "login": "登入",
+    "loggingIn": "登入中…",
+    "tips": "提示",
+    "adminHint": "需要建立第一個區域 / 區域管理者時，可在此驗證管理者金鑰，驗證成功後會顯示「管理者」頁籤。",
+    "adminKey": "管理者金鑰",
+    "adminKeyPlaceholder": "請貼上金鑰",
+    "verifying": "驗證中…",
+    "verifyAndUnlock": "驗證並解鎖管理者",
+    "role": "角色",
+    "roleLoading": "（讀取中…）",
+    "tenantId": "區域 ID",
+    "tenantNotSaved": "（未保存）",
+    "updateIdentity": "更新身分",
+    "logout": "登出",
+    "tenantSettings": "區域設定",
+    "tenantSelected": "目前已選擇的區域（區域 ID）",
+    "none": "（無）",
+    "clearTenantId": "清除區域 ID",
+    "refreshTenants": "刷新區域列表",
+    "tenantsNeedAuth": "（此環境需要金鑰才能讀取區域）",
+    "tenants": "區域",
+    "tenantsEmpty": "（目前為空）",
+    "useTenant": "使用此區域",
+    "adminTips": "提示（管理者）",
+    "adminTipsText": "如需初始化/管理區域與使用者，請在此驗證管理者金鑰以解鎖「管理者」頁籤。",
+    "toast": {
+      "diagFailedNeedLogin": "自檢失敗：請確認後端可連線，並已登入",
+      "diagUpdated": "已更新自檢資訊",
+      "diagFailedNetwork": "自檢失敗（網路或伺服器未啟動）",
+      "authEnabledNeedLogin": "後端已啟用權限驗證：請先登入（或由管理者完成初始化）",
+      "fetchTenantsFailedHttp": "取得 tenants 失敗 (HTTP {{status}})",
+      "fetchTenantsOk": "已取得 tenants：{{count}} 筆",
+      "fetchTenantsFailedNetwork": "取得 tenants 失敗（網路或伺服器未啟動）",
+      "clearedCredentials": "已清除權限憑證（localStorage）",
+      "tenantIdEmpty": "區域 ID 不可為空",
+      "tenantSet": "已設定區域：{{label}}",
+      "tenantCleared": "已清除區域 ID（localStorage）",
+      "usernameRequired": "請輸入帳號",
+      "passwordRequired": "請輸入密碼",
+      "loginFailedHttp": "登入失敗 (HTTP {{status}})",
+      "loginResponseIncomplete": "登入成功但回傳格式不完整",
+      "loginSuccessSaved": "登入成功：已自動保存區域與權限",
+      "loginFailedNetwork": "登入失敗（網路或伺服器未啟動）",
+      "adminKeyRequired": "請輸入管理者金鑰",
+      "adminKeyInvalid": "管理者金鑰無效",
+      "adminKeyVerifySuccessUnlockTab": "管理者金鑰驗證成功：已解鎖「管理者」頁籤",
+      "adminKeyVerifyFailedNetwork": "管理者金鑰驗證失敗（網路或伺服器未啟動）"
+    }
+  },
+  "upload": {
+    "dropMain": "拖曳上傳或是選擇檔案",
+    "dropSub": "支援 csv / pdf 檔案，檔案大小限制 10MB",
+    "chooseFile": "選擇檔案",
+    "uploadedFiles": "已上傳檔案",
+    "empty": "尚未上傳任何檔案",
+    "status": {
+      "pendingValidation": "待驗證",
+      "validating": "驗證中...",
+      "validated": "已驗證",
+      "importing": "匯入資料庫中...請稍後...",
+      "imported": "已完成匯入",
+      "validationPassed": "驗證通過"
+    },
+    "pdf": {
+      "status": {
+        "converting": "轉檔中（PDF→CSV）",
+        "converted": "已轉檔（CSV）",
+        "convertFailed": "轉檔失敗",
+        "uploadedPendingConvert": "已上傳（PDF）/待轉檔"
+      },
+      "convert": {
+        "done": "已轉檔 ✓",
+        "retry": "重新轉檔",
+        "start": "開始轉檔"
+      },
+      "upload": {
+        "uploaded": "已上傳 ✓",
+        "upload": "上傳 PDF"
+      }
+    },
+    "actions": {
+      "validate": "驗證檔案",
+      "revalidate": "重新驗證",
+      "validated": "已驗證 ✓",
+      "validating": "驗證中...",
+      "saveChanges": "儲存修改",
+      "importFile": "匯入檔案",
+      "remove": "移除",
+      "expand": "展開",
+      "collapse": "收起"
+    },
+    "badges": {
+      "readyToImport": "✓ 準備匯入",
+      "needsFix": "需要修正"
+    },
+    "editDisabledNotice": "此版本上傳流程不提供編輯；如需修正請修改 CSV 後重新上傳。",
+    "lotNoLabel": "批號（Lot No）",
+    "validationErrors": {
+      "count": "{{count}} 個錯誤"
+    },
+    "validation": {
+      "fileTooLarge": "檔案大小超過限制 ({{maxSizeMb}}MB)",
+      "unsupportedFileType": "不支援的檔案類型：{{type}}",
+      "unknownType": "（未知）"
+    },
+    "errors": {
+      "uploadFailed": "上傳失敗",
+      "batchUploadFailed": "批次上傳失敗",
+      "confirmUploadFailed": "確認上傳失敗",
+      "fetchPdfConvertStatusFailed": "取得 PDF 轉檔狀態失敗",
+      "fetchCsvOutputsFailed": "取得 CSV 轉檔輸出失敗",
+      "fetchImportStatusFailed": "取得匯入狀態失敗",
+      "triggerPdfConvertFailed": "觸發 PDF 轉檔失敗",
+      "validateFailed": "驗證失敗",
+      "importFailed": "匯入失敗",
+      "saveFailed": "儲存失敗",
+      "saveError": "儲存修改時發生錯誤",
+      "fileNotFound": "找不到檔案",
+      "missingProcessId": "缺少 process_id",
+      "pdfUploadFailed": "PDF 上傳失敗",
+      "validationTimeout": "驗證逾時，請稍後再試或重新驗證",
+      "validationProcessError": "驗證過程發生錯誤",
+      "importError": "匯入時發生錯誤"
+    },
+    "toast": {
+      "onlyCsvOrPdf": "僅支援 csv 或 pdf 檔案類型",
+      "fileAlreadyExists": "檔案 {{fileName}} 已存在列表中，略過上傳",
+      "fileTooLarge": "檔案大小超過 {{maxSizeMb}}MB 限制",
+      "filesAdded": "已加入 {{count}} 個檔案",
+      "missingProcessIdUploadPdf": "找不到 process_id，請先上傳 PDF",
+      "pdfConvertFetchingCsv": "PDF 轉檔完成，正在取得 CSV 轉檔輸出…",
+      "pdfConvertGotCsv": "PDF 轉檔完成，已取得 {{count}} 份 CSV（請先檢視/修正，再點驗證）",
+      "pdfConvertNoCsv": "PDF 轉檔完成，但沒有產生可用的 CSV",
+      "pdfConvertCreateCsvJobFailed": "PDF 轉檔完成但建立 CSV 驗證工作失敗",
+      "pdfConvertFailed": "PDF 轉檔失敗",
+      "pdfConvertStillProcessing": "PDF 轉檔仍在處理中，可稍後再查看狀態",
+      "changesAppliedRevalidate": "修改已套用（尚未上傳），請重新驗證",
+      "missingProcessIdSave": "缺少 process_id，請先驗證檔案後再儲存修改",
+      "savedWithInvalidRows": "修改已儲存，但仍有 {{count}} 行無效，請繼續修正",
+      "savedAndValidated": "修改已儲存，且驗證通過",
+      "validationCompletedWithErrors": "{{fileName}} 驗證完成：有錯誤，請修正後再匯入",
+      "validationPassedFile": "{{fileName}} 驗證通過",
+      "validationFailedWithMessage": "{{fileName}} 驗證失敗：{{message}}",
+      "validationDoneWithInvalidRowsNoEdit": "{{fileName}} 驗證完成：共 {{totalRows}} 行，無效 {{errorCount}} 行。此版本不提供編輯，請修正 CSV 後重新上傳。",
+      "validationPassedAllRows": "{{fileName}} 驗證通過：共 {{totalRows}} 行全部有效",
+      "pdfUploadedReadyToConvert": "PDF 已上傳（可開始 PDF→CSV 轉檔）",
+      "missingFileOrJobId": "找不到檔案或缺少 job_id",
+      "importStarting": "開始匯入：{{fileName}}",
+      "importCompleted": "{{fileName}} 匯入完成",
+      "pageResetContinueUpload": "頁面已重置，可以繼續上傳新檔案"
+    },
+    "csvEditor": {
+      "titleEdit": "CSV 內容編輯",
+      "titlePreview": "CSV 內容預覽",
+      "header": "{{title}} - {{fileName}}（共 {{rowCount}} 行，{{colCount}} 個欄位）",
+      "errorSummary": "發現 {{count}} 個驗證錯誤",
+      "cellErrorTitle": "錯誤：{{message}}",
+      "emptyCellTitle": "此欄位為空白",
+      "errorCodeLabel": "錯誤程式碼: {{code}}",
+      "hintEdit": "提示：點擊任意儲存格即可直接編輯內容",
+      "hintPreview": "提示：此版本不提供編輯；如需修正請修改 CSV 後重新上傳",
+      "hintHasErrors": "紅色高亮的單元格表示有驗證錯誤，將滑鼠懸停查看詳情。請修正 CSV 後重新上傳再驗證。",
+      "hintAllValid": "所有資料驗證通過，可以匯入資料庫",
+      "errorDetailsTitle": "驗證錯誤詳情（{{count}} 個錯誤）",
+      "errorRowField": "第 {{row}} 行 • {{field}} 欄位",
+      "moreErrorsHint": "...還有 {{count}} 個錯誤（請修正上述錯誤後重新驗證）"
+    },
+    "progress": {
+      "validation": "驗證進度",
+      "import": "匯入進度",
+      "pdfConvert": "PDF→CSV 轉檔進度"
+    },
+    "tooltips": {
+      "validating": "驗證中...",
+      "importing": "匯入中...",
+      "pdfUploadOnly": "上傳 PDF（僅保存，不轉檔/不匯入）",
+      "validationErrorsExpand": "發現 {{count}} 個驗證錯誤，點擊展開查看詳情",
+      "revalidateHasErrors": "發現驗證錯誤，點擊重新驗證",
+      "revalidatePassed": "驗證通過，點擊可重新驗證",
+      "validate": "點擊驗證檔案",
+      "pdfConvertDone": "已完成轉檔",
+      "pdfConvertStartAsync": "開始將 PDF 轉成 CSV（非同步）",
+      "validateBeforeEdit": "請先驗證檔案",
+      "noUnsavedChanges": "沒有未儲存的變更",
+      "saveChanges": "儲存修改",
+      "importToDb": "匯入此檔案到資料庫"
+    },
+    "batchValidate": {
+      "buttonLabel": "一鍵驗證 ({{count}})",
+      "buttonLabelBusy": "一鍵驗證中...",
+      "title": {
+        "noEligible": "沒有需要驗證的檔案",
+        "busy": "目前有檔案在驗證/匯入中",
+        "ready": "一鍵驗證 {{count}} 個檔案"
+      },
+      "toast": {
+        "noEligible": "沒有需要驗證的檔案",
+        "start": "開始一鍵驗證：共 {{count}} 個檔案",
+        "progress": "一鍵驗證中：{{current}}/{{total}}（{{fileName}}）",
+        "doneWithFailures": "一鍵驗證完成：通過 {{ok}}、有錯誤 {{errors}}、失敗 {{failed}}",
+        "doneWithErrors": "一鍵驗證完成：通過 {{ok}}、有錯誤 {{errors}}",
+        "doneAllPassed": "一鍵驗證完成：全部通過（{{ok}}）"
+      }
+    },
+    "batchConvert": {
+      "buttonLabel": "一鍵轉檔 ({{count}})",
+      "buttonLabelBusy": "一鍵轉檔中...",
+      "title": {
+        "busy": "目前有檔案在轉檔中",
+        "ready": "一鍵轉檔 {{count}} 個 PDF 檔案"
+      },
+      "toast": {
+        "noEligible": "沒有需要轉檔的 PDF 檔案",
+        "start": "開始一鍵轉檔：共 {{count}} 個 PDF 檔案",
+        "progress": "一鍵轉檔中：{{current}}/{{total}}（{{fileName}}）",
+        "doneWithFailures": "一鍵轉檔完成：成功 {{ok}}、失敗 {{failed}}",
+        "doneAllPassed": "一鍵轉檔完成：全部成功（{{ok}}）"
+      }
+    },
+    "batchImport": {
+      "buttonLabel": "批次匯入全部 ({{count}})",
+      "errorBadge": "{{count}} 個錯誤",
+      "title": {
+        "noValidated": "沒有已驗證的檔案可供匯入",
+        "hasErrors": "有 {{count}} 個檔案包含驗證錯誤，請修正後再匯入",
+        "notValidated": "有 {{count}} 個檔案尚未驗證，請先驗證檔案",
+        "ready": "批次匯入 {{validCount}} 個有效檔案",
+        "skipErrorsSuffix": "（將跳過 {{errorCount}} 個有錯誤的檔案）"
+      },
+      "info": {
+        "multiUploadSkipErrors": "多檔上傳：已跳過 {{errorCount}} 個有錯誤的檔案，只匯入 {{validCount}} 個有效檔案"
+      },
+      "toast": {
+        "startSingle": "開始匯入檔案...",
+        "startBatch": "開始批次匯入 {{count}} 個檔案...",
+        "progress": "匯入中：{{current}}/{{total}}（{{fileName}}）",
+        "completedSingle": "檔案匯入完成！共匯入 {{fileCount}} 個檔案，總計 {{rowCount}} 筆資料",
+        "completedBatch": "批次匯入完成！共匯入 {{fileCount}} 個檔案，總計 {{rowCount}} 筆資料",
+        "remainingFiles": "已匯入檔案已移除，剩餘 {{count}} 個檔案",
+        "allDone": "所有檔案處理完成，可以繼續上傳新檔案"
+      },
+      "error": {
+        "generic": "批次匯入時發生錯誤",
+        "fileImportFailed": "檔案 {{fileName}} 匯入失敗: {{errorMessage}}"
+      },
+      "confirm": {
+        "title": "是否確認批次匯入",
+        "confirmText": "確認批次匯入",
+        "summary": "即將批次匯入 {{count}} 個已驗證的檔案到資料庫。",
+        "warning": "匯入後資料將無法直接還原，請再次確認所有檔案內容是否正確。",
+        "skipNotice": "注意：有 {{count}} 個檔案因包含錯誤將被跳過",
+        "pendingListTitle": "待匯入檔案："
+      }
+    },
+    "importConfirm": {
+      "title": "是否確認匯入",
+      "confirmText": "確認匯入",
+      "body": "匯入資料庫中後，資料將無法直接還原，請再次確認內容是否正確。"
+    }
+  },
+  "query": {
+    "title": "資料查詢",
+    "descLotTitle": "批號（Lot No）查詢：",
+    "descLot": "輸入批號（Lot No）進行模糊搜尋，查詢後可查看 P1/P2/P3 分類資料",
+    "descProductTitle": "產品編號查詢：",
+    "descProduct": "直接輸入產品編號（Product ID）會顯示該筆的 P1/P2/P3 追溯結果",
+    "descAdvancedTitle": "進階搜尋：",
+    "descAdvanced": "可依日期範圍、機台號碼、下膠編號、產品編號、P3規格等條件進行多條件組合搜尋",
+    "noTenantWarning": "尚未選擇區域。請先到上方「登入」頁籤選擇區域；若尚未初始化，請先驗證管理者金鑰以解鎖「管理者」頁籤。",
+    "searchPlaceholder": "輸入批號（Lot No）或產品編號（Product ID）查詢",
+    "suggestionLoading": "載入建議中...",
+    "suggestionNoResults": "沒有找到相符的建議",
+    "search": "查詢",
+    "searching": "查詢中...",
+    "advancedSearch": "進階搜尋",
+    "traceResult": "追溯結果",
+    "clearTraceResult": "清除追溯結果",
+    "noExtraCsvData": "此記錄沒有額外的 CSV 資料",
+    "detailModalTitle": "{{type}} 資料詳情",
+    "sections": {
+      "extrusionConditions": "押出機生產條件",
+      "otherParams": "其他參數",
+      "inspectionData": "檢測資料",
+      "checkItemsDetail": "檢查項目明細"
+    },
+    "tableHeaders": {
+      "clickToSort": "點擊排序",
+      "winder": "收卷機（Winder）",
+      "linkSearch": "關聯查詢",
+      "lotNo": "批號（Lot No）",
+      "dataType": "資料類型",
+      "productionDate": "生產日期",
+      "createdAt": "建立時間",
+      "actions": "操作"
+    },
+    "fields": {
+      "lotNo": "批號（Lot No）",
+      "productId": "產品編號（Product ID）",
+      "productName": "產品名稱",
+      "quantity": "數量",
+      "productionDate": "生產日期",
+      "notes": "備註",
+      "createdAt": "建立時間",
+      "slittingTime": "分條時間",
+      "machineNo": "機台",
+      "moldNo": "模具",
+      "specification": "規格",
+      "bottomTapeLot": "下膠編號"
+    },
+    "p1": {
+      "paper": {
+        "productionTimeStart": "生產時間：起",
+        "productionTimeEnd": "訖",
+        "specification": "品名規格",
+        "material": "材料",
+        "actualTemp": "實際溫度(°C)",
+        "setTemp": "控制溫度(°C)",
+        "param": "項目",
+        "value": "數值",
+        "unit": "單位",
+        "sections": {
+          "dryerTemps": "乾燥桶溫度",
+          "extWheelTemps": "延押輪參數",
+          "productionParams": "生產參數"
+        },
+        "extWheel": {
+          "top": "上輪(A)",
+          "mid": "中輪(B)",
+          "bottom": "下輪(C)"
+        },
+        "params": {
+          "lineSpeed": "線速度",
+          "screwPressure": "螺桿壓力",
+          "screwOutput": "螺桿壓出量",
+          "leftPadThickness": "墊片厚度(左下)",
+          "rightPadThickness": "墊片厚度(右下)",
+          "current": "電流量",
+          "extruderSpeed": "押出機轉速",
+          "quantitativePressure": "定量壓力",
+          "quantitativeOutput": "定量輸出",
+          "frame": "車台",
+          "filterPressure": "濾網壓力"
+        }
+      }
+    },
+    "actions": {
+      "linkSearch": "查詢",
+      "searchLinkedDataHint": "查詢對應的 P2 和 P1 資料",
+      "expandDetails": "展開查看細項",
+      "expandCsvData": "展開查看 CSV 資料"
+    },
+    "results": {
+      "noResults": "沒有找到符合條件的資料",
+      "foundCount": "共找到 {{count}} 筆資料",
+      "foundCountWithKeyword": "{{keyword}} - 共找到 {{count}} 筆資料"
+    },
+    "pagination": {
+      "previous": "上一頁",
+      "next": "下一頁",
+      "page": "第 {{page}} 頁"
+    },
+    "units": {
+      "items": "{{count}} 筆"
+    },
+    "stats": {
+      "checkCount": "檢查筆數",
+      "originalCount": "原始筆數",
+      "validCount": "有效筆數"
+    },
+    "p2": {
+      "fields": {
+        "slittingMachine": "分條機",
+        "winderMachine": "收卷機",
+        "sheetWidth": "片材寬度",
+        "thickness1": "厚度1",
+        "thickness2": "厚度2",
+        "thickness3": "厚度3",
+        "thickness4": "厚度4",
+        "thickness5": "厚度5",
+        "thickness6": "厚度6",
+        "thickness7": "厚度7",
+        "appearance": "外觀",
+        "roughEdge": "毛邊",
+        "slittingResult": "分條結果"
+      },
+      "slittingMachineDisplay": {
+        "points1": "分1 Points 1",
+        "points2": "分2 Points 2"
+      }
+    },
+    "p3": {
+      "fields": {
+        "p3No": "P3編號"
+      },
+      "rowHeader": "第 {{index}} 筆 - 產品編號（Product ID）：{{productId}}"
+    },
+    "errors": {
+      "productNotFound": "查無此產品",
+      "lotInfoMissing": "缺少批號資訊，無法追溯",
+      "winderMissing": "缺少收卷機（Winder）資訊，無法追溯",
+      "p2NotFound": "查無對應的 P2（批號 {{lotNo}} / 收卷機（Winder） {{winder}}）",
+      "traceFailedWithStatus": "追溯查詢失敗（HTTP {{status}}）：{{statusText}}",
+      "unknownDataType": "未知的資料類型",
+      "searchFailedWithDetail": "查詢失敗: {{detail}}",
+      "unknownError": "未知錯誤"
+    },
+    "advanced": {
+      "validationAtLeastOne": "請至少填寫一個搜尋條件",
+      "lotNo": "批號（Lot No）",
+      "lotNoPlaceholder": "輸入批號 (模糊搜尋)",
+      "productionDateFrom": "生產日期 (起始)",
+      "productionDateTo": "生產日期 (結束)",
+      "year": "年",
+      "month": "月",
+      "day": "日",
+      "machineNo": "機台號碼",
+      "machineNoPlaceholder": "輸入機台號碼 (模糊搜尋)",
+      "moldNo": "模具號碼",
+      "moldNoPlaceholder": "輸入模具號碼 (模糊搜尋)",
+      "productId": "產品編號（Product ID）",
+      "productIdPlaceholder": "輸入產品編號 (模糊搜尋)",
+      "specification": "規格",
+      "specificationPlaceholder": "輸入規格",
+      "material": "材料代號",
+      "materialPlaceholder": "輸入材料代號",
+      "thicknessMin": "厚度 (最小, 0.01mm)",
+      "thicknessMinPlaceholder": "例如 30 表示 0.30mm",
+      "thicknessMax": "厚度 (最大, 0.01mm)",
+      "thicknessMaxPlaceholder": "例如 33 表示 0.33mm",
+      "winderNumber": "收卷機號碼（Winder Number）",
+      "winderAll": "全部",
+      "winderDrawerSet": "已設定（點擊修改）",
+      "winderDrawerOpen": "點擊展開",
+      "winderDrawerTitle": "收卷機號碼（Winder Number）",
+      "winderInputLabel": "輸入收卷機號碼（Winder Number）",
+      "winderInputPlaceholder": "輸入收卷機號碼（Winder Number）",
+      "winderDone": "完成",
+      "dataType": "資料類型",
+      "dataTypeAll": "全部",
+      "reset": "重置",
+      "search": "搜尋"
+    }
+  },
+  "analytics": {
+    "title": "資料分析",
+    "tenantCurrent": "目前區域：",
+    "tenantNotSelected": "（未選擇）",
+    "tenantUnknown": "（未知）",
+    "startDate": "開始時間",
+    "endDate": "結束時間",
+    "dateRangeMode": "日期範圍",
+    "modeDay": "單日",
+    "modeWeek": "週",
+    "modeMonth": "月",
+    "modeQuarter": "季",
+    "modeHalfYear": "半年",
+    "modeYear": "一年",
+    "modeCustom": "自訂",
+    "pickDate": "選擇日期",
+    "pickRange": "選擇日期區間",
+    "pickPreset": "選擇範圍",
+    "yearLabel": "年份",
+    "monthLabel": "月份",
+    "quarterLabel": "季度",
+    "halfYearLabel": "半年",
+    "halfYearH1": "上半年",
+    "halfYearH2": "下半年",
+    "weekNumberLabel": "週次",
+    "rangePreview": "範圍：{{start}} ~ {{end}}",
+    "productId": "產品編號",
+    "productIdPlaceholder": "輸入產品編號",
+    "traceabilityTitle": "追溯（跨站點）",
+    "traceabilityOpen": "查看追溯流程",
+    "traceabilityFetchFailed": "無法獲取追溯資料",
+    "traceabilityIncomplete": "追溯鏈不完整：{{missing}}",
+    "stations": "站點",
+    "analyze": "分析",
+    "analyzing": "分析中...",
+    "resultJson": "分析結果 JSON",
+    "resultJsonPlaceholder": "（自動顯示後端回傳的 JSON）",
+    "applyJson": "使用 JSON 立即繪圖",
+    "note": "備註：此頁會呼叫後端分析服務，並將回傳 JSON 視覺化（直方圖/圓餅圖）。",
+    "yield": "良率",
+    "ngDrilldownHint": "提示：可點擊圓餅圖的 NG 區塊，或任一長條圖的 NG 柱，進入 NG 明細模式。",
+    "totalProducts": "總產品",
+    "ok": "良品",
+    "ng": "不良品",
+    "moldingAnalysis": "成形分析",
+    "noData": "暫無資料",
+    "notFound": "未找到資料",
+    "ngOnlyTitle": "不良品（NG）明細",
+    "backToAnalysis": "返回分析",
+    "refresh": "重新查詢",
+    "loading": "載入中...",
+    "viewDetails": "查看明細",
+    "stationPickError": "請至少勾選一個站點（P2 / P3 / ALL）",
+    "analyzeRequestFailed": "分析請求失敗（HTTP {{status}}）",
+    "analyzeFailedWithDetail": "分析請求失敗：{{detail}}",
+    "invalidResponse": "後端回傳 JSON 格式不符合預期（需為 {分類: {key: {total_count,count_0,...}}}）",
+    "pasteJsonFirst": "請先貼上分析結果 JSON",
+    "jsonParseFailed": "JSON 解析失敗，請確認格式正確",
+    "summary": {
+      "productionNg": "生產品：{{total}} / 不良品：{{ng}}（{{percent}}%）"
+    },
+    "featurePct": {
+      "title": "Feature 重要度（feature_pct）",
+      "percent": "{{percent}}%"
+    },
+    "views": {
+      "heatmap": "熱區圖",
+      "bar": "長條圖"
+    },
+    "heatmap": {
+      "category": "分類",
+      "value": "值",
+      "ngRate": "NG 比率",
+      "sample": "樣本數"
+    },
+    "pareto": {
+      "featureTitle": "Feature Pareto (final_raw_score)",
+      "ngTitle": "NG Code Pareto",
+      "valueLabel": "Final Score",
+      "cumLabel": "累積%",
+      "noData": "暫無資料"
+    }
+  },
+  "errors": {
+    "networkConnectionFailed": "網路連接失敗，請檢查網路連接或服務器狀態",
+    "unknownError": "未知錯誤",
+    "uploadNetworkFailed": "網路錯誤，上傳失敗",
+    "uploadCanceled": "上傳已取消",
+    "noTenantSelected": "尚未選擇區域（X-Tenant-Id）。請到「登入」頁籤選擇區域；若尚未初始化，先用管理者金鑰解鎖「管理者」頁籤建立區域。"
+  },
+  "tenant": {
+    "toast": {
+      "resetRecreated": "偵測到區域已重置，已自動重新建立區域「{{code}}」",
+      "resetReconnected": "偵測到區域已重置，已自動重新連線",
+      "resetMultipleTenants": "偵測到區域已重置且存在多個區域，請設定預設區域或手動指定區域",
+      "noTenantsNeedAdmin": "目前資料庫沒有任何區域。請到「登入」頁籤驗證管理者金鑰以解鎖「管理者」，再使用「一鍵建立/選擇區域」或「建立區域」。"
+    }
+  },
+  "init": {
+    "title": "初始化",
+    "disabledHint": "此頁面已停用：初始化功能已合併到「管理者」頁籤。"
+  },
+  "dataQuery": {
+    "title": "資料查詢",
+    "searchPlaceholder": "請輸入檔案名稱或狀態...",
+    "search": "查詢",
+    "searching": "查詢中...",
+    "hint": "提示：可以搜尋檔案名稱、上傳狀態等關鍵字",
+    "resultsWithCount": "查詢結果 ({{count}} 筆)",
+    "columns": {
+      "filename": "檔案名稱",
+      "uploadTime": "上傳時間",
+      "status": "處理狀態",
+      "records": "記錄數量",
+      "actions": "操作"
+    },
+    "export": "匯出",
+    "empty": {
+      "noMatch": "沒有找到符合條件的資料",
+      "tryDifferent": "請嘗試不同的搜尋關鍵字",
+      "prompt": "請輸入搜尋條件開始查詢",
+      "supportsKeywords": "支援檔案名稱、狀態等關鍵字搜尋"
+    },
+    "status": {
+      "completed": "已完成",
+      "processing": "處理中"
+    }
+  },
+  "logViewer": {
+    "title": "日誌管理",
+    "subtitle": "查看、搜尋和管理系統日誌",
+    "refresh": "重新整理",
+    "cleanupOld": "清理舊日誌",
+    "tabs": {
+      "logs": "日誌查看",
+      "stats": "統計資訊"
+    },
+    "controls": {
+      "title": "日誌控制",
+      "logFile": "日誌檔案",
+      "selectLogFile": "選擇日誌檔案",
+      "download": "下載"
+    },
+    "filters": {
+      "level": "日誌級別",
+      "levelAll": "全部級別",
+      "timeRange": "時間範圍",
+      "selectTimeRange": "選擇時間範圍",
+      "lastHours": "最近 {{hours}} 小時",
+      "lastWeek": "最近 1 週",
+      "allTime": "全部時間",
+      "displayCount": "顯示數量",
+      "rows": "{{count}} 條"
+    },
+    "search": {
+      "placeholder": "搜尋日誌內容...",
+      "search": "搜尋"
+    },
+    "status": {
+      "searchResults": "搜尋結果: {{count}} 條",
+      "showing": "顯示: {{shown}} / {{total}} 條日誌",
+      "file": "檔案: {{file}}"
+    },
+    "content": {
+      "title": "日誌內容",
+      "searchMode": "搜尋模式"
+    },
+    "loading": "載入中...",
+    "loadMore": "載入更多",
+    "empty": {
+      "searchNone": "沒有找到匹配的日誌",
+      "noLogs": "沒有日誌資料"
+    },
+    "confirm": {
+      "cleanup": "確定要清理所有舊的日誌備份檔案嗎？"
+    },
+    "alert": {
+      "cleanupDone": "日誌清理完成"
+    },
+    "errors": {
+      "loadFilesFailed": "載入日誌檔案失敗",
+      "loadLogsFailed": "載入日誌失敗",
+      "searchFailed": "搜尋失敗",
+      "cleanupFailed": "清理失敗",
+      "downloadFailed": "下載失敗"
+    },
+    "stats": {
+      "fileInfo": "檔案資訊",
+      "totalSize": "總大小: {{size}}",
+      "levelDistribution": "日誌級別分佈",
+      "apiUsage": "API 使用統計",
+      "recentActivity": "最近活動",
+      "recentActivityDesc": "最新的系統活動記錄"
+    },
+    "extraDataSummary": "額外資料 ({{count}} 項)"
+  },
+  "traceability": {
+    "title": "生產追溯流程圖",
+    "loading": "載入追溯資料中...",
+    "noData": "無資料",
+    "missingData": "資料缺失",
+    "clickToViewDetails": "點擊查看詳細資料",
+    "actions": {
+      "clickToExpand": "點擊展開"
+    },
+    "fields": {
+      "lotNo": "批號",
+      "material": "材料",
+      "winderNumber": "捲收機號碼",
+      "semiProductNo": "半成品編號",
+      "moldNo": "模具號碼",
+      "productionSerial": "生產序號"
+    },
+    "cards": {
+      "p1": "P1 原料",
+      "p2": "P2 半成品編號",
+      "p3": "P3 成品"
+    },
+    "chainIncomplete": "追溯鏈不完整: {{links}}",
+    "errorWithDetail": "錯誤: {{error}}",
+    "errors": {
+      "fetchFailed": "無法獲取追溯資料"
+    }
+  },
+  "fileUpload": {
+    "ui": {
+      "dropzoneTitle": "拖曳上傳或是選擇檔案",
+      "dropzoneHint": "支援 CSV 和 Excel 檔案格式，檔案大小限制 10MB",
+      "uploadedFiles": "已上傳檔案",
+      "allUploaded": "所有檔案上傳完成",
+      "uploading": "上傳中... {{percent}}%",
+      "uploadDone": "✓ 上傳完成"
+    },
+    "errors": {
+      "invalidFileType": "檔案 \"{{name}}\" 格式不符，僅支援 CSV 和 Excel 檔案格式",
+      "fileTooLarge": "檔案 \"{{name}}\" 超過 10MB 限制，檔案大小: {{size}}"
+    },
+    "alerts": {
+      "importSuccess": "資料匯入成功！匯入了 {{count}} 筆資料",
+      "importFailed": "資料匯入失敗",
+      "uploadFailed": "檔案上傳失敗"
+    }
+  },
+  "csvEditor": {
+    "titleWithFile": "CSV 內容編輯 - {{fileName}}",
+    "actions": {
+      "download": "下載",
+      "saveChanges": "儲存修改",
+      "confirmImport": "確認匯入"
+    },
+    "status": {
+      "importingWait": "匯入資料庫中...請稍後...",
+      "importProgress": "匯入進度: {{percent}}%"
+    },
+    "footer": {
+      "summary": "共 {{rows}} 行資料，{{cols}} 個欄位",
+      "hint": "提示：點擊任意儲存格即可直接編輯內容"
+    },
+    "confirmDialog": {
+      "title": "是否確認上傳",
+      "description": "此操作將會把 CSV 檔案匯入資料庫中，請確認是否要繼續？"
+    }
+  },
+  "logService": {
+    "downloadFailed": "下載日誌檔案失敗"
+  },
+  "admin": {
+    "tabs": {
+      "general": "一般設定",
+      "stations": "工站管理",
+      "validation": "驗證規則",
+      "analytics": "分析映射",
+      "links": "追溯關係"
+    },
+    "general": {
+      "title": "管理者模式",
+      "hint": "此頁面只在你明確提供管理者金鑰時，才會在呼叫端點時帶入 X-Admin-API-Key。",
+      "keyLabel": "目前管理者金鑰",
+      "keyNotSet": "（未設定）",
+      "statusLabel": "管理者模式狀態",
+      "statusEnabled": "已啟用",
+      "statusDisabled": "已停用",
+      "inputLabel": "管理者金鑰",
+      "inputPlaceholder": "輸入 X-Admin-API-Key",
+      "btn": {
+        "save": "保存",
+        "saving": "驗證中…",
+        "clear": "清除",
+        "disable": "停用"
+      },
+      "toast": {
+        "keyRequired": "請輸入管理者金鑰",
+        "keyInvalid": "管理者金鑰無效",
+        "keySuccess": "管理者金鑰驗證成功：已解鎖管理者模式",
+        "keyNetworkError": "管理者金鑰驗證失敗（網路或伺服器未啟動）",
+        "keyCleared": "已清除管理者金鑰（localStorage）",
+        "disabled": "已停用管理者模式（本次 session）",
+        "diagSuccess": "已更新自檢資訊",
+        "diagError": "自檢失敗：請確認後端可連線，且管理者金鑰正確",
+        "diagNetworkError": "自檢失敗（網路或伺服器未啟動）"
+      },
+      "diag": {
+        "title": "自檢（WhoAmI / Bootstrap Status）",
+        "btn": "更新自檢資訊",
+        "btnLoading": "更新中…",
+        "tenantMismatch": "提醒：目前瀏覽器儲存（localStorage）的區域為 {{local}}，但身分（whoami）回報的場域（tenant）為 {{remote}}。若要同步，請到下方「區域管理」點「套用為目前區域」。"
+      },
+      "init": {
+        "title": "初始化（第一次／空資料庫）",
+        "hint": "這裡提供建立/選擇區域的工具（會寫入 localStorage：{{key}}）。",
+        "currentTenant": "目前區域",
+        "notSet": "（未設定）",
+        "btn": {
+          "autoInit": "一鍵建立/選擇區域",
+          "clearTenant": "清除區域",
+          "bootstrap": "建立第一個區域（bootstrap）"
+        },
+        "hasTenantsHint": "已偵測到有效區域，此初始化（bootstrap）按鈕已隱藏（避免誤建）。",
+        "requireKey": "請先設定管理者金鑰",
+        "toast": {
+          "noTenant": "無法自動決定區域（可能存在多個區域且沒有預設）",
+          "tenantReady": "區域已就緒：{{label}}",
+          "tenantCleared": "已清除區域（localStorage）",
+          "initError": "初始化場域（tenant）失敗",
+          "bootstrapError": "建立區域失敗（網路或伺服器未啟動）",
+          "bootstrapCreated": "已建立區域：{{code}}"
+        }
+      }
+    },
+    "tenants": {
+      "title": "區域管理",
+      "hint": "需要管理者金鑰才能完整 CRUD（新增/編輯/停用/設預設）。",
+      "showInactive": "顯示停用區域",
+      "btn": {
+        "refresh": "重新整理",
+        "refreshing": "更新中…",
+        "create": "建立區域",
+        "creating": "建立中…",
+        "setDefault": "設為預設",
+        "applyCurrent": "套用為目前區域",
+        "enable": "啟用",
+        "disable": "停用",
+        "delete": "刪除"
+      },
+      "form": {
+        "title": "新增區域",
+        "name": "名稱",
+        "code": "代碼（Code）",
+        "default": "預設（Default）",
+        "yes": "是（Yes）",
+        "no": "否（No）"
+      },
+      "table": {
+        "colArea": "區域（Area）",
+        "colCode": "代碼（Code）",
+        "colName": "名稱（Name）",
+        "colDefault": "預設（Default）",
+        "colActive": "狀態（Active）",
+        "colActions": "操作（Actions）",
+        "empty": "沒有場域（tenants）",
+        "notLoaded": "尚未載入",
+        "pillDefault": "預設（Default）",
+        "pillActive": "啟用",
+        "pillInactive": "停用"
+      },
+      "toast": {
+        "updated": "已更新場域（tenant）",
+        "updateError": "更新場域（tenant）失敗 (HTTP {{status}})",
+        "updateNetworkError": "更新場域（tenant）失敗（網路或伺服器未啟動）",
+        "loadError": "取得場域（tenants）失敗 (HTTP {{status}})",
+        "loadNetworkError": "取得場域（tenants）失敗（網路或伺服器未啟動）",
+        "created": "已建立區域：{{code}}",
+        "createError": "建立區域失敗 (HTTP {{status}})",
+        "createNetworkError": "建立區域失敗（網路或伺服器未啟動）",
+        "deleted": "已刪除（停用）區域：{{code}}",
+        "deleteError": "刪除區域失敗 (HTTP {{status}})",
+        "deleteNetworkError": "刪除區域失敗（網路或伺服器未啟動）",
+        "switched": "已切換目前區域：{{code}} ({{name}})",
+        "switchedWithKey": "已切換區域：{{code}} ({{name}}），並取得可用 API 金鑰（API key）",
+        "switchError": "取得 API 金鑰（API key）失敗 (HTTP {{status}})",
+        "switchNetworkError": "切換區域失敗（網路或伺服器未啟動）"
+      },
+      "confirm": {
+        "delete": "確定要刪除區域 {{code}}？\n（此操作為安全停用：is_active=false）"
+      },
+      "requireKey": "請輸入區域名稱",
+      "requireCode": "請輸入區域代碼"
+    },
+    "users": {
+      "title": "場域（Tenant）使用者管理",
+      "hint": "可修改帳號（Username）/ 角色（Role）/ 啟用停用；密碼修改先不做（待辦，TODO）。",
+      "selectTenantPlaceholder": "選擇場域（Tenant）…",
+      "btn": {
+        "loadUsers": "載入使用者",
+        "loading": "更新中…"
+      },
+      "form": {
+        "title": "新增使用者（需密碼；密碼修改仍為待辦，TODO）",
+        "username": "帳號（Username）",
+        "password": "密碼（Password）",
+        "passwordPlaceholder": "至少 8 碼",
+        "role": "角色（Role）",
+        "roleUser": "使用者（User）",
+        "roleManager": "管理者（Manager）",
+        "btn": {
+          "create": "建立使用者",
+          "creating": "建立中…"
+        }
+      },
+      "table": {
+        "colUsername": "帳號（Username）",
+        "colTenant": "場域（Tenant）",
+        "colRole": "角色（Role）",
+        "colActive": "狀態（Active）",
+        "colLastLogin": "最後登入（Last login）",
+        "colActions": "操作（Actions）",
+        "empty": "沒有使用者",
+        "notLoaded": "尚未載入",
+        "moveToPlaceholder": "改綁定到…",
+        "btn": {
+          "move": "改綁定",
+          "moving": "處理中…",
+          "enable": "啟用",
+          "disable": "停用"
+        }
+      },
+      "toast": {
+        "selectTenantFirst": "請先選擇場域（tenant）",
+        "usernameRequired": "請輸入 username",
+        "passwordTooShort": "請輸入至少 8 碼密碼（建立使用者需要）",
+        "created": "已建立使用者：{{username}}",
+        "createError": "建立使用者失敗 (HTTP {{status}})",
+        "createNetworkError": "建立使用者失敗（網路或伺服器未啟動）",
+        "updated": "已更新使用者",
+        "updateError": "更新使用者失敗 (HTTP {{status}})",
+        "updateNetworkError": "更新使用者失敗（網路或伺服器未啟動）",
+        "deleted": "已刪除（停用）使用者",
+        "deleteError": "刪除使用者失敗 (HTTP {{status}})",
+        "deleteNetworkError": "刪除使用者失敗（網路或伺服器未啟動）",
+        "moved": "已改綁定：{{username}} → {{target}}",
+        "moveSelectFirst": "請先選擇要綁定的場域（tenant）",
+        "moveAlreadyThere": "使用者已在此場域（tenant），不需修改",
+        "moveError": "改綁定失敗 (HTTP {{status}})",
+        "moveNetworkError": "改綁定失敗（網路或伺服器未啟動）",
+        "loadError": "取得使用者失敗 (HTTP {{status}})",
+        "loadNetworkError": "取得使用者失敗（網路或伺服器未啟動）"
+      },
+      "confirm": {
+        "delete": "確定要刪除使用者 {{username}}？\n（此操作為安全停用：is_active=false）",
+        "move": "確定要將使用者 {{username}} 改綁定到場域（tenant） {{target}}？\n\n注意：會撤銷此使用者現有的登入 API 金鑰（API key），需要重新登入。"
+      }
+    },
+    "stations": {
+      "title": "工站管理",
+      "subtitle": "管理工站定義與 Schema 欄位設定。",
+      "btn": {
+        "refresh": "重新整理",
+        "create": "建立工站",
+        "creating": "建立中…",
+        "schema": "Schema",
+        "delete": "刪除",
+        "save": "儲存",
+        "cancel": "取消"
+      },
+      "form": {
+        "title": "新增工站",
+        "code": "代碼（Code）",
+        "codePlaceholder": "例如 P4",
+        "name": "名稱（Name）",
+        "namePlaceholder": "例如 Assembly",
+        "sortOrder": "排序（Sort Order）",
+        "hasItems": "有明細（Has Items）"
+      },
+      "table": {
+        "colCode": "代碼",
+        "colName": "名稱",
+        "colSort": "排序",
+        "colHasItems": "有明細",
+        "colActions": "操作",
+        "empty": "尚無工站"
+      },
+      "schema": {
+        "title": "Schema：{{code}}",
+        "loading": "載入 Schema 中…",
+        "saved": "{{code}} 的 Schema 已儲存"
+      },
+      "toast": {
+        "created": "已建立工站：{{code}}",
+        "updated": "已更新工站：{{code}}",
+        "deleted": "已刪除工站：{{code}}",
+        "failedLoad": "載入工站失敗",
+        "requiredFields": "代碼與名稱為必填",
+        "invalidJson": "JSON 格式錯誤"
+      },
+      "confirm": {
+        "delete": "確定要刪除工站 {{code}}？\n（此操作同時刪除 Schema、記錄與追溯關係）"
+      }
+    },
+    "validation": {
+      "title": "驗證規則",
+      "subtitle": "管理各工站的 enum、range、regex 及 required 驗證規則。",
+      "selectStation": "選擇工站…",
+      "btn": {
+        "load": "載入規則",
+        "create": "建立規則",
+        "creating": "建立中…",
+        "toggle": "切換",
+        "delete": "刪除"
+      },
+      "form": {
+        "title": "新增規則",
+        "fieldName": "欄位名稱（Field Name）",
+        "fieldNamePlaceholder": "例如 material_grade",
+        "ruleType": "規則類型（Rule Type）",
+        "config": "設定（JSON）",
+        "configPlaceholder": "{\"values\": [\"H2\",\"H5\",\"H8\"]}"
+      },
+      "table": {
+        "colField": "欄位",
+        "colType": "類型",
+        "colConfig": "設定",
+        "colActions": "操作",
+        "emptyNoRules": "此工站尚無規則",
+        "emptySelectFirst": "請先選擇工站"
+      },
+      "toast": {
+        "created": "已建立驗證規則",
+        "deleted": "已刪除驗證規則",
+        "fieldRequired": "欄位名稱為必填",
+        "invalidJson": "規則設定 JSON 格式錯誤"
+      },
+      "confirm": {
+        "delete": "確定要刪除欄位「{{field}}」的驗證規則？"
+      }
+    },
+    "analytics": {
+      "title": "分析映射",
+      "subtitle": "將 JSONB 路徑對應到分析輸出欄位名稱。",
+      "selectStation": "選擇工站…",
+      "btn": {
+        "load": "載入映射",
+        "create": "建立映射",
+        "creating": "建立中…",
+        "delete": "刪除"
+      },
+      "form": {
+        "title": "新增映射",
+        "sourcePath": "來源路徑（Source Path）",
+        "sourcePathPlaceholder": "例如 record.data.thickness",
+        "outputColumn": "輸出欄位（Output Column）",
+        "outputColumnPlaceholder": "例如 thickness_mm",
+        "order": "排序（Order）",
+        "dataType": "資料類型（Data Type）"
+      },
+      "table": {
+        "colOrder": "排序",
+        "colSourcePath": "來源路徑",
+        "colOutputColumn": "輸出欄位",
+        "colType": "類型",
+        "colActions": "操作",
+        "emptyNoMappings": "此工站尚無映射",
+        "emptySelectFirst": "請先選擇工站"
+      },
+      "toast": {
+        "created": "已建立映射",
+        "deleted": "已刪除映射",
+        "requiredFields": "來源路徑與輸出欄位為必填"
+      },
+      "confirm": {
+        "delete": "確定要刪除映射「{{column}}」？"
+      }
+    },
+    "links": {
+      "title": "追溯關係（Station Links）",
+      "subtitle": "定義工站之間的追溯鏈關係。",
+      "btn": {
+        "refresh": "重新整理",
+        "create": "建立連結",
+        "creating": "建立中…",
+        "delete": "刪除"
+      },
+      "form": {
+        "title": "新增連結",
+        "fromStation": "起始工站（From）",
+        "toStation": "目標工站（To）",
+        "stationPlaceholder": "選擇…",
+        "linkType": "連結類型（Link Type）",
+        "sortOrder": "排序（Sort Order）"
+      },
+      "table": {
+        "colFrom": "起始",
+        "colTo": "目標",
+        "colType": "類型",
+        "colSort": "排序",
+        "colActions": "操作",
+        "empty": "尚無連結"
+      },
+      "toast": {
+        "created": "已建立連結：{{from}} → {{to}}",
+        "deleted": "已刪除連結",
+        "requiredStations": "請選擇起始與目標工站",
+        "sameStation": "起始與目標工站不可相同"
+      },
+      "confirm": {
+        "delete": "確定要刪除連結 {{from}} → {{to}}？"
+      }
+    }
+  }
+}

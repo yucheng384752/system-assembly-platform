@@ -1,0 +1,1189 @@
+{
+  "app": {
+    "title": "File Upload System",
+    "subtitle": "Upload, validate, and query CSV/PDF data"
+  },
+  "common": {
+    "clear": "Clear",
+    "loading": "Loading…",
+    "noData": "No data",
+    "unknown": "(Unknown)",
+    "expand": "Expand",
+    "collapse": "Collapse",
+    "ok": "OK",
+    "cancel": "Cancel",
+    "close": "Close"
+  },
+  "專有名詞對照表": {
+    "分條時間": "Slitting Time",
+    "分條日期": "Slitting Date",
+    "批號": "LOT NO.",
+    "製造日期": "Production Date",
+    "年月日": "year-month-day",
+    "規格": "Specification",
+    "P1.規格": "P1.Specification",
+    "P2.規格": "Specification",
+    "P3.規格": "P3.Specification",
+    "分條速度": "Slitting speed",
+    "分條機台": "Slitting machine",
+    "捲收機號": "Winder number",
+    "完成米數": "Meters completed",
+    "分條結果": "Striped Results",
+    "品檢": "Quality inspection",
+    "品管": "Quality control",
+    "毛邊": "Rough edge",
+    "外觀": "Appearance",
+    "操作員": "operator",
+    "機台編號": "Machine NO",
+    "模具編號": "Mold NO",
+    "下膠編號": "BottomTape",
+    "完成": "Finish",
+    "半成品阻抗": "Semi-finished impedance",
+    "熱風槍溫度": "Heat gun temperature"
+  },
+  "roles": {
+    "user": "User",
+    "manager": "Manager",
+    "globalAdmin": "Global admin"
+  },
+  "fields": {
+    "tenantId": "Area ID",
+    "actorRole": "Role",
+    "apiKeyLabel": "API key label"
+  },
+  "manager": {
+    "title": "Tenant management",
+    "subtitle": "Use a regular API key (no admin key required)",
+    "notManager": "Current role is not manager, cannot manage users.",
+    "hint": "Note: Managers can manage users in the same area.",
+    "actions": {
+      "refreshIdentity": "Refresh identity",
+      "refreshUsers": "Refresh users",
+      "createUser": "Create user",
+      "save": "Save",
+      "deactivate": "Deactivate"
+    },
+    "labels": {
+      "username": "Username",
+      "password": "Password",
+      "role": "Role",
+      "includeInactive": "Include inactive"
+    },
+    "table": {
+      "username": "Username",
+      "role": "Role",
+      "active": "Status",
+      "createdAt": "Created at",
+      "lastLoginAt": "Last login",
+      "actions": "Actions"
+    },
+    "toast": {
+      "whoamiFailed": "Failed to load identity (not logged in or no permission)",
+      "whoamiFailedNetwork": "Failed to load identity (network/server not running)",
+      "fetchUsersFailedHttp": "Failed to fetch users (HTTP {{status}})",
+      "fetchUsersFailedNetwork": "Failed to fetch users (network/server not running)",
+      "usernameRequired": "Please enter username",
+      "passwordMin": "Password must be at least 8 characters",
+      "createUserFailedHttp": "Failed to create user (HTTP {{status}})",
+      "createUserFailedNetwork": "Failed to create user (network/server not running)",
+      "createUserSuccess": "User created",
+      "updateUserFailedHttp": "Failed to update user (HTTP {{status}})",
+      "updateUserFailedNetwork": "Failed to update user (network/server not running)",
+      "updateUserSuccess": "User updated",
+      "deactivateUserFailedHttp": "Failed to deactivate user (HTTP {{status}})",
+      "deactivateUserFailedNetwork": "Failed to deactivate user (network/server not running)",
+      "deactivateUserSuccess": "User deactivated"
+    },
+    "confirm": {
+      "deactivateUser": "Deactivate user \"{{username}}\"?"
+    }
+  },
+  "tabs": {
+    "register": "Login",
+    "upload": "Upload",
+    "query": "Query",
+    "analysis": "Analytics",
+    "manager": "Tenant Admin",
+    "admin": "Admin"
+  },
+  "footer": {
+    "copyright": "© 2024 Form Analysis System. All rights reserved.",
+    "version": "Version {{version}}"
+  },
+  "language": {
+    "label": "Language",
+    "zhTW": "Chinese (Traditional)",
+    "en": "English"
+  },
+  "a11y": {
+    "fontSize": {
+      "label": "Font size",
+      "small": "Small",
+      "medium": "Medium",
+      "large": "Large"
+    }
+  },
+  "register": {
+    "title": "Login",
+    "tenantCodeOptional": "Area code (optional)",
+    "tenantCodePlaceholder": "e.g. ut",
+      "noTenantWarning": "No tenant selected. Please choose a tenant in the Login tab. If not initialized, use the Admin key to unlock the Admin tab and create a tenant first.",
+      "errors": {
+        "productNotFound": "Product not found",
+        "searchFailedWithDetail": "Search failed: {{detail}}",
+        "unknownError": "Unknown error"
+      },
+    "username": "Username",
+    "usernamePlaceholder": "Enter username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "login": "Login",
+    "loggingIn": "Logging in…",
+    "tips": "Tips",
+    "adminHint": "To create the first Area / Area admin, verify the admin key here. After success, the Admin tab will appear.",
+    "adminKey": "Admin key",
+    "adminKeyPlaceholder": "Paste key",
+    "verifying": "Verifying…",
+    "verifyAndUnlock": "Verify & unlock admin",
+    "role": "Role",
+    "roleLoading": "(loading…)",
+    "tenantId": "Area ID",
+    "tenantNotSaved": "(not saved)",
+    "updateIdentity": "Refresh identity",
+    "logout": "Logout (clear login info)",
+    "tenantSettings": "Area settings",
+    "tenantSelected": "Selected area (Area ID)",
+    "none": "(none)",
+    "clearTenantId": "Clear Area ID",
+    "refreshTenants": "Refresh areas list",
+    "tenantsNeedAuth": "(This environment requires a key to read areas)",
+    "tenants": "areas",
+    "tenantsEmpty": "(empty)",
+    "useTenant": "Use this area",
+    "adminTips": "Admin tips",
+    "adminTipsText": "If you need to initialize/manage tenants and users, verify the admin key here to unlock the \"Admin\" tab.",
+    "toast": {
+      "diagFailedNeedLogin": "Diagnostics failed: please ensure the backend is reachable and you are logged in",
+      "diagUpdated": "Diagnostics updated",
+      "diagFailedNetwork": "Diagnostics failed (network/server not running)",
+      "authEnabledNeedLogin": "Auth is enabled on the backend: please log in first (or ask an admin to initialize)",
+      "fetchTenantsFailedHttp": "Failed to fetch tenants (HTTP {{status}})",
+      "fetchTenantsOk": "Fetched tenants: {{count}}",
+      "fetchTenantsFailedNetwork": "Failed to fetch tenants (network/server not running)",
+      "clearedCredentials": "Cleared auth credentials (localStorage)",
+      "tenantIdEmpty": "Tenant ID cannot be empty",
+      "tenantSet": "Tenant set: {{label}}",
+      "tenantCleared": "Cleared tenant ID (localStorage)",
+      "usernameRequired": "Please enter username",
+      "passwordRequired": "Please enter password",
+      "loginFailedHttp": "Login failed (HTTP {{status}})",
+      "loginResponseIncomplete": "Login succeeded but response is incomplete",
+      "loginSuccessSaved": "Login succeeded: tenant and credentials saved",
+      "loginFailedNetwork": "Login failed (network/server not running)",
+      "adminKeyRequired": "Please enter admin key",
+      "adminKeyInvalid": "Invalid admin key",
+      "adminKeyVerifySuccessUnlockTab": "Admin key verified: \"Admin\" tab unlocked",
+      "adminKeyVerifyFailedNetwork": "Admin key verification failed (network/server not running)"
+    }
+  },
+  "upload": {
+    "dropMain": "Drag & drop or choose files",
+    "dropSub": "Supports csv / pdf, size limit 10MB",
+    "chooseFile": "Choose files",
+    "uploadedFiles": "Uploaded Files",
+    "empty": "No files uploaded yet",
+    "status": {
+      "pendingValidation": "Pending validation",
+      "validating": "Validating...",
+      "validated": "Validated",
+      "importing": "Importing...",
+      "imported": "Imported",
+      "validationPassed": "Validation passed"
+    },
+    "pdf": {
+      "status": {
+        "converting": "Converting (PDF→CSV)",
+        "converted": "Converted (CSV)",
+        "convertFailed": "Convert failed",
+        "uploadedPendingConvert": "Uploaded (PDF) / Pending convert"
+      },
+      "convert": {
+        "done": "Converted ✓",
+        "retry": "Retry convert",
+        "start": "Start convert"
+      },
+      "upload": {
+        "uploaded": "Uploaded ✓",
+        "upload": "Upload PDF"
+      }
+    },
+    "actions": {
+      "validate": "Validate",
+      "revalidate": "Re-validate",
+      "validated": "Validated ✓",
+      "validating": "Validating...",
+      "saveChanges": "Save changes",
+      "importFile": "Import",
+      "remove": "Remove",
+      "expand": "Expand",
+      "collapse": "Collapse"
+    },
+    "badges": {
+      "readyToImport": "✓ Ready",
+      "needsFix": "Needs fixes"
+    },
+    "editDisabledNotice": "Editing is not available in this upload flow. Please fix the CSV and upload again.",
+    "lotNoLabel": "Lot No",
+    "validationErrors": {
+      "count": "{{count}} error(s)"
+    },
+    "validation": {
+      "fileTooLarge": "File size exceeds the limit ({{maxSizeMb}}MB)",
+      "unsupportedFileType": "Unsupported file type: {{type}}",
+      "unknownType": "(unknown)"
+    },
+    "errors": {
+      "uploadFailed": "Upload failed",
+      "batchUploadFailed": "Batch upload failed",
+      "confirmUploadFailed": "Confirm upload failed",
+      "fetchPdfConvertStatusFailed": "Failed to fetch PDF convert status",
+      "fetchCsvOutputsFailed": "Failed to fetch converted CSV outputs",
+      "fetchImportStatusFailed": "Failed to fetch import status",
+      "triggerPdfConvertFailed": "Failed to trigger PDF conversion",
+      "validateFailed": "Validation failed",
+      "importFailed": "Import failed",
+      "saveFailed": "Save failed",
+      "saveError": "An error occurred while saving changes",
+      "fileNotFound": "File not found",
+      "missingProcessId": "Missing process_id",
+      "pdfUploadFailed": "PDF upload failed",
+      "validationTimeout": "Validation timed out. Please try again later or re-validate.",
+      "validationProcessError": "An error occurred during validation",
+      "importError": "An error occurred during import",
+      "networkConnectionFailed": "Network request failed. Please check your connection or server status.",
+      "unknownError": "Unknown error",
+      "uploadNetworkFailed": "Network error: upload failed.",
+      "uploadCanceled": "Upload canceled.",
+      "noTenantSelected": "No tenant selected (X-Tenant-Id). Go to the \"Login\" tab to choose a tenant. If the system isn't initialized yet, unlock the \"Admin\" tab with the admin key to create a tenant."
+    },
+    "toast": {
+      "onlyCsvOrPdf": "Only CSV or PDF files are supported",
+      "fileAlreadyExists": "File {{fileName}} is already in the list; skipping",
+      "fileTooLarge": "File size exceeds {{maxSizeMb}}MB limit",
+      "filesAdded": "Added {{count}} file(s)",
+      "missingProcessIdUploadPdf": "Missing process_id. Please upload the PDF first.",
+      "pdfConvertFetchingCsv": "PDF conversion finished. Fetching converted CSV outputs...",
+      "pdfConvertGotCsv": "PDF conversion finished. Retrieved {{count}} CSV file(s). Please review/fix, then validate.",
+      "pdfConvertNoCsv": "PDF conversion finished, but no usable CSV was produced",
+      "pdfConvertCreateCsvJobFailed": "PDF conversion finished, but failed to create a CSV validation job",
+      "pdfConvertFailed": "PDF conversion failed",
+      "pdfConvertStillProcessing": "PDF conversion is still processing. Please check again later.",
+      "changesAppliedRevalidate": "Changes applied (not uploaded). Please re-validate.",
+      "missingProcessIdSave": "Missing process_id. Please validate the file before saving changes.",
+      "savedWithInvalidRows": "Changes saved, but {{count}} row(s) are still invalid. Please continue fixing.",
+      "savedAndValidated": "Changes saved and validation passed",
+      "validationCompletedWithErrors": "{{fileName}} validation completed with errors. Please fix before importing.",
+      "validationPassedFile": "{{fileName}} validation passed",
+      "validationFailedWithMessage": "{{fileName}} validation failed: {{message}}",
+      "validationDoneWithInvalidRowsNoEdit": "{{fileName}} validation completed: {{totalRows}} rows, {{errorCount}} invalid. Editing is not available; please fix the CSV and upload again.",
+      "validationPassedAllRows": "{{fileName}} validation passed: {{totalRows}} rows are valid",
+      "pdfUploadedReadyToConvert": "PDF uploaded (you can start PDF→CSV conversion)",
+      "missingFileOrJobId": "File not found or missing job_id",
+      "importStarting": "Starting import: {{fileName}}",
+      "importCompleted": "{{fileName}} import completed",
+      "pageResetContinueUpload": "Page has been reset. You can upload new files."
+    },
+    "csvEditor": {
+      "titleEdit": "CSV Editor",
+      "titlePreview": "CSV Preview",
+      "header": "{{title}} - {{fileName}} ({{rowCount}} rows, {{colCount}} columns)",
+      "errorSummary": "Found {{count}} validation error(s)",
+      "cellErrorTitle": "Error: {{message}}",
+      "emptyCellTitle": "This field is empty",
+      "errorCodeLabel": "Error code: {{code}}",
+      "hintEdit": "Tip: click any cell to edit",
+      "hintPreview": "Tip: editing is not available. Please fix the CSV and upload again.",
+      "hintHasErrors": "Red-highlighted cells have validation errors. Hover to see details. Please fix the CSV, upload again, and re-validate.",
+      "hintAllValid": "All data is valid. Ready to import.",
+      "errorDetailsTitle": "Validation error details ({{count}} errors)",
+      "errorRowField": "Row {{row}} • Field {{field}}",
+      "moreErrorsHint": "...and {{count}} more error(s) (fix the above errors and re-validate)"
+    },
+    "progress": {
+      "validation": "Validation progress",
+      "import": "Import progress",
+      "pdfConvert": "PDF→CSV convert progress"
+    },
+    "tooltips": {
+      "validating": "Validating...",
+      "importing": "Importing...",
+      "pdfUploadOnly": "Upload PDF (store only; no convert/import)",
+      "validationErrorsExpand": "{{count}} validation error(s). Click to expand for details",
+      "revalidateHasErrors": "Validation errors found. Click to re-validate",
+      "revalidatePassed": "Validation passed. Click to re-validate",
+      "validate": "Click to validate",
+      "pdfConvertDone": "Converted",
+      "pdfConvertStartAsync": "Convert PDF to CSV (async)",
+      "validateBeforeEdit": "Please validate the file first",
+      "noUnsavedChanges": "No unsaved changes",
+      "saveChanges": "Save changes",
+      "importToDb": "Import this file into the database"
+    },
+    "batchValidate": {
+      "buttonLabel": "Validate all ({{count}})",
+      "buttonLabelBusy": "Validating...",
+      "title": {
+        "noEligible": "No files to validate",
+        "busy": "Some files are being validated/imported",
+        "ready": "Validate {{count}} files"
+      },
+      "toast": {
+        "noEligible": "No files to validate",
+        "start": "Starting validate-all: {{count}} files",
+        "progress": "Validating: {{current}}/{{total}} ({{fileName}})",
+        "doneWithFailures": "Validate-all finished: {{ok}} passed, {{errors}} with errors, {{failed}} failed",
+        "doneWithErrors": "Validate-all finished: {{ok}} passed, {{errors}} with errors",
+        "doneAllPassed": "Validate-all finished: all passed ({{ok}})"
+      }
+    },
+      "tenant": {
+        "toast": {
+          "resetRecreated": "Tenant reset detected. Recreated tenant \"{{code}}\" automatically.",
+          "resetReconnected": "Tenant reset detected. Reconnected automatically.",
+          "resetMultipleTenants": "Tenant reset detected and multiple tenants exist. Please set a default tenant or select one manually.",
+          "noTenantsNeedAdmin": "No tenants found in the database. Go to the \"Login\" tab to verify the admin key and unlock \"Admin\", then use \"One-click create/select tenant\" or \"Create tenant\"."
+        }
+      },
+      "init": {
+        "title": "Initialization",
+        "disabledHint": "This page is disabled: initialization has been merged into the \"Admin\" tab."
+      },
+      "dataQuery": {
+        "title": "Data Query",
+        "searchPlaceholder": "Enter filename or status...",
+        "search": "Search",
+        "searching": "Searching...",
+        "hint": "Tip: search by filename, upload status, and other keywords",
+        "resultsWithCount": "Results ({{count}})",
+        "columns": {
+          "filename": "Filename",
+          "uploadTime": "Uploaded at",
+          "status": "Status",
+          "records": "Records",
+          "actions": "Actions"
+        },
+        "export": "Export",
+        "empty": {
+          "noMatch": "No matching data found",
+          "tryDifferent": "Try different keywords",
+          "prompt": "Enter search criteria to start",
+          "supportsKeywords": "Supports searching by filename, status, etc."
+        },
+        "status": {
+          "completed": "Completed",
+          "processing": "Processing"
+        }
+      },
+    "batchConvert": {
+      "buttonLabel": "Convert all PDFs ({{count}})",
+      "buttonLabelBusy": "Converting...",
+      "title": {
+        "busy": "Some files are being converted",
+        "ready": "Convert {{count}} PDF files"
+      },
+      "toast": {
+        "noEligible": "No PDF files to convert",
+        "start": "Starting convert-all: {{count}} PDF files",
+        "progress": "Converting: {{current}}/{{total}} ({{fileName}})",
+        "doneWithFailures": "Convert-all finished: {{ok}} succeeded, {{failed}} failed",
+        "doneAllPassed": "Convert-all finished: all succeeded ({{ok}})"
+      }
+    },
+    "batchImport": {
+      "buttonLabel": "Import all ({{count}})",
+      "errorBadge": "{{count}} errors",
+      "title": {
+        "noValidated": "No validated files to import",
+        "hasErrors": "{{count}} files have validation errors. Fix them before importing.",
+        "notValidated": "{{count}} files are not validated yet. Please validate them first.",
+        "ready": "Import {{validCount}} valid files",
+        "skipErrorsSuffix": "(will skip {{errorCount}} files with errors)"
+      },
+      "info": {
+        "multiUploadSkipErrors": "Multiple files: skipped {{errorCount}} files with errors; importing {{validCount}} valid files"
+      },
+      "toast": {
+        "startSingle": "Starting import...",
+        "startBatch": "Starting batch import: {{count}} files...",
+        "progress": "Importing: {{current}}/{{total}} ({{fileName}})",
+        "completedSingle": "Import completed! Imported {{fileCount}} file(s), total {{rowCount}} rows",
+        "completedBatch": "Batch import completed! Imported {{fileCount}} file(s), total {{rowCount}} rows",
+        "remainingFiles": "Imported files removed. Remaining: {{count}} file(s)",
+        "allDone": "All files processed. You can upload new files."
+      },
+      "error": {
+        "generic": "Batch import failed",
+        "fileImportFailed": "File {{fileName}} import failed: {{errorMessage}}"
+      },
+      "confirm": {
+        "title": "Confirm batch import",
+        "confirmText": "Import",
+        "summary": "You are about to batch import {{count}} validated file(s) into the database.",
+        "warning": "After importing, data cannot be easily reverted. Please confirm all files are correct.",
+        "skipNotice": "Note: {{count}} file(s) will be skipped due to errors",
+        "pendingListTitle": "Files to import:"
+      }
+    },
+    "importConfirm": {
+      "title": "Confirm import",
+      "confirmText": "Import",
+      "body": "After importing into the database, data cannot be easily reverted. Please confirm the content is correct."
+    }
+  },
+  "query": {
+    "title": "Data query",
+    "descLotTitle": "Lot query:",
+    "descLot": "Enter a lot number for fuzzy search; view P1/P2/P3 grouped results.",
+    "descProductTitle": "Product ID query:",
+    "descProduct": "Enter Product ID directly to see P1/P2/P3 traceability.",
+    "descAdvancedTitle": "Advanced search:",
+    "descAdvanced": "Combine filters like date range, machine number, tape lot, product id, P3 spec, etc.",
+    "noTenantWarning": "No area selected. Go to the Login tab to choose an area; if not initialized, verify the admin key to unlock Admin tab.",
+    "searchPlaceholder": "Search by Lot No or Product ID",
+    "suggestionLoading": "Loading suggestions...",
+    "suggestionNoResults": "No matching suggestions",
+    "search": "Search",
+    "searching": "Searching...",
+    "advancedSearch": "Advanced search",
+    "traceResult": "Traceability",
+    "clearTraceResult": "Clear traceability",
+    "noExtraCsvData": "This record has no extra CSV data",
+    "detailModalTitle": "{{type}} details",
+    "sections": {
+      "extrusionConditions": "Extrusion conditions",
+      "otherParams": "Other params",
+      "inspectionData": "Inspection data",
+      "checkItemsDetail": "Check items"
+    },
+    "tableHeaders": {
+      "clickToSort": "Click to sort",
+      "winder": "Winder",
+      "linkSearch": "Linked search",
+      "lotNo": "Lot No",
+      "dataType": "Data type",
+      "productionDate": "Production date",
+      "createdAt": "Created at",
+      "actions": "Actions"
+    },
+    "fields": {
+      "lotNo": "Lot No",
+      "productId": "Product ID",
+      "productName": "Product name",
+      "quantity": "Quantity",
+      "productionDate": "Production date",
+      "notes": "Notes",
+      "createdAt": "Created at",
+      "slittingTime": "Slitting time",
+      "machineNo": "Machine",
+      "moldNo": "Mold",
+      "specification": "Spec",
+      "bottomTapeLot": "Bottom tape lot"
+    },
+    "p1": {
+      "paper": {
+        "productionTimeStart": "Production Time: Start",
+        "productionTimeEnd": "End",
+        "specification": "Specification",
+        "material": "Material",
+        "actualTemp": "Actual Temp (°C)",
+        "setTemp": "Set Temp (°C)",
+        "param": "Parameter",
+        "value": "Value",
+        "unit": "Unit",
+        "sections": {
+          "dryerTemps": "Dryer Bucket Temps",
+          "extWheelTemps": "Extension Wheel Params",
+          "productionParams": "Production Params"
+        },
+        "extWheel": {
+          "top": "Top (A)",
+          "mid": "Mid (B)",
+          "bottom": "Bottom (C)"
+        },
+        "params": {
+          "lineSpeed": "Line Speed",
+          "screwPressure": "Screw Pressure",
+          "screwOutput": "Screw Output",
+          "leftPadThickness": "Left Pad Thickness",
+          "rightPadThickness": "Right Pad Thickness",
+          "current": "Current",
+          "extruderSpeed": "Extruder Speed",
+          "quantitativePressure": "Quantitative Pressure",
+          "quantitativeOutput": "Quantitative Output",
+          "frame": "Frame",
+          "filterPressure": "Filter Pressure"
+        }
+      }
+    },
+    "actions": {
+      "linkSearch": "Search",
+      "searchLinkedDataHint": "Search matching P2 and P1 data",
+      "expandDetails": "Expand to view details",
+      "expandCsvData": "Expand to view CSV data"
+    },
+    "results": {
+      "noResults": "No matching data found",
+      "foundCount": "Found {{count}} records",
+      "foundCountWithKeyword": "{{keyword}} - Found {{count}} records"
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "page": "Page {{page}}"
+    },
+    "units": {
+      "items": "{{count}} items"
+    },
+    "stats": {
+      "checkCount": "Check count",
+      "originalCount": "Original count",
+      "validCount": "Valid count"
+    },
+    "p2": {
+      "fields": {
+        "slittingMachine": "Slitting machine",
+        "winderMachine": "Winder",
+        "sheetWidth": "Sheet width",
+        "thickness1": "Thickness 1",
+        "thickness2": "Thickness 2",
+        "thickness3": "Thickness 3",
+        "thickness4": "Thickness 4",
+        "thickness5": "Thickness 5",
+        "thickness6": "Thickness 6",
+        "thickness7": "Thickness 7",
+        "appearance": "Appearance",
+        "roughEdge": "Rough edge",
+        "slittingResult": "Slitting result"
+      },
+      "slittingMachineDisplay": {
+        "points1": "Points 1",
+        "points2": "Points 2"
+      }
+    },
+    "p3": {
+      "fields": {
+        "p3No": "P3 No"
+      },
+      "rowHeader": "#{{index}} - Product ID: {{productId}}"
+    },
+    "errors": {
+      "productNotFound": "Product not found",
+      "lotInfoMissing": "Missing lot info; cannot trace",
+      "winderMissing": "Missing winder info; cannot trace",
+      "p2NotFound": "No matching P2 (lot {{lotNo}} / winder {{winder}})",
+      "traceFailedWithStatus": "Traceability request failed (HTTP {{status}}): {{statusText}}",
+      "unknownDataType": "Unknown data type",
+      "searchFailedWithDetail": "Search failed: {{detail}}",
+      "unknownError": "Unknown error"
+    },
+    "advanced": {
+      "validationAtLeastOne": "Please fill in at least one search condition",
+      "lotNo": "Lot No",
+      "lotNoPlaceholder": "Enter lot no (fuzzy)",
+      "productionDateFrom": "Production date (from)",
+      "productionDateTo": "Production date (to)",
+      "year": "Year",
+      "month": "Month",
+      "day": "Day",
+      "machineNo": "Machine no",
+      "machineNoPlaceholder": "Enter machine no (fuzzy)",
+      "moldNo": "Bottom tape lot",
+      "moldNoPlaceholder": "Enter bottom tape lot (fuzzy)",
+      "productId": "Product ID",
+      "productIdPlaceholder": "Enter product id (fuzzy)",
+      "specification": "Spec",
+      "specificationPlaceholder": "Enter spec",
+      "material": "Material",
+      "materialPlaceholder": "Enter material",
+      "thicknessMin": "Thickness (min, 0.01mm)",
+      "thicknessMinPlaceholder": "e.g. 30 means 0.30mm",
+      "thicknessMax": "Thickness (max, 0.01mm)",
+      "thicknessMaxPlaceholder": "e.g. 33 means 0.33mm",
+      "winderNumber": "Winder Number",
+      "winderAll": "All",
+      "winderDrawerSet": "Set (click to edit)",
+      "winderDrawerOpen": "Click to expand",
+      "winderDrawerTitle": "Winder Number",
+      "winderInputLabel": "Enter Winder Number",
+      "winderInputPlaceholder": "Enter Winder Number",
+      "winderDone": "Done",
+      "dataType": "Data type",
+      "dataTypeAll": "All",
+      "reset": "Reset",
+      "search": "Search"
+    }
+  },
+  "logViewer": {
+    "title": "Log Management",
+    "subtitle": "View, search, and manage system logs",
+    "refresh": "Refresh",
+    "cleanupOld": "Clean up old logs",
+    "tabs": {
+      "logs": "Logs",
+      "stats": "Statistics"
+    },
+    "controls": {
+      "title": "Log Controls",
+      "logFile": "Log file",
+      "selectLogFile": "Select a log file",
+      "download": "Download"
+    },
+    "filters": {
+      "level": "Log level",
+      "levelAll": "All levels",
+      "timeRange": "Time range",
+      "selectTimeRange": "Select time range",
+      "lastHours": "Last {{hours}} hours",
+      "lastWeek": "Last 1 week",
+      "allTime": "All time",
+      "displayCount": "Items",
+      "rows": "{{count}} lines"
+    },
+    "search": {
+      "placeholder": "Search logs...",
+      "search": "Search"
+    },
+    "status": {
+      "searchResults": "Search results: {{count}}",
+      "showing": "Showing: {{shown}} / {{total}} logs",
+      "file": "File: {{file}}"
+    },
+    "content": {
+      "title": "Log entries",
+      "searchMode": "Search mode"
+    },
+    "loading": "Loading...",
+    "loadMore": "Load more",
+    "empty": {
+      "searchNone": "No matching logs found",
+      "noLogs": "No logs"
+    },
+    "confirm": {
+      "cleanup": "Are you sure you want to delete all old log backup files?"
+    },
+    "alert": {
+      "cleanupDone": "Log cleanup completed"
+    },
+    "errors": {
+      "loadFilesFailed": "Failed to load log files",
+      "loadLogsFailed": "Failed to load logs",
+      "searchFailed": "Search failed",
+      "cleanupFailed": "Cleanup failed",
+      "downloadFailed": "Download failed"
+    },
+    "stats": {
+      "fileInfo": "File info",
+      "totalSize": "Total size: {{size}}",
+      "levelDistribution": "Level distribution",
+      "apiUsage": "API usage",
+      "recentActivity": "Recent activity",
+      "recentActivityDesc": "Latest system activity records"
+    },
+    "extraDataSummary": "Extra data ({{count}} items)"
+  },
+  "traceability": {
+    "title": "Production Traceability Flow",
+    "loading": "Loading traceability data…",
+    "noData": "No data",
+    "missingData": "Missing",
+    "clickToViewDetails": "Click to view details",
+    "actions": {
+      "clickToExpand": "Click to expand"
+    },
+    "fields": {
+      "lotNo": "Lot No.",
+      "material": "Material",
+      "winderNumber": "Winder number",
+      "semiProductNo": "Semi-finished lot",
+      "moldNo": "Mold No.",
+      "productionSerial": "Production lot"
+    },
+    "cards": {
+      "p1": "P1 Raw material",
+      "p2": "P2 Semi-finished",
+      "p3": "P3 Finished"
+    },
+    "chainIncomplete": "Traceability chain incomplete: {{links}}",
+    "errorWithDetail": "Error: {{error}}",
+    "errors": {
+      "fetchFailed": "Failed to fetch traceability data"
+    }
+  },
+  "fileUpload": {
+    "ui": {
+      "dropzoneTitle": "Drag & drop or choose files",
+      "dropzoneHint": "Supports CSV and Excel files. Max file size: 10MB",
+      "uploadedFiles": "Uploaded files",
+      "allUploaded": "All uploads completed",
+      "uploading": "Uploading… {{percent}}%",
+      "uploadDone": "✓ Uploaded"
+    },
+    "errors": {
+      "invalidFileType": "File \"{{name}}\" is not supported. Only CSV and Excel files are allowed.",
+      "fileTooLarge": "File \"{{name}}\" exceeds the 10MB limit. File size: {{size}}"
+    },
+    "alerts": {
+      "importSuccess": "Import succeeded. Imported {{count}} rows.",
+      "importFailed": "Import failed",
+      "uploadFailed": "Upload failed"
+    }
+  },
+  "csvEditor": {
+    "titleWithFile": "CSV editor - {{fileName}}",
+    "actions": {
+      "download": "Download",
+      "saveChanges": "Save changes",
+      "confirmImport": "Import"
+    },
+    "status": {
+      "importingWait": "Importing into database… please wait…",
+      "importProgress": "Progress: {{percent}}%"
+    },
+    "footer": {
+      "summary": "{{rows}} rows, {{cols}} columns",
+      "hint": "Tip: click any cell to edit"
+    },
+    "confirmDialog": {
+      "title": "Confirm import",
+      "description": "This action will import the CSV into the database. Do you want to continue?"
+    }
+  },
+  "logService": {
+    "downloadFailed": "Failed to download log file"
+  },
+  "analytics": {
+    "title": "Analytics",
+    "tenantCurrent": "Current area:",
+    "tenantNotSelected": "(not selected)",
+    "tenantUnknown": "(unknown)",
+    "startDate": "Start date",
+    "endDate": "End date",
+    "dateRangeMode": "Date range",
+    "modeDay": "Day",
+    "modeWeek": "Week",
+    "modeMonth": "Month",
+    "modeQuarter": "Quarter",
+    "modeHalfYear": "Half-year",
+    "modeYear": "Year",
+    "modeCustom": "Custom",
+    "pickDate": "Pick a date",
+    "pickRange": "Pick a date range",
+    "pickPreset": "Pick a range",
+    "yearLabel": "Year",
+    "monthLabel": "Month",
+    "quarterLabel": "Quarter",
+    "halfYearLabel": "Half-year",
+    "halfYearH1": "H1",
+    "halfYearH2": "H2",
+    "weekNumberLabel": "Week #",
+    "rangePreview": "Range: {{start}} ~ {{end}}",
+    "productId": "Product ID",
+    "productIdPlaceholder": "Enter product id",
+    "traceabilityTitle": "Traceability (cross-station)",
+    "traceabilityOpen": "Open traceability",
+    "traceabilityFetchFailed": "Failed to fetch traceability",
+    "traceabilityIncomplete": "Trace is incomplete: {{missing}}",
+    "stations": "Stations",
+    "analyze": "Analyze",
+    "analyzing": "Analyzing...",
+    "resultJson": "Result JSON",
+    "resultJsonPlaceholder": "(Auto-filled with the backend response JSON)",
+    "applyJson": "Render using JSON",
+    "note": "Note: This page calls the backend analysis service and visualizes the returned JSON (bar/pie charts).",
+    "yield": "Yield",
+    "ngDrilldownHint": "Tip: Click the NG slice in the pie chart, or the NG bar in any bar chart, to open NG details.",
+    "totalProducts": "Total",
+    "ok": "OK",
+    "ng": "NG",
+    "moldingAnalysis": "Molding analysis",
+    "noData": "No data",
+    "notFound": "No data found",
+    "ngOnlyTitle": "NG Details",
+    "backToAnalysis": "Back to analysis",
+    "refresh": "Refresh",
+    "loading": "Loading...",
+    "viewDetails": "View details",
+    "stationPickError": "Select at least one station (P2 / P3 / ALL)",
+    "analyzeRequestFailed": "Analytics request failed (HTTP {{status}})",
+    "invalidResponse": "Unexpected JSON shape from backend",
+    "pasteJsonFirst": "Paste the result JSON first",
+    "jsonParseFailed": "JSON parse failed",
+    "analyzeFailedWithDetail": "Analytics request failed: {{detail}}",
+    "summary": {
+      "productionNg": "Total: {{total}} / NG: {{ng}} ({{percent}}%)"
+    },
+    "featurePct": {
+      "title": "Feature importance (feature_pct)",
+      "percent": "{{percent}}%"
+    },
+    "views": {
+      "heatmap": "Heatmap",
+      "bar": "Bar chart"
+    },
+    "heatmap": {
+      "category": "Category",
+      "value": "Value",
+      "ngRate": "NG rate",
+      "sample": "Samples"
+    },
+    "pareto": {
+      "featureTitle": "Feature Pareto (final_raw_score)",
+      "ngTitle": "NG Code Pareto",
+      "valueLabel": "Final Score",
+      "cumLabel": "Cumulative %",
+      "noData": "No data"
+    }
+  },
+  "admin": {
+    "tabs": {
+      "general": "General",
+      "stations": "Stations",
+      "validation": "Validation Rules",
+      "analytics": "Analytics Mappings",
+      "links": "Station Links"
+    },
+    "general": {
+      "title": "Admin Mode",
+      "hint": "This page only sends X-Admin-API-Key when you explicitly provide a key.",
+      "keyLabel": "Current Admin Key",
+      "keyNotSet": "(not set)",
+      "statusLabel": "Admin Mode Status",
+      "statusEnabled": "Enabled",
+      "statusDisabled": "Disabled",
+      "inputLabel": "Admin API Key",
+      "inputPlaceholder": "Enter X-Admin-API-Key",
+      "btn": {
+        "save": "Save",
+        "saving": "Verifying…",
+        "clear": "Clear",
+        "disable": "Disable"
+      },
+      "toast": {
+        "keyRequired": "Please enter an admin API key",
+        "keyInvalid": "Invalid admin API key",
+        "keySuccess": "Admin key verified: admin mode unlocked",
+        "keyNetworkError": "Failed to verify admin key (network or server error)",
+        "keyCleared": "Admin key cleared (localStorage)",
+        "disabled": "Admin mode disabled (this session)",
+        "diagSuccess": "Diagnostics updated",
+        "diagError": "Diagnostics failed: check backend and admin key",
+        "diagNetworkError": "Diagnostics failed (network or server error)"
+      },
+      "diag": {
+        "title": "Diagnostics (WhoAmI / Bootstrap Status)",
+        "btn": "Refresh Diagnostics",
+        "btnLoading": "Refreshing…",
+        "tenantMismatch": "Note: localStorage tenant is {{local}} but whoami reports {{remote}}. Use the tenant table below to sync."
+      },
+      "init": {
+        "title": "Initialization (first run / empty DB)",
+        "hint": "Tools for creating or selecting a tenant (writes to localStorage: {{key}}).",
+        "currentTenant": "Current Tenant",
+        "notSet": "(not set)",
+        "btn": {
+          "autoInit": "Auto-create / select tenant",
+          "clearTenant": "Clear tenant",
+          "bootstrap": "Create first tenant (bootstrap)"
+        },
+        "hasTenantsHint": "Active tenant detected — bootstrap button hidden to prevent duplicates.",
+        "requireKey": "Please set an admin API key first",
+        "toast": {
+          "noTenant": "Could not determine tenant (multiple tenants, no default)",
+          "tenantReady": "Tenant ready: {{label}}",
+          "tenantCleared": "Tenant cleared (localStorage)",
+          "initError": "Failed to initialize tenant",
+          "bootstrapError": "Failed to create tenant (network or server error)",
+          "bootstrapCreated": "Tenant created: {{code}}"
+        }
+      }
+    },
+    "tenants": {
+      "title": "Tenant Management",
+      "hint": "Admin key required for full CRUD (create / edit / disable / set default).",
+      "showInactive": "Show inactive tenants",
+      "btn": {
+        "refresh": "Refresh",
+        "refreshing": "Refreshing…",
+        "create": "Create Tenant",
+        "creating": "Creating…",
+        "setDefault": "Set Default",
+        "applyCurrent": "Set as Current",
+        "enable": "Enable",
+        "disable": "Disable",
+        "delete": "Delete"
+      },
+      "form": {
+        "title": "Add Tenant",
+        "name": "Name",
+        "code": "Code",
+        "default": "Default",
+        "yes": "Yes",
+        "no": "No"
+      },
+      "table": {
+        "colArea": "Area",
+        "colCode": "Code",
+        "colName": "Name",
+        "colDefault": "Default",
+        "colActive": "Active",
+        "colActions": "Actions",
+        "empty": "No tenants",
+        "notLoaded": "Not loaded",
+        "pillDefault": "Default",
+        "pillActive": "Active",
+        "pillInactive": "Inactive"
+      },
+      "toast": {
+        "updated": "Tenant updated",
+        "updateError": "Failed to update tenant (HTTP {{status}})",
+        "updateNetworkError": "Failed to update tenant (network or server error)",
+        "loadError": "Failed to load tenants (HTTP {{status}})",
+        "loadNetworkError": "Failed to load tenants (network or server error)",
+        "created": "Tenant created: {{code}}",
+        "createError": "Failed to create tenant (HTTP {{status}})",
+        "createNetworkError": "Failed to create tenant (network or server error)",
+        "deleted": "Tenant deleted (disabled): {{code}}",
+        "deleteError": "Failed to delete tenant (HTTP {{status}})",
+        "deleteNetworkError": "Failed to delete tenant (network or server error)",
+        "switched": "Switched to tenant: {{code}} ({{name}})",
+        "switchedWithKey": "Switched to tenant: {{code}} ({{name}}) — API key obtained",
+        "switchError": "Failed to get API key (HTTP {{status}})",
+        "switchNetworkError": "Failed to switch tenant (network or server error)"
+      },
+      "confirm": {
+        "delete": "Delete tenant {{code}}?\n(This is a safe disable: is_active=false)"
+      },
+      "requireKey": "Please enter a tenant name",
+      "requireCode": "Please enter a tenant code"
+    },
+    "users": {
+      "title": "Tenant User Management",
+      "hint": "Edit username / role / active status. Password changes are TODO.",
+      "selectTenantPlaceholder": "Select tenant…",
+      "btn": {
+        "loadUsers": "Load Users",
+        "loading": "Loading…"
+      },
+      "form": {
+        "title": "Add User (password required; password change is TODO)",
+        "username": "Username",
+        "password": "Password",
+        "passwordPlaceholder": "At least 8 characters",
+        "role": "Role",
+        "roleUser": "User",
+        "roleManager": "Manager",
+        "btn": {
+          "create": "Create User",
+          "creating": "Creating…"
+        }
+      },
+      "table": {
+        "colUsername": "Username",
+        "colTenant": "Tenant",
+        "colRole": "Role",
+        "colActive": "Active",
+        "colLastLogin": "Last Login",
+        "colActions": "Actions",
+        "empty": "No users",
+        "notLoaded": "Not loaded",
+        "moveToPlaceholder": "Move to…",
+        "btn": {
+          "move": "Move",
+          "moving": "Moving…",
+          "enable": "Enable",
+          "disable": "Disable"
+        }
+      },
+      "toast": {
+        "selectTenantFirst": "Please select a tenant first",
+        "usernameRequired": "Please enter a username",
+        "passwordTooShort": "Password must be at least 8 characters",
+        "created": "User created: {{username}}",
+        "createError": "Failed to create user (HTTP {{status}})",
+        "createNetworkError": "Failed to create user (network or server error)",
+        "updated": "User updated",
+        "updateError": "Failed to update user (HTTP {{status}})",
+        "updateNetworkError": "Failed to update user (network or server error)",
+        "deleted": "User deleted (disabled)",
+        "deleteError": "Failed to delete user (HTTP {{status}})",
+        "deleteNetworkError": "Failed to delete user (network or server error)",
+        "moved": "User moved: {{username}} → {{target}}",
+        "moveSelectFirst": "Please select a target tenant",
+        "moveAlreadyThere": "User is already in this tenant",
+        "moveError": "Failed to move user (HTTP {{status}})",
+        "moveNetworkError": "Failed to move user (network or server error)",
+        "loadError": "Failed to load users (HTTP {{status}})",
+        "loadNetworkError": "Failed to load users (network or server error)"
+      },
+      "confirm": {
+        "delete": "Delete user {{username}}?\n(This is a safe disable: is_active=false)",
+        "move": "Move user {{username}} to tenant {{target}}?\n\nNote: this revokes their current API key — they will need to log in again."
+      }
+    },
+    "stations": {
+      "title": "Station Management",
+      "subtitle": "Manage workstations and their schema definitions.",
+      "btn": {
+        "refresh": "Refresh",
+        "create": "Create Station",
+        "creating": "Creating…",
+        "schema": "Schema",
+        "delete": "Delete",
+        "save": "Save",
+        "cancel": "Cancel"
+      },
+      "form": {
+        "title": "Add Station",
+        "code": "Code",
+        "codePlaceholder": "e.g. P4",
+        "name": "Name",
+        "namePlaceholder": "e.g. Assembly",
+        "sortOrder": "Sort Order",
+        "hasItems": "Has Items"
+      },
+      "table": {
+        "colCode": "Code",
+        "colName": "Name",
+        "colSort": "Sort",
+        "colHasItems": "Has Items",
+        "colActions": "Actions",
+        "empty": "No stations"
+      },
+      "schema": {
+        "title": "Schema: {{code}}",
+        "loading": "Loading schema…",
+        "saved": "Schema for {{code}} saved"
+      },
+      "toast": {
+        "created": "Station {{code}} created",
+        "updated": "Station {{code}} updated",
+        "deleted": "Station {{code}} deleted",
+        "failedLoad": "Failed to load stations",
+        "requiredFields": "Code and Name are required",
+        "invalidJson": "Invalid JSON"
+      },
+      "confirm": {
+        "delete": "Delete station {{code}}? This will also delete its schema, records, and links."
+      }
+    },
+    "validation": {
+      "title": "Validation Rules",
+      "subtitle": "Manage enum, range, regex, and required validation rules per station.",
+      "selectStation": "Select station…",
+      "btn": {
+        "load": "Load Rules",
+        "create": "Create Rule",
+        "creating": "Creating…",
+        "toggle": "Toggle",
+        "delete": "Delete"
+      },
+      "form": {
+        "title": "Add Rule",
+        "fieldName": "Field Name",
+        "fieldNamePlaceholder": "e.g. material_grade",
+        "ruleType": "Rule Type",
+        "config": "Config (JSON)",
+        "configPlaceholder": "{\"values\": [\"H2\",\"H5\",\"H8\"]}"
+      },
+      "table": {
+        "colField": "Field",
+        "colType": "Type",
+        "colConfig": "Config",
+        "colActions": "Actions",
+        "emptyNoRules": "No rules for this station",
+        "emptySelectFirst": "Select a station first"
+      },
+      "toast": {
+        "created": "Validation rule created",
+        "deleted": "Rule deleted",
+        "fieldRequired": "Field name is required",
+        "invalidJson": "Invalid JSON in rule config"
+      },
+      "confirm": {
+        "delete": "Delete validation rule for field \"{{field}}\"?"
+      }
+    },
+    "analytics": {
+      "title": "Analytics Mappings",
+      "subtitle": "Map JSONB data paths to named analytics output columns.",
+      "selectStation": "Select station…",
+      "btn": {
+        "load": "Load Mappings",
+        "create": "Create Mapping",
+        "creating": "Creating…",
+        "delete": "Delete"
+      },
+      "form": {
+        "title": "Add Mapping",
+        "sourcePath": "Source Path",
+        "sourcePathPlaceholder": "e.g. record.data.thickness",
+        "outputColumn": "Output Column",
+        "outputColumnPlaceholder": "e.g. thickness_mm",
+        "order": "Order",
+        "dataType": "Data Type"
+      },
+      "table": {
+        "colOrder": "Order",
+        "colSourcePath": "Source Path",
+        "colOutputColumn": "Output Column",
+        "colType": "Type",
+        "colActions": "Actions",
+        "emptyNoMappings": "No mappings for this station",
+        "emptySelectFirst": "Select a station first"
+      },
+      "toast": {
+        "created": "Mapping created",
+        "deleted": "Mapping deleted",
+        "requiredFields": "Source path and output column are required"
+      },
+      "confirm": {
+        "delete": "Delete mapping \"{{column}}\"?"
+      }
+    },
+    "links": {
+      "title": "Station Links (Traceability)",
+      "subtitle": "Define traceability relationships between stations.",
+      "btn": {
+        "refresh": "Refresh",
+        "create": "Create Link",
+        "creating": "Creating…",
+        "delete": "Delete"
+      },
+      "form": {
+        "title": "Add Link",
+        "fromStation": "From Station",
+        "toStation": "To Station",
+        "stationPlaceholder": "Select…",
+        "linkType": "Link Type",
+        "sortOrder": "Sort Order"
+      },
+      "table": {
+        "colFrom": "From",
+        "colTo": "To",
+        "colType": "Type",
+        "colSort": "Sort",
+        "colActions": "Actions",
+        "empty": "No links"
+      },
+      "toast": {
+        "created": "Link created: {{from}} → {{to}}",
+        "deleted": "Link deleted",
+        "requiredStations": "Select both From and To stations",
+        "sameStation": "From and To cannot be the same station"
+      },
+      "confirm": {
+        "delete": "Delete link {{from}} → {{to}}?"
+      }
+    }
+  }
+}
