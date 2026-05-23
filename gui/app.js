@@ -1512,10 +1512,9 @@ function buildDeployPs1(recipe, dateStr) {
   const kits = recipe.enabledKits.join(", ");
   const name = recipe.name;
   const db = recipe.database.engine;
-  // 使用陣列 join 避免 PS 行接續符號 (`) 與 JS template literal 衝突
   const L = [
     `# ${"═".repeat(64)}`,
-    `#  Form System Kit Composer — 部署腳本（Windows / PowerShell）`,
+    `#  Form System Kit Composer — 組裝協調腳本（Windows / PowerShell）`,
     `#  Recipe : ${name}`,
     `#  產生於 : ${dateStr}`,
     `#  Kits   : ${kits}`,
@@ -1524,70 +1523,168 @@ function buildDeployPs1(recipe, dateStr) {
     `#`,
     `#  用法（在 form-system-kit-composer 專案根目錄執行）：`,
     `#    powershell -ExecutionPolicy Bypass -File deploy.ps1`,
-    `#    powershell -ExecutionPolicy Bypass -File deploy.ps1 -ComposerRoot "C:\\projects\\kit-composer"`,
+    `#    powershell -ExecutionPolicy Bypass -File deploy.ps1 -StartFrom 3  # 從組裝階段重試`,
     `#`,
+    `#  階段：  1=準備  2=解析  3=組裝  4=打包`,
     `#  參數：`,
     `#    -ComposerRoot  kit-composer 專案路徑（預設：當前目錄）`,
-    `#    -SkipAssembly  跳過組裝，直接執行打包步驟（系統已組裝時使用）`,
+    `#    -StartFrom     從指定階段開始（預設 1）`,
     ``,
     `param(`,
     `    [string]$ComposerRoot = (Get-Location).Path,`,
-    `    [switch]$SkipAssembly`,
+    `    [int]$StartFrom = 1`,
     `)`,
     ``,
     `$ErrorActionPreference = "Stop"`,
-    `$ScriptDir  = Split-Path -Parent $MyInvocation.MyCommand.Path`,
-    `$RecipeName = "${name}"`,
+    `$ScriptDir    = Split-Path -Parent $MyInvocation.MyCommand.Path`,
+    `$PhasesDir    = Join-Path $ScriptDir "phases"`,
+    `$RecipeName   = "${name}"`,
+    `$AssemblyDir  = Join-Path $ComposerRoot "assembly"`,
+    `$ResolvedPath = Join-Path $AssemblyDir "$RecipeName-resolved-plan.json"`,
     ``,
-    `Write-Host "Form System Kit Composer 部署程序" -ForegroundColor Cyan`,
+    `Write-Host "Form System Kit Composer — 組裝協調腳本" -ForegroundColor Cyan`,
     `Write-Host "ComposerRoot : $ComposerRoot" -ForegroundColor Gray`,
     `Write-Host "Recipe       : $RecipeName" -ForegroundColor Gray`,
+    `Write-Host "StartFrom    : $StartFrom" -ForegroundColor Gray`,
     `Write-Host ""`,
     ``,
-    `# ── 前置驗證`,
     `if (-not (Test-Path (Join-Path $ComposerRoot "tools"))) {`,
     `    Write-Error "找不到 tools\\ 目錄。請確認 -ComposerRoot 指向 form-system-kit-composer 專案根目錄。"`,
     `    exit 1`,
     `}`,
     ``,
-    `# ── 1. 確保 assembly\\ 目錄存在並複製 recipe.json`,
-    `$assemblyDir = Join-Path $ComposerRoot "assembly"`,
-    `if (-not (Test-Path $assemblyDir)) { New-Item -ItemType Directory -Force $assemblyDir | Out-Null }`,
-    `$recipeDest = Join-Path $assemblyDir "$RecipeName.recipe.json"`,
-    `Copy-Item (Join-Path $ScriptDir "recipe.json") $recipeDest -Force`,
-    `Write-Host "✓ recipe.json 複製至 $recipeDest"`,
-    ``,
-    `if (-not $SkipAssembly) {`,
-    `    # ── 2. 驗證 recipe`,
-    `    Write-Host "驗證 recipe..." -ForegroundColor Cyan`,
-    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\validate-recipe.ps1") -RecipePath $recipeDest`,
-    ``,
-    `    # ── 3. Resolve 計畫`,
-    `    $resolvedPath = Join-Path $assemblyDir "$RecipeName-resolved-plan.json"`,
-    `    Write-Host "解析 kit 依賴..." -ForegroundColor Cyan`,
-    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\resolve-recipe.ps1") -RecipePath $recipeDest -OutputPath $resolvedPath`,
-    ``,
-    `    # ── 4. 組裝系統`,
-    `    Write-Host "組裝系統..." -ForegroundColor Cyan`,
-    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\assemble-system.ps1") \``,
-    `        -ResolvedPlanPath $resolvedPath`,
+    `# ── 階段 1：準備 recipe`,
+    `if ($StartFrom -le 1) {`,
+    `    Write-Host ""`,
+    `    Write-Host "── 階段 1：準備 recipe" -ForegroundColor Cyan`,
+    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $PhasesDir "01-prepare.ps1") \``,
+    `        -ComposerRoot $ComposerRoot -ScriptDir $ScriptDir -RecipeName $RecipeName -AssemblyDir $AssemblyDir`,
+    `    if ($LASTEXITCODE -ne 0) { throw "階段 1 失敗，重試：deploy.ps1 -StartFrom 1" }`,
     `}`,
     ``,
-    `# ── 5. 打包 client deploy ZIP`,
-    `Write-Host "打包 client deploy ZIP..." -ForegroundColor Cyan`,
-    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\package-client-deploy.ps1") \``,
-    `    -RecipeName $RecipeName`,
+    `# ── 階段 2：解析依賴`,
+    `if ($StartFrom -le 2) {`,
+    `    Write-Host ""`,
+    `    Write-Host "── 階段 2：解析依賴" -ForegroundColor Cyan`,
+    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $PhasesDir "02-resolve.ps1") \``,
+    `        -ComposerRoot $ComposerRoot -AssemblyDir $AssemblyDir -RecipeName $RecipeName -ResolvedPath $ResolvedPath`,
+    `    if ($LASTEXITCODE -ne 0) { throw "階段 2 失敗，重試：deploy.ps1 -StartFrom 2" }`,
+    `}`,
     ``,
-    `$clientZip = Join-Path $ComposerRoot "dist\\client-deploy-$RecipeName.zip"`,
+    `# ── 階段 3：組裝系統`,
+    `if ($StartFrom -le 3) {`,
+    `    Write-Host ""`,
+    `    Write-Host "── 階段 3：組裝系統" -ForegroundColor Cyan`,
+    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $PhasesDir "03-assemble.ps1") \``,
+    `        -ComposerRoot $ComposerRoot -ResolvedPath $ResolvedPath`,
+    `    if ($LASTEXITCODE -ne 0) { throw "階段 3 失敗，重試：deploy.ps1 -StartFrom 3" }`,
+    `}`,
+    ``,
+    `# ── 階段 4：打包 ZIP（永遠執行）`,
     `Write-Host ""`,
-    `Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Green`,
+    `Write-Host "── 階段 4：打包 ZIP" -ForegroundColor Cyan`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $PhasesDir "04-package.ps1") \``,
+    `    -ComposerRoot $ComposerRoot -RecipeName $RecipeName`,
+    `if ($LASTEXITCODE -ne 0) { throw "階段 4 失敗，重試：deploy.ps1 -StartFrom 4" }`,
+    ``,
+    `$ClientZip = Join-Path $ComposerRoot "dist\\client-deploy-$RecipeName.zip"`,
+    `Write-Host ""`,
+    `Write-Host "${"═".repeat(56)}" -ForegroundColor Green`,
     `Write-Host "  完成！Client deploy ZIP 已產生：" -ForegroundColor Green`,
-    `Write-Host "  $clientZip" -ForegroundColor Yellow`,
+    `Write-Host "  $ClientZip" -ForegroundColor Yellow`,
     `Write-Host ""`,
     `Write-Host "  將此 ZIP 傳給部署人員，解壓後執行：" -ForegroundColor Gray`,
     `Write-Host "    (Windows)  powershell -ExecutionPolicy Bypass -File deploy.ps1" -ForegroundColor Gray`,
     `Write-Host "    (Linux)    bash deploy.sh" -ForegroundColor Gray`,
-    `Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Green`,
+    `Write-Host "${"═".repeat(56)}" -ForegroundColor Green`,
+  ];
+  return L.join("\r\n");
+}
+
+function buildDeployPhase1Ps1() {
+  const L = [
+    `# ${"═".repeat(56)}`,
+    `#  階段 1：準備 recipe`,
+    `#  複製 recipe.json 至 assembly\\ 目錄並驗證格式`,
+    `# ${"═".repeat(56)}`,
+    `param(`,
+    `    [string]$ComposerRoot,`,
+    `    [string]$ScriptDir,`,
+    `    [string]$RecipeName,`,
+    `    [string]$AssemblyDir`,
+    `)`,
+    `$ErrorActionPreference = "Stop"`,
+    `if (-not (Test-Path $AssemblyDir)) { New-Item -ItemType Directory -Force $AssemblyDir | Out-Null }`,
+    `$RecipeDest = Join-Path $AssemblyDir "$RecipeName.recipe.json"`,
+    `Copy-Item (Join-Path $ScriptDir "recipe.json") $RecipeDest -Force`,
+    `Write-Host "  ✓ recipe.json 複製至 $RecipeDest"`,
+    `Write-Host "  驗證 recipe..."`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\validate-recipe.ps1") \``,
+    `    -RecipePath $RecipeDest`,
+    `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+    `Write-Host "  ✓ 驗證通過"`,
+  ];
+  return L.join("\r\n");
+}
+
+function buildDeployPhase2Ps1() {
+  const L = [
+    `# ${"═".repeat(56)}`,
+    `#  階段 2：解析 kit 依賴`,
+    `# ${"═".repeat(56)}`,
+    `param(`,
+    `    [string]$ComposerRoot,`,
+    `    [string]$AssemblyDir,`,
+    `    [string]$RecipeName,`,
+    `    [string]$ResolvedPath`,
+    `)`,
+    `$ErrorActionPreference = "Stop"`,
+    `$RecipeDest = Join-Path $AssemblyDir "$RecipeName.recipe.json"`,
+    `Write-Host "  解析 kit 依賴..."`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\resolve-recipe.ps1") \``,
+    `    -RecipePath $RecipeDest -OutputPath $ResolvedPath`,
+    `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+    `Write-Host "  ✓ 依賴解析完成：$ResolvedPath"`,
+  ];
+  return L.join("\r\n");
+}
+
+function buildDeployPhase3Ps1() {
+  const L = [
+    `# ${"═".repeat(56)}`,
+    `#  階段 3：組裝系統`,
+    `#  最耗時步驟，失敗後可用 -StartFrom 3 重試`,
+    `# ${"═".repeat(56)}`,
+    `param(`,
+    `    [string]$ComposerRoot,`,
+    `    [string]$ResolvedPath`,
+    `)`,
+    `$ErrorActionPreference = "Stop"`,
+    `Write-Host "  組裝系統（這是最耗時的步驟）..."`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\assemble-system.ps1") \``,
+    `    -ResolvedPlanPath $ResolvedPath`,
+    `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+    `Write-Host "  ✓ 系統組裝完成"`,
+  ];
+  return L.join("\r\n");
+}
+
+function buildDeployPhase4Ps1() {
+  const L = [
+    `# ${"═".repeat(56)}`,
+    `#  階段 4：打包 client deploy ZIP`,
+    `# ${"═".repeat(56)}`,
+    `param(`,
+    `    [string]$ComposerRoot,`,
+    `    [string]$RecipeName`,
+    `)`,
+    `$ErrorActionPreference = "Stop"`,
+    `Write-Host "  打包 client deploy ZIP..."`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\package-client-deploy.ps1") \``,
+    `    -RecipeName $RecipeName`,
+    `if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }`,
+    `$ClientZip = Join-Path $ComposerRoot "dist\\client-deploy-$RecipeName.zip"`,
+    `Write-Host "  ✓ Client deploy ZIP：$ClientZip"`,
   ];
   return L.join("\r\n");
 }
@@ -1801,11 +1898,20 @@ function buildDeployReadme(recipe, dateStr) {
 # 在 form-system-kit-composer 專案根目錄執行
 powershell -ExecutionPolicy Bypass -File deploy.ps1
 
-# 若系統已組裝，跳過組裝只做打包
-powershell -ExecutionPolicy Bypass -File deploy.ps1 -SkipAssembly
+# 若中途失敗，可從指定階段重試（不必重頭）
+powershell -ExecutionPolicy Bypass -File deploy.ps1 -StartFrom 3
 \`\`\`
 
 執行完成後，將產生 **client deploy ZIP**（位於 \`dist/\` 目錄）。
+
+## 組裝階段說明
+
+| 階段 | 腳本 | 說明 |
+|------|------|------|
+| 1 | \`phases/01-prepare.ps1\` | 複製 recipe.json 並驗證格式 |
+| 2 | \`phases/02-resolve.ps1\` | 解析 kit 依賴、產生 resolved-plan |
+| 3 | \`phases/03-assemble.ps1\` | 組裝系統（最耗時，失敗可 -StartFrom 3 重試） |
+| 4 | \`phases/04-package.ps1\` | 打包 client deploy ZIP |
 
 ## 部署到目標機器（Client Deploy ZIP）
 
@@ -1867,11 +1973,15 @@ async function downloadPackage() {
     const recipe = buildRecipe();
     const dateStr = new Date().toISOString().slice(0, 16).replace("T", " ");
     const zip = new JSZip();
+    // UTF-8 BOM: PowerShell 5.1 needs BOM to detect UTF-8; without it Chinese chars
+    // are read as CP950/ANSI, corrupting brace-matching (MissingEndCurlyBrace).
+    const bom = "﻿";
     zip.file("recipe.json", recipeJsonText());
-    // UTF-8 BOM (﻿) ensures Windows PowerShell 5.1 reads the file as UTF-8
-    // instead of the system ANSI code page; without BOM, multi-byte Chinese characters
-    // are misread and corrupt the PS parser's brace-matching, causing MissingEndCurlyBrace.
-    zip.file("deploy.ps1", "﻿" + buildDeployPs1(recipe, dateStr));
+    zip.file("deploy.ps1", bom + buildDeployPs1(recipe, dateStr));
+    zip.file("phases/01-prepare.ps1", bom + buildDeployPhase1Ps1());
+    zip.file("phases/02-resolve.ps1", bom + buildDeployPhase2Ps1());
+    zip.file("phases/03-assemble.ps1", bom + buildDeployPhase3Ps1());
+    zip.file("phases/04-package.ps1", bom + buildDeployPhase4Ps1());
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });

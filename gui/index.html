@@ -19,7 +19,7 @@
 
         <nav class="nav-list" aria-label="主要流程">
           <button class="nav-item is-active" data-view="configure"><span>01</span>選擇業務流程</button>
-          <button class="nav-item" data-view="database"><span>02</span>資料庫與標準化</button>
+          <button class="nav-item" data-view="database"><span>02</span>資料保存方式</button>
           <button class="nav-item" data-view="preview"><span>03</span>系統預覽</button>
           <button class="nav-item" data-view="generate"><span>04</span>輸出部署套件</button>
         </nav>
@@ -77,12 +77,12 @@
           </div>
         </section>
 
-        <!-- ── Step 2：資料庫與標準化 ── -->
+        <!-- ── Step 2：資料來源與保存方式 ── -->
         <section class="view" id="view-database">
           <header class="page-head">
             <p class="eyebrow">Step 2</p>
-            <h2>資料來源與資料庫設定</h2>
-            <p>上傳 CSV 萃取欄位與表格關係，再設定資料庫連線方式。</p>
+            <h2>資料來源與保存方式</h2>
+            <p>上傳表單資料後，系統會依使用人數、資料重要性與追溯需求，協助選擇適合的資料保存方式。</p>
           </header>
 
           <div class="layout-two">
@@ -97,10 +97,10 @@
               <div id="uploaded-tables-list" class="uploaded-tables-list"></div>
 
               <div class="divider"></div>
-              <h3>資料庫設定</h3>
+              <h3>正式資料保存需求</h3>
 
               <label>
-                <span class="lbl">使用規模</span>
+                <span class="lbl">會有多少人一起使用？</span>
                 <select id="usage-scale">
                   <option value="single">單人 Demo / 驗證</option>
                   <option value="team" selected>2 到 20 人團隊</option>
@@ -108,7 +108,7 @@
                 </select>
               </label>
               <label>
-                <span class="lbl">資料重要性</span>
+                <span class="lbl">這些資料是否會成為正式紀錄？</span>
                 <select id="data-criticality">
                   <option value="demo">可重建測試資料</option>
                   <option value="ops" selected>日常營運資料</option>
@@ -116,7 +116,7 @@
                 </select>
               </label>
               <label>
-                <span class="lbl">分析需求</span>
+                <span class="lbl">是否需要查詢、追溯或報表？</span>
                 <select id="analytics-need">
                   <option value="low">低，只需要查詢</option>
                   <option value="medium">中，需要摘要與報表</option>
@@ -124,7 +124,7 @@
                 </select>
               </label>
               <label>
-                <span class="lbl">部署方式</span>
+                <span class="lbl">系統會安裝在哪裡？</span>
                 <select id="deployment-mode">
                   <option value="local">本機 Demo</option>
                   <option value="intranet">內網部署</option>
@@ -143,7 +143,7 @@
               </div>
 
               <div class="divider"></div>
-              <p class="eyebrow">Recommendation</p>
+              <p class="eyebrow">建議保存方式</p>
               <div class="db-name" id="db-engine">PostgreSQL</div>
               <p class="db-reason" id="db-reason"></p>
               <div class="db-meter"><div id="db-meter-fill"></div></div>
@@ -174,7 +174,7 @@
           <header class="page-head">
             <p class="eyebrow">Step 4</p>
             <h2>輸出部署套件</h2>
-            <p>下載壓縮檔，解壓後執行腳本即可完成資料庫與前後端部署，無需手動設定。</p>
+            <p>下載<strong>開發者組裝包</strong>，在 form-system-kit-composer 目錄執行腳本，自動組裝 kit 內容並產生可直接交付給部署人員的客戶 ZIP。</p>
           </header>
 
           <div class="generate-layout">
@@ -185,8 +185,13 @@
 
             <div class="deploy-cta-card">
               <div class="deploy-cta-icon">⬇</div>
-              <h3>部署套件</h3>
-              <p>recipe.json<br>deploy.ps1（Windows）<br>deploy.sh（Linux / Mac）<br>README.md</p>
+              <h3>開發者組裝包</h3>
+              <ol class="deploy-steps">
+                <li>在 kit-composer 目錄執行 <code>deploy.ps1</code></li>
+                <li>自動組裝 kit 並產生 <code>dist/client-deploy-*.zip</code></li>
+                <li>將客戶 ZIP 交給部署人員解壓執行</li>
+              </ol>
+              <p class="deploy-cta-files">包含：recipe.json · deploy.ps1 · phases/ · deploy.sh · README.md</p>
               <button class="deploy-btn" id="download-package" type="button">下載 .zip</button>
             </div>
           </div>
