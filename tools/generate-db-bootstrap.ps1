@@ -1,24 +1,13 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
     [string]$SystemDirectory = "dist\generated-system",
-    [string]$DbPlanPath = "assembly\db-plan\db-assembly-plan.json",
-    [string]$BaselinePath = (Join-Path $PSScriptRoot "..\assembly\baselines\default-db-schema.baseline.json")
+    [string]$DbPlanPath = "assembly\db-plan\db-assembly-plan.json"
 )
 
 $ErrorActionPreference = "Stop"
 
 function Read-JsonUtf8([string]$Path) {
     return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
-}
-
-# Load DB schema baseline if available
-$schemaContract = $null
-if (Test-Path $BaselinePath) {
-    $schemaBaseline = Read-JsonUtf8 $BaselinePath
-    $schemaContract = [ordered]@{
-        baselineFile = (Resolve-Path $BaselinePath).Path
-        tables = $schemaBaseline.tables
-    }
 }
 
 $systemRoot = Join-Path $ProjectRoot $SystemDirectory
@@ -50,7 +39,16 @@ import importlib
 import json
 from pathlib import Path
 
+from sqlalchemy import select
+
 from app.core.database import Base, close_db, init_db
+
+
+def load_bootstrap_plan() -> dict[str, object]:
+    plan_path = Path(__file__).resolve().parents[3] / "db-bootstrap-plan.json"
+    if not plan_path.exists():
+        return {}
+    return json.loads(plan_path.read_text(encoding="utf-8-sig"))
 
 
 def import_model_modules() -> list[str]:
@@ -70,6 +68,87 @@ def import_model_modules() -> list[str]:
         imported.append(module_name)
 
     return imported
+
+
+def seed_schema_contracts(connection) -> dict[str, int]:
+    plan = load_bootstrap_plan()
+    schema_contract = plan.get("schemaContract") or {}
+    seed_data = schema_contract.get("seedData") or {}
+    form_definitions = seed_data.get("formDefinitions") or []
+    schema_versions = seed_data.get("schemaVersions") or []
+
+    table_registry = Base.metadata.tables.get("table_registry")
+    schema_versions_table = Base.metadata.tables.get("schema_versions")
+
+    if table_registry is None or schema_versions_table is None:
+        return {
+            "seededFormDefinitions": 0,
+            "seededSchemaVersions": 0,
+        }
+
+    table_ids: dict[str, object] = {}
+    seeded_forms = 0
+
+    for form in form_definitions:
+        table_code = form.get("tableCode") or form.get("formCode")
+        if not table_code:
+            continue
+
+        existing_id = connection.execute(
+            select(table_registry.c.id).where(table_registry.c.table_code == table_code)
+        ).scalar_one_or_none()
+
+        if existing_id is None:
+            result = connection.execute(
+                table_registry.insert().values(
+                    table_code=table_code,
+                    display_name=form.get("displayName") or table_code,
+                )
+            )
+            existing_id = result.inserted_primary_key[0]
+            seeded_forms += 1
+
+        table_ids[table_code] = existing_id
+
+    seeded_versions = 0
+    for version in schema_versions:
+        table_code = version.get("formCode") or version.get("tableCode")
+        schema_hash = version.get("schemaHash")
+        if not table_code or not schema_hash:
+            continue
+
+        table_id = table_ids.get(table_code)
+        if table_id is None:
+            table_id = connection.execute(
+                select(table_registry.c.id).where(table_registry.c.table_code == table_code)
+            ).scalar_one_or_none()
+        if table_id is None:
+            continue
+
+        existing_version_id = connection.execute(
+            select(schema_versions_table.c.id).where(
+                schema_versions_table.c.table_id == table_id,
+                schema_versions_table.c.schema_hash == schema_hash,
+            )
+        ).scalar_one_or_none()
+
+        if existing_version_id is not None:
+            continue
+
+        connection.execute(
+            schema_versions_table.insert().values(
+                table_id=table_id,
+                schema_hash=schema_hash,
+                header_fingerprint=version.get("headerFingerprint") or "",
+                schema_json=version.get("schemaJson") or {},
+            )
+        )
+        seeded_versions += 1
+
+    return {
+        "seededFormDefinitions": seeded_forms,
+        "seededSchemaVersions": seeded_versions,
+    }
 
 
 async def bootstrap(check_only: bool = False) -> dict[str, object]:
@@ -95,10 +174,12 @@ async def bootstrap(check_only: bool = False) -> dict[str, object]:
 
         async with database.engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
+            seed_result = await connection.run_sync(seed_schema_contracts)
     finally:
         await close_db()
 
     result["created"] = True
+    result.update(seed_result)
     return result
 
 
@@ -175,13 +256,20 @@ $bootstrapPlan = [ordered]@{
         "Import available backend model modules.",
         "Use Alembic when backend\alembic.ini exists.",
         "Use SQLAlchemy metadata create_all when Alembic is not present.",
+        "Seed table_registry and schema_versions from db-bootstrap-plan.json when schema seed data exists.",
         "Run scripts\check-db.ps1 without -Connect for structural validation.",
         "Run scripts\check-db.ps1 -Connect to verify an actual database connection."
     )
 }
 
-if ($null -ne $schemaContract) {
-    $bootstrapPlan["schemaContract"] = $schemaContract
+$bootstrapPlan["schemaContract"] = [ordered]@{
+    tables = $plan.tables
+    relationships = $plan.relationships
+    indexes = $plan.indexes
+    schemaVersions = $plan.schemaVersions
+    seedData = $plan.seedData
+    sourceSamples = $plan.sourceSamples
+    schemaContracts = $plan.schemaContracts
 }
 
 $bootstrapPlan | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 (Join-Path $systemRoot "db-bootstrap-plan.json")

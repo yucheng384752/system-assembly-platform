@@ -1305,6 +1305,8 @@ DB_NAME=form_system
 DB_USERNAME=form_system
 DB_PASSWORD=
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/form_system
+# Local dev without PostgreSQL - use SQLite instead:
+# DATABASE_URL=sqlite+aiosqlite:///./form_db.sqlite
 SECRET_KEY=
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
 AUTH_MODE=api_key

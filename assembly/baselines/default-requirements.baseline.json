@@ -4,6 +4,7 @@
   "nodeMinVersion": "18",
   "python": {
     "packages": [
+      { "name": "aiosqlite",         "spec": ">=0.20.0", "kits": ["platform-core-kit"],    "note": "async SQLite driver for local dev without PostgreSQL" },
       { "name": "asyncpg",           "spec": ">=0.29.0", "kits": ["platform-core-kit"],    "note": "no cp313 wheel for ==0.29.0; resolves to >=0.31.0 on Python 3.13" },
       { "name": "fastapi",           "spec": "==0.115.0", "kits": ["platform-core-kit"] },
       { "name": "greenlet",          "spec": ">=3.0.0",  "kits": ["platform-core-kit"],    "note": "implicit SQLAlchemy async dep; not detected by import scan" },

@@ -479,6 +479,8 @@ Get-Content $EnvFile | ForEach-Object {
     }
 }
 Write-Host "  OK .env loaded"
+Write-Host "  Tip: No PostgreSQL? Use SQLite for local dev/testing:"
+Write-Host "       DATABASE_URL=sqlite+aiosqlite:///./form_db.sqlite"
 Write-Host ""
 
 # --- Virtual environment -----------------------------------------------------
