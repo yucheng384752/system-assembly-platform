@@ -195,7 +195,7 @@ button {
   font-size: 27px;
 }
 
-.page-head p:last-child {
+.page-head p:not(.eyebrow) {
   color: var(--ink-3);
   line-height: 1.7;
 }
@@ -907,6 +907,12 @@ select:focus {
   margin-top: auto;
 }
 
+.architecture-guide .guide-overlay-actions {
+  padding: 16px 28px 22px;
+  border-top: 1px solid var(--line);
+  background: white;
+}
+
 .node-editor-panel .guide-overlay-actions {
   padding: 16px 28px 22px;
   border-top: 1px solid var(--line);
@@ -1546,6 +1552,27 @@ select:focus {
   color: var(--ink-3);
   font-size: 12px;
   line-height: 1.7;
+  margin: 0;
+}
+
+.deploy-steps {
+  margin: 0;
+  padding: 0 0 0 18px;
+  text-align: left;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.9;
+}
+.deploy-steps code {
+  font-size: 11px;
+  background: var(--surface-2);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+.deploy-cta-files {
+  color: var(--ink-4, var(--ink-3));
+  font-size: 11px;
   margin: 0;
 }
 

@@ -503,6 +503,27 @@ $assemblyIrPath = Join-Path $OutputDirectory $assemblyIrPackagePath
     -SystemDirectory $OutputDirectory `
     -BaselinePath (Join-Path $ProjectRoot "assembly\baselines\default-requirements.baseline.json")
 
+# Build frontend production bundle (result: frontend/dist/)
+# Must run after generate-dependency-files.ps1 which creates package.json + tsconfig
+$frontendDir = Join-Path $outputPath "frontend"
+if (Test-Path (Join-Path $frontendDir "package.json")) {
+    Write-Host "Building frontend (npm install + npm run build)..."
+    Push-Location $frontendDir
+    try {
+        & npm install --silent
+        if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        & npm run build
+        if ($LASTEXITCODE -ne 0) { throw "npm run build failed in $frontendDir" }
+    } finally {
+        Pop-Location
+    }
+    $nodeModulesPath = Join-Path $frontendDir "node_modules"
+    if (Test-Path $nodeModulesPath) {
+        Remove-Item -LiteralPath $nodeModulesPath -Recurse -Force
+    }
+    Write-Host "Frontend built -> $frontendDir\dist\"
+}
+
 & (Join-Path $ProjectRoot "tools\generate-model-init.ps1") `
     -ProjectRoot $ProjectRoot `
     -SystemDirectory $OutputDirectory

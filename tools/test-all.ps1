@@ -70,6 +70,11 @@ Run-Step "Baseline contracts" {
     if ($db.tables.PSObject.Properties.Name.Count -eq 0) { throw "db schema baseline has no tables" }
 }
 Run-Step "Assemble generated system" { & (Join-Path $ProjectRoot "tools\assemble-system.ps1") -ProjectRoot $ProjectRoot -CreateZip }
+Run-Step "Frontend production build" {
+    $distIndex = Join-Path $ProjectRoot "dist\generated-system\frontend\dist\index.html"
+    if (-not (Test-Path $distIndex)) { throw "Frontend build missing: dist\generated-system\frontend\dist\index.html" }
+    Write-Host "  OK dist\generated-system\frontend\dist\index.html present"
+}
 Run-Step "Kit install plan" {
     $irPath = Join-Path $ProjectRoot "assembly\assembly-ir.json"
     $generatedIrPath = Join-Path $ProjectRoot "dist\generated-system\assembly\assembly-ir.json"

@@ -99,6 +99,7 @@ const state = {
   tableData: new Map(),
   pkFkSuggestions: null,
   pkFkApplied: null,
+  guideAnswers: {},
 };
 
 const elements = {};
@@ -118,6 +119,7 @@ async function start() {
   bindFlows();
   bindCsvUpload();
   bindNodeEditor();
+  bindGuide();
   renderAll();
 }
 
@@ -183,7 +185,7 @@ function renderArchitectureGuide() {
       <h4>${esc(q.label)}</h4>
       <div class="guide-choice-grid">
         ${q.choices.map((c) => `
-          <button type="button" class="guide-choice" data-guide-choice="${esc(q.id)}:${esc(c.id)}">
+          <button type="button" class="guide-choice${state.guideAnswers[q.id] === c.id ? " is-selected" : ""}" data-guide-choice="${esc(q.id)}:${esc(c.id)}">
             <strong>${esc(c.label)}</strong>
             <span>${esc(c.hint)}</span>
           </button>
@@ -191,6 +193,76 @@ function renderArchitectureGuide() {
       </div>
     </div>
   `).join("");
+}
+
+function bindGuide() {
+  document.querySelector("#open-guide")?.addEventListener("click", () => {
+    renderArchitectureGuide();
+    renderGuideResult();
+    document.querySelector("#architecture-guide").hidden = false;
+  });
+  document.querySelector("#guide-close")?.addEventListener("click", () => {
+    document.querySelector("#architecture-guide").hidden = true;
+  });
+  document.querySelector("#guide-apply")?.addEventListener("click", applyGuideRecommendation);
+  document.querySelector("#guide-questions")?.addEventListener("click", (event) => {
+    const btn = event.target.closest("[data-guide-choice]");
+    if (!btn) return;
+    const [qId, cId] = btn.dataset.guideChoice.split(":");
+    state.guideAnswers[qId] = cId;
+    btn.closest(".guide-choice-grid").querySelectorAll(".guide-choice").forEach((b) => b.classList.remove("is-selected"));
+    btn.classList.add("is-selected");
+    renderGuideResult();
+  });
+}
+
+function computeGuideRecommendation() {
+  const scale = state.guideAnswers.scale || "small";
+  const multi = state.guideAnswers.multitenancy || "no";
+  const ids = ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit", "upload-validation-kit", "import-pipeline-kit"];
+  if (scale === "medium" || scale === "large") ids.push("query-traceability-kit", "analytics-kit", "station-admin-kit");
+  if (scale === "large") ids.push("logs-ops-kit");
+  if (multi === "yes") ids.push("audit-edit-kit");
+  return ids;
+}
+
+function renderGuideResult() {
+  const container = document.getElementById("guide-result-kit-list");
+  if (!container) return;
+  const ids = computeGuideRecommendation();
+  container.innerHTML = ids.map((id) => {
+    const k = state.kits.find((item) => item.id === id);
+    if (!k) return "";
+    return `<div class="guide-result-kit-card">
+      <strong>${esc(k.name)}</strong>
+      <span>${esc(k.capability)}</span>
+      ${k.required ? '<span class="guide-result-req">必選</span>' : ""}
+    </div>`;
+  }).join("");
+}
+
+function applyGuideRecommendation() {
+  const scale = state.guideAnswers.scale || "small";
+  const multi = state.guideAnswers.multitenancy || "no";
+
+  // Sync selectedFlows so flow cards visually reflect the recommendation
+  state.selectedFlows.clear();
+  state.selectedSubflows.clear();
+  state.selectedFlows.add("data-import");
+  if (scale === "medium" || scale === "large") {
+    state.selectedFlows.add("query-trace");
+    state.selectedFlows.add("analytics");
+    state.selectedFlows.add("governance");
+  }
+  if (multi === "yes" && scale === "small") {
+    state.selectedFlows.add("governance");
+  }
+
+  // Apply exact kit selection from recommendation (may differ slightly from flow bundling)
+  resetToRequiredKits();
+  computeGuideRecommendation().forEach((id) => addKitWithDependencies(id));
+  renderAll();
+  document.querySelector("#architecture-guide").hidden = true;
 }
 
 // ── Kit Manifest 載入 ────────────────────────────────────────────────────────

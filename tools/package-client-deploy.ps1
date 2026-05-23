@@ -59,6 +59,11 @@ $stagedEnv = Join-Path $stageDir 'system\.env'
 if (Test-Path $stagedEnv) {
     Remove-Item -LiteralPath $stagedEnv -Force
 }
+# Remove node_modules from staged frontend (pre-built dist/ is sufficient on server)
+$stagedNodeModules = Join-Path $stageDir 'system\frontend\node_modules'
+if (Test-Path $stagedNodeModules) {
+    Remove-Item $stagedNodeModules -Recurse -Force
+}
 
 # Build deploy.sh -----------------------------------------------------------
 Write-Host 'Generating deploy.sh...'
@@ -313,6 +318,10 @@ PY
 }
 
 build_frontend() {
+    if [ -f "${SYS_ROOT}/frontend/dist/index.html" ]; then
+        ok "Frontend pre-built (dist/index.html present)"
+        return
+    fi
     if [ -f "${SYS_ROOT}/frontend/package.json" ]; then
         echo "=== Building frontend ==="
         npm --prefix "${SYS_ROOT}/frontend" install --silent
@@ -494,15 +503,20 @@ if (Test-Path $KitInstallPlan) {
     Write-Host "  OK kit installs complete"
 }
 
-# --- Frontend install (optional) ---------------------------------------------
+# --- Frontend (pre-built or build on-demand) ----------------------------------
 if (-not $SkipFrontend) {
-    $frontendPkg = "$SysRoot\frontend\package.json"
-    if (Test-Path $frontendPkg) {
-        Write-Host "=== Installing frontend dependencies ==="
+    $frontendDist = "$SysRoot\frontend\dist\index.html"
+    $frontendPkg  = "$SysRoot\frontend\package.json"
+    if (Test-Path $frontendDist) {
+        Write-Host "  OK Frontend pre-built (dist\index.html present)"
+    } elseif (Test-Path $frontendPkg) {
+        Write-Host "=== Building frontend ==="
         Push-Location "$SysRoot\frontend"
-        try { npm install --silent }
-        finally { Pop-Location }
-        Write-Host "  OK frontend dependencies installed"
+        try {
+            npm install --silent
+            npm run build
+        } finally { Pop-Location }
+        Write-Host "  OK frontend built"
     }
 }
 Write-Host ""
@@ -590,9 +604,16 @@ $R.Add('## Package contents')
 $R.Add('')
 $R.Add($tick3)
 $R.Add('client-deploy-' + $rName + '/')
-$R.Add('|-- system/      <- Assembled system (backend + frontend + scripts)')
-$R.Add('|-- deploy.sh    <- Deploy script (Linux / macOS)')
-$R.Add('|-- recipe.json  <- Assembly recipe')
+$R.Add('|-- system/              <- Assembled system (backend + pre-built frontend + scripts)')
+$R.Add('|-- docker/              <- Dockerfiles + nginx config (Docker mode)')
+$R.Add('|   |-- backend.Dockerfile')
+$R.Add('|   |-- frontend.Dockerfile')
+$R.Add('|   +-- nginx.conf')
+$R.Add('|-- docker-compose.yml  <- Docker Compose (one-command deploy)')
+$R.Add('|-- .env.docker         <- Environment template for Docker')
+$R.Add('|-- nginx.conf          <- nginx config for direct nginx setup (no Docker)')
+$R.Add('|-- deploy.sh           <- Traditional deploy script (Linux / macOS)')
+$R.Add('|-- recipe.json         <- Assembly recipe')
 $R.Add($tick3)
 $R.Add('')
 $R.Add('## Deployment (Ubuntu 22.04 / macOS)')
@@ -671,8 +692,17 @@ $R.Add($tick3)
 $R.Add('')
 $R.Add('### 5. Serve the frontend')
 $R.Add('')
-$R.Add('Frontend static files are built to ' + $tick1 + 'system/frontend/dist/' + $tick1 + '.')
-$R.Add('Serve them via nginx as a reverse proxy:')
+$R.Add('Frontend static files are **pre-built** and included at ' + $tick1 + 'system/frontend/dist/' + $tick1 + '. Node.js is not required on the server.')
+$R.Add('')
+$R.Add('A ready-to-use nginx config is provided at ' + $tick1 + 'nginx.conf' + $tick1 + '. Edit the ' + $tick1 + 'root' + $tick1 + ' path, then:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('sudo cp nginx.conf /etc/nginx/sites-available/form-system')
+$R.Add('sudo ln -s /etc/nginx/sites-available/form-system /etc/nginx/sites-enabled/')
+$R.Add('sudo nginx -t && sudo systemctl reload nginx')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('Or configure manually to serve via nginx as a reverse proxy:')
 $R.Add('')
 $R.Add($tick3 + 'nginx')
 $R.Add('server {')
@@ -704,11 +734,218 @@ $R.Add('- [ ] ' + $tick1 + 'DATABASE_URL' + $tick1 + ' uses a strong password (n
 $R.Add('- [ ] ' + $tick1 + 'ENVIRONMENT=production' + $tick1 + ' is set (disables /docs)')
 $R.Add('- [ ] Run ' + $tick1 + 'pip-audit' + $tick1 + ' and ' + $tick1 + 'npm audit' + $tick1)
 $R.Add('- [ ] Rotate SECRET_KEY and API keys periodically')
+$R.Add('')
+$R.Add('## Docker Compose (quick start)')
+$R.Add('')
+$R.Add('No manual PostgreSQL or Python installation required.')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('# 1. Configure environment')
+$R.Add('cp .env.docker .env')
+$R.Add('nano .env   # set DB_PASSWORD, SECRET_KEY, ADMIN_API_KEYS')
+$R.Add('')
+$R.Add('# 2. Start all services (db + backend + frontend/nginx)')
+$R.Add('docker compose up -d')
+$R.Add('')
+$R.Add('# 3. Open in browser')
+$R.Add('# http://localhost        (frontend via nginx)')
+$R.Add('# http://localhost:8000   (backend API)')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('Stop services:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('docker compose down          # stop (keep database volume)')
+$R.Add('docker compose down -v       # stop and delete database')
+$R.Add('docker compose logs -f       # stream live logs')
+$R.Add($tick3)
 
 $readmeContent = $R -join "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $stageDir 'README.md'),
     $readmeContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+# Generate Docker Compose files -----------------------------------------------
+Write-Host 'Generating Docker Compose files...'
+New-Item -ItemType Directory -Force (Join-Path $stageDir 'docker') | Out-Null
+
+$dockerComposeContent = @'
+version: "3.9"
+# Generated by Form System Kit Composer - Recipe: __RNAME__
+#
+# Quick start:
+#   cp .env.docker .env && nano .env   # set DB_PASSWORD, SECRET_KEY, ADMIN_API_KEYS
+#   docker compose up -d
+#   open http://localhost
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${DB_NAME:-form_db}
+      POSTGRES_USER: ${DB_USER:-form_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-changeme}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "${DB_USER:-form_user}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend.Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: "postgresql+asyncpg://${DB_USER:-form_user}:${DB_PASSWORD:-changeme}@db:5432/${DB_NAME:-form_db}"
+      SECRET_KEY: ${SECRET_KEY:-changeme-replace-before-production}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      AUTH_MODE: ${AUTH_MODE:-api_key}
+      ADMIN_API_KEYS: ${ADMIN_API_KEYS:-changeme-replace-before-production}
+      ENVIRONMENT: ${ENVIRONMENT:-production}
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend.Dockerfile
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+
+volumes:
+  db-data:
+'@
+$dockerComposeContent = $dockerComposeContent.Replace('__RNAME__', $rName) -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'docker-compose.yml'),
+    $dockerComposeContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$backendDockerfileContent = @'
+FROM python:3.11-slim
+WORKDIR /app
+COPY system/backend/requirements.txt ./requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt
+COPY system/backend/ .
+CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+'@
+$backendDockerfileContent = $backendDockerfileContent -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'docker\backend.Dockerfile'),
+    $backendDockerfileContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$frontendDockerfileContent = @'
+FROM node:20-slim AS builder
+WORKDIR /app
+COPY system/frontend/ .
+RUN npm install --silent && npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+EXPOSE 80
+'@
+$frontendDockerfileContent = $frontendDockerfileContent -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'docker\frontend.Dockerfile'),
+    $frontendDockerfileContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$nginxConfContent = @'
+server {
+    listen 80;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://backend:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+'@
+$nginxConfContent = $nginxConfContent -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'docker\nginx.conf'),
+    $nginxConfContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$envDockerContent = @'
+# Docker Compose environment — copy to .env and edit before running docker compose up
+DB_NAME=form_db
+DB_USER=form_user
+DB_PASSWORD=changeme
+
+# Generate SECRET_KEY: python3 -c "import secrets; print(secrets.token_urlsafe(48))"
+SECRET_KEY=changeme
+
+CORS_ORIGINS=http://localhost
+AUTH_MODE=api_key
+ADMIN_API_KEYS=changeme
+ENVIRONMENT=production
+'@
+$envDockerContent = $envDockerContent -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir '.env.docker'),
+    $envDockerContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+# Generate standalone nginx.conf (for direct nginx without Docker) --------------
+Write-Host 'Generating nginx.conf...'
+$nginxStandaloneContent = @'
+# nginx reverse proxy config for client-deploy-__RNAME__
+# 1. Edit the "root" path below to the absolute deploy directory
+# 2. sudo cp nginx.conf /etc/nginx/sites-available/form-system
+# 3. sudo ln -s /etc/nginx/sites-available/form-system /etc/nginx/sites-enabled/
+# 4. sudo nginx -t && sudo systemctl reload nginx
+
+server {
+    listen 80;
+    server_name _;
+
+    # Update to the absolute path where you extracted the deploy package
+    root /opt/form-system/client-deploy-__RNAME__/system/frontend/dist;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+    }
+}
+'@
+$nginxStandaloneContent = $nginxStandaloneContent.Replace('__RNAME__', $rName) -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'nginx.conf'),
+    $nginxStandaloneContent,
     (New-Object System.Text.UTF8Encoding $false)
 )
 
