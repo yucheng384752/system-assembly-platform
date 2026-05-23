@@ -179,6 +179,24 @@ foreach ($service in @($plan.selectedExternalServices)) {
     }
 }
 
+$kitInstallPlan = New-Object System.Collections.Generic.List[object]
+foreach ($kitId in @($plan.resolvedKitOrder)) {
+    $kitInstallManifestPath = Join-Path $ProjectRoot "kits\$kitId\manifest.json"
+    if (-not (Test-Path $kitInstallManifestPath)) {
+        throw "Kit install manifest not found: $kitInstallManifestPath"
+    }
+
+    $kitInstallManifest = Read-JsonUtf8 $kitInstallManifestPath
+    $kitInstallPlan.Add([pscustomobject][ordered]@{
+        kit = [string]$kitId
+        order = [int]$kitInstallManifest.installOrder
+        requires = @($kitInstallManifest.requires)
+        env = @($kitInstallManifest.runtimeEnv)
+        scripts = @("kits/$kitId/install.ps1")
+    })
+}
+$kitInstallPlanSorted = @($kitInstallPlan.ToArray() | Sort-Object order)
+
 $ir = [ordered]@{
     irVersion = "0.1.0"
     generatedAt = (Get-Date).ToUniversalTime().ToString("o")
@@ -236,6 +254,7 @@ $ir = [ordered]@{
         "scripts\restart.ps1",
         "scripts\start.ps1"
     )
+    kitInstallPlan = $kitInstallPlanSorted
     entitlements = [ordered]@{
         checks = if ($entitlementPlan) { @($entitlementPlan.checks) } else { @() }
         planMatrix = if ($entitlementPlan) { $entitlementPlan.planMatrix } else { [ordered]@{} }

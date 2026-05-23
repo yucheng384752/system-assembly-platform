@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "station-admin-kit",
+    "displayName":  "站點與規則管理",
+    "installOrder":  80,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

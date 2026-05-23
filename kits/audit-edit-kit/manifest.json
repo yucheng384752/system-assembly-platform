@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "audit-edit-kit",
+    "displayName":  "稽核與資料修正",
+    "installOrder":  85,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

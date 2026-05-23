@@ -70,6 +70,38 @@ Run-Step "Baseline contracts" {
     if ($db.tables.PSObject.Properties.Name.Count -eq 0) { throw "db schema baseline has no tables" }
 }
 Run-Step "Assemble generated system" { & (Join-Path $ProjectRoot "tools\assemble-system.ps1") -ProjectRoot $ProjectRoot -CreateZip }
+Run-Step "Kit install plan" {
+    $irPath = Join-Path $ProjectRoot "assembly\assembly-ir.json"
+    $generatedIrPath = Join-Path $ProjectRoot "dist\generated-system\assembly\assembly-ir.json"
+    $kitsPath = Join-Path $ProjectRoot "dist\generated-system\kits"
+    $runnerPath = Join-Path $ProjectRoot "dist\generated-system\scripts\run-kit-installs.ps1"
+    $planPath = Join-Path $ProjectRoot "dist\generated-system\kitInstallPlan.json"
+
+    $ir = Get-Content -Raw -Encoding UTF8 $irPath | ConvertFrom-Json
+    if (@($ir.kitInstallPlan).Count -eq 0) {
+        throw "assembly-ir.json has an empty kitInstallPlan"
+    }
+    if (-not (Test-Path $generatedIrPath)) {
+        throw "Generated assembly-ir.json is missing: $generatedIrPath"
+    }
+    $generatedIr = Get-Content -Raw -Encoding UTF8 $generatedIrPath | ConvertFrom-Json
+    if (@($generatedIr.kitInstallPlan).Count -eq 0) {
+        throw "Generated assembly-ir.json has an empty kitInstallPlan"
+    }
+    if (-not (Test-Path $kitsPath)) {
+        throw "Generated kits directory is missing: $kitsPath"
+    }
+    if (-not (Test-Path $runnerPath)) {
+        throw "Generated kit install runner is missing: $runnerPath"
+    }
+    if (-not (Test-Path $planPath)) {
+        throw "Generated kitInstallPlan.json is missing: $planPath"
+    }
+    $plan = Get-Content -Raw -Encoding UTF8 $planPath | ConvertFrom-Json
+    if (@($plan).Count -eq 0) {
+        throw "kitInstallPlan.json is empty"
+    }
+}
 Run-Step "Dependency files" { & (Join-Path $ProjectRoot "tools\test-dependency-files.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "DB bootstrap" { & (Join-Path $ProjectRoot "tools\test-db-bootstrap.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Generated start validation" { & (Join-Path $ProjectRoot "tools\test-generated-start.ps1") -ProjectRoot $ProjectRoot }

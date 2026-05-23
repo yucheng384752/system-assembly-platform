@@ -1,1491 +1,1638 @@
-{
-  "manifestVersion": "0.1.0",
-  "name": "form-analysis-kit-suite",
-  "displayName": "Form Analysis Kit Suite",
-  "sourceSystem": {
-    "path": "C:\\Users\\gslab\\Desktop\\Form-analysis-server-specify-kit",
-    "appRoot": "form-analysis-server",
-    "frontendRoot": "form-analysis-server/frontend",
-    "backendRoot": "form-analysis-server/backend"
-  },
-  "defaultDatabaseRecommendation": {
-    "engine": "postgresql",
-    "reason": "The target system uses tenant-scoped production records, async SQLAlchemy, Alembic, JSON/JSONB-style query paths, background import jobs, and analytics workflows. PostgreSQL is the safest production default."
-  },
-  "kits": [
-    {
-      "id": "platform-core-kit",
-      "displayName": "平台核心",
-      "category": "foundation",
-      "required": true,
-      "businessCapability": "提供應用程式啟動、設定、資料庫連線、健康檢查、共用樣式、語系與 API 呼叫基礎。",
-      "dependencies": [],
-      "frontend": {
-        "pages": [],
-        "components": [],
-        "services": [
-          "frontend/src/services/fetchWrapper.ts",
-          "frontend/src/services/a11y.ts"
-        ],
-        "shellFiles": [
-          "frontend/src/App.tsx",
-          "frontend/src/main.tsx",
-          "frontend/src/i18n.ts",
-          "frontend/src/locales"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_health.py"
-        ],
-        "core": [
-          "backend/app/main.py",
-          "backend/app/core/config.py",
-          "backend/app/core/database.py",
-          "backend/app/core/logging.py",
-          "backend/app/core/middleware.py",
-          "backend/app/api/deps.py"
-        ],
-        "services": [],
-        "models": [],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_health",
-            "symbol": "router",
-            "prefix": "/healthz",
-            "tags": [
-              "Health Check"
-            ],
-            "tenantScoped": false
-          }
-        ]
-      },
-      "database": {
-        "models": [],
-        "migrations": [
-          "backend/alembic"
-        ]
-      },
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "app-shell"
-      },
-      "subfeatures": [
-        {
-          "id": "app-shell",
-          "displayName": "應用程式 shell",
-          "businessCapability": "提供前端入口、共用版面、語系與樣式基礎。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "shell",
-            "layout",
-            "i18n"
-          ]
-        },
-        {
-          "id": "configuration-management",
-          "displayName": "設定管理",
-          "businessCapability": "集中管理環境設定與系統啟動設定。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "config",
-            "env"
-          ]
-        },
-        {
-          "id": "database-connection",
-          "displayName": "資料庫連線",
-          "businessCapability": "提供後端資料庫連線、session 與 migration 基礎。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "database",
-            "db"
-          ]
-        },
-        {
-          "id": "health-check",
-          "displayName": "健康檢查",
-          "businessCapability": "提供服務健康檢查 API 與維運探針。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "health",
-            "status"
-          ]
-        },
-        {
-          "id": "api-client-foundation",
-          "displayName": "API 呼叫基礎",
-          "businessCapability": "提供前端 API wrapper、錯誤處理與可及性輔助。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "fetch",
-            "api"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "tenant-auth-kit",
-      "displayName": "租戶與登入權限",
-      "category": "security",
-      "required": true,
-      "businessCapability": "讓不同公司或部門隔離資料，並管理登入、API key、使用者角色與管理員權限。",
-      "dependencies": [
-        "platform-core-kit"
-      ],
-      "frontend": {
-        "pages": [
-          "frontend/src/pages/RegisterPage.tsx",
-          "frontend/src/pages/AdminPage.tsx",
-          "frontend/src/pages/ManagerPage.tsx"
-        ],
-        "components": [],
-        "services": [
-          "frontend/src/services/auth.ts",
-          "frontend/src/services/adminAuth.ts",
-          "frontend/src/services/tenant.ts",
-          "frontend/src/services/tenantMap.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_auth.py",
-          "backend/app/api/routes_tenants.py"
-        ],
-        "core": [
-          "backend/app/core/auth.py",
-          "backend/app/core/bootstrap.py",
-          "backend/app/core/password.py",
-          "backend/app/core/tenant_resolver.py"
-        ],
-        "services": [],
-        "models": [
-          "backend/app/models/core/tenant.py",
-          "backend/app/models/core/tenant_user.py",
-          "backend/app/models/core/tenant_api_key.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_auth",
-            "symbol": "router",
-            "prefix": "/api/auth",
-            "tags": [
-              "Authentication"
-            ],
-            "tenantScoped": false
-          },
-          {
-            "module": "app.api.routes_tenants",
-            "symbol": "router",
-            "tags": [
-              "Tenants"
-            ],
-            "tenantScoped": false
-          }
-        ]
-      },
-      "api": [
-        "GET /api/auth/whoami",
-        "POST /api/auth/login",
-        "POST /api/auth/me/password",
-        "GET /api/auth/users",
-        "POST /api/auth/admin/tenant-api-keys",
-        "GET /api/tenants",
-        "POST /api/tenants"
-      ],
-      "database": {
-        "models": [
-          "Tenant",
-          "TenantUser",
-          "TenantApiKey"
-        ]
-      },
-      "permissions": [
-        "admin",
-        "manager",
-        "tenant user"
-      ],
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "mock-auth-session"
-      },
-      "subfeatures": [
-        {
-          "id": "tenant-list-and-create",
-          "displayName": "租戶列表與建立",
-          "businessCapability": "建立與瀏覽租戶，作為資料隔離邊界。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "tenant",
-            "租戶"
-          ]
-        },
-        {
-          "id": "user-login",
-          "displayName": "使用者登入",
-          "businessCapability": "提供使用者登入、身份確認與密碼更新。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "login",
-            "auth",
-            "登入"
-          ]
-        },
-        {
-          "id": "api-key-issue",
-          "displayName": "API key 發行",
-          "businessCapability": "為租戶或管理端發行 API key。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "api key",
-            "token"
-          ]
-        },
-        {
-          "id": "user-management",
-          "displayName": "使用者管理",
-          "businessCapability": "管理使用者角色、狀態與權限。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "users",
-            "roles"
-          ]
-        },
-        {
-          "id": "admin-unlock",
-          "displayName": "管理員解鎖",
-          "businessCapability": "提供管理員操作入口與解鎖流程。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "admin",
-            "管理員"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "station-data-link-kit",
-      "displayName": "站點資料串聯",
-      "category": "data-model",
-      "required": true,
-      "businessCapability": "保存並標準化多站點製程資料，將 P1/P2/P3 或未來新增站點依 lot、winder、product_id 串成可追溯資料鏈。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit"
-      ],
-      "frontend": {
-        "pages": [],
-        "components": [],
-        "services": []
-      },
-      "backend": {
-        "routers": [],
-        "models": [
-          "backend/app/models/base_record.py",
-          "backend/app/models/p1_record.py",
-          "backend/app/models/p2_record.py",
-          "backend/app/models/p3_record.py",
-          "backend/app/models/p2_item_v2.py",
-          "backend/app/models/p3_item_v2.py",
-          "backend/app/models/generic_record.py",
-          "backend/app/models/station.py",
-          "backend/app/models/validation_rule.py",
-          "backend/app/models/analytics_mapping.py"
-        ],
-        "services": [
-          "backend/app/utils/normalization.py",
-          "backend/app/services/product_id_generator.py",
-          "backend/app/services/production_date_extractor.py"
-        ]
-      },
-      "database": {
-        "models": [
-          "P1Record",
-          "P2Record",
-          "P2ItemV2",
-          "P3Record",
-          "P3ItemV2",
-          "GenericRecord",
-          "GenericRecordItem"
-        ]
-      },
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "data-relationship-cards"
-      },
-      "subfeatures": [
-        {
-          "id": "station-data-model",
-          "displayName": "站點資料模型",
-          "businessCapability": "定義站點資料、明細列與跨站點關聯。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "station",
-            "站點"
-          ]
-        },
-        {
-          "id": "p123-compatibility-adapter",
-          "displayName": "P1/P2/P3 相容層",
-          "businessCapability": "保留既有 P1/P2/P3 資料表與欄位相容。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "P1",
-            "P2",
-            "P3"
-          ]
-        },
-        {
-          "id": "new-station-definition",
-          "displayName": "新站點資料定義",
-          "businessCapability": "支援未來新增站點與泛用資料模型。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "generic station"
-          ]
-        },
-        {
-          "id": "lot-normalization",
-          "displayName": "lot normalization",
-          "businessCapability": "標準化 lot 與 winder 等追溯鍵。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "lot",
-            "normalize"
-          ]
-        },
-        {
-          "id": "product-id-generation",
-          "displayName": "product_id 產生",
-          "businessCapability": "依規則產生或整理 product_id。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "product id"
-          ]
-        },
-        {
-          "id": "generic-record",
-          "displayName": "generic record",
-          "businessCapability": "提供泛用記錄與明細模型。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "generic record"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "upload-validation-kit",
-      "displayName": "檔案上傳與驗證",
-      "category": "workflow",
-      "required": false,
-      "businessCapability": "使用者上傳 CSV、Excel 或 PDF，系統建立上傳工作、驗證內容、顯示錯誤並允許修正。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit"
-      ],
-      "optionalDependencies": [
-        "import-pipeline-kit"
-      ],
-      "runtimeDependencies": {
-        "python": ["openpyxl", "pandas", "python-multipart"]
-      },
-      "frontend": {
-        "pages": [
-          "frontend/src/pages/UploadPage.tsx"
-        ],
-        "components": [
-          "frontend/src/components/FileUpload.tsx",
-          "frontend/src/components/CSVEditor.tsx"
-        ],
-        "hooks": [
-          "frontend/src/hooks/useUpload.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_upload.py",
-          "backend/app/api/routes_validate.py"
-        ],
-        "services": [
-          "backend/app/services/validation.py",
-          "backend/app/services/pdf_conversion.py"
-        ],
-        "models": [
-          "backend/app/models/upload_job.py",
-          "backend/app/models/upload_error.py",
-          "backend/app/models/pdf_upload.py",
-          "backend/app/models/pdf_conversion_job.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_upload",
-            "symbol": "router",
-            "prefix": "/api",
-            "tags": [
-              "檔案上傳"
-            ],
-            "tenantScoped": true
-          },
-          {
-            "module": "app.api.routes_validate",
-            "symbol": "router",
-            "prefix": "/api",
-            "tags": [
-              "驗證結果查詢"
-            ],
-            "tenantScoped": true
-          }
-        ]
-      },
-      "api": [
-        "POST /api/upload",
-        "GET /api/upload/{process_id}/status",
-        "POST /api/upload/{process_id}/validate",
-        "PUT /api/upload/{process_id}/content",
-        "GET /api/upload/pdf/service-status",
-        "POST /api/upload/pdf/{process_id}/convert",
-        "POST /api/upload/pdf/{process_id}/convert/ingest"
-      ],
-      "database": {
-        "models": [
-          "UploadJob",
-          "UploadError",
-          "PdfUpload",
-          "PdfConversionJob"
-        ]
-      },
-      "externalServices": [
-        {
-          "id": "pdf-conversion-service",
-          "required": false,
-          "config": "PDF_SERVER_URL"
-        }
-      ],
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "upload-simulation"
-      },
-      "subfeatures": [
-        {
-          "id": "csv-excel-upload-validation",
-          "displayName": "CSV / Excel 上傳驗證",
-          "businessCapability": "上傳 CSV 或 Excel 並建立 upload job。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "csv",
-            "excel",
-            "上傳",
-            "upload"
-          ]
-        },
-        {
-          "id": "csv-excel-error-summary",
-          "displayName": "CSV / Excel 錯誤摘要",
-          "businessCapability": "彙整驗證錯誤並顯示可修正摘要。",
-          "defaultSelected": true,
-          "dependencies": [
-            "csv-excel-upload-validation"
-          ],
-          "aliases": [
-            "error",
-            "validation",
-            "錯誤"
-          ]
-        },
-        {
-          "id": "csv-content-correction",
-          "displayName": "CSV 內容修正",
-          "businessCapability": "允許修正 CSV 內容並重新驗證。",
-          "defaultSelected": true,
-          "dependencies": [
-            "csv-excel-upload-validation",
-            "csv-excel-error-summary"
-          ],
-          "aliases": [
-            "edit csv",
-            "修正"
-          ]
-        },
-        {
-          "id": "pdf-upload-option",
-          "displayName": "PDF 上傳選項",
-          "businessCapability": "允許上傳 PDF，並保留轉換前的 upload 狀態。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "pdf",
-            "pdf upload"
-          ]
-        },
-        {
-          "id": "pdf-to-csv-binding",
-          "displayName": "PDF 轉 CSV 綁定",
-          "businessCapability": "將 PDF 送往外部轉換服務並取回 CSV。",
-          "defaultSelected": true,
-          "dependencies": [
-            "pdf-upload-option"
-          ],
-          "aliases": [
-            "pdf convert",
-            "PDF_SERVER_URL"
-          ],
-          "externalServices": [
-            {
-              "id": "pdf-conversion-service",
-              "config": "PDF_SERVER_URL",
-              "required": true
-            }
-          ],
-          "entitlement": {
-            "requiredPlan": "pro",
-            "featureKey": "pdf_to_csv",
-            "description": "PDF to CSV conversion is a paid/customized capability."
-          }
-        },
-        {
-          "id": "converted-result-ingest-upload-job",
-          "displayName": "轉換結果匯入 upload job",
-          "businessCapability": "把 PDF 轉換結果回寫成可驗證與匯入的 upload job。",
-          "defaultSelected": true,
-          "dependencies": [
-            "pdf-to-csv-binding",
-            "csv-excel-upload-validation"
-          ],
-          "aliases": [
-            "ingest",
-            "匯入 upload job"
-          ],
-          "entitlement": {
-            "requiredPlan": "pro",
-            "featureKey": "pdf_to_csv_ingest",
-            "description": "Ingesting converted PDF results requires the PDF conversion entitlement."
-          }
-        }
-      ]
-    },
-    {
-      "id": "import-pipeline-kit",
-      "displayName": "資料匯入流程",
-      "category": "workflow",
-      "required": false,
-      "businessCapability": "將已驗證檔案轉成匯入工作，暫存、驗證、提交到正式 P1/P2/P3 資料表。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit",
-        "station-data-link-kit"
-      ],
-      "runtimeDependencies": {
-        "python": ["pandas"]
-      },
-      "frontend": {
-        "pages": [],
-        "components": [],
-        "services": [
-          "frontend/src/services/api.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_import.py",
-          "backend/app/api/routes_import_v2.py"
-        ],
-        "services": [
-          "backend/app/services/import_v2.py",
-          "backend/app/services/csv_field_mapper.py",
-          "backend/app/services/generic_validator.py"
-        ],
-        "models": [
-          "backend/app/models/import_job.py",
-          "backend/app/models/core/schema_registry.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_import",
-            "symbol": "router",
-            "prefix": "/api",
-            "tags": [
-              "資料匯入"
-            ],
-            "tenantScoped": true
-          },
-          {
-            "module": "app.api.routes_import_v2",
-            "symbol": "router",
-            "prefix": "/api/v2/import",
-            "tags": [
-              "Import V2"
-            ],
-            "tenantScoped": true
-          }
-        ]
-      },
-      "api": [
-        "POST /api/v2/import/jobs",
-        "POST /api/v2/import/jobs/from-upload-job",
-        "GET /api/v2/import/jobs/{job_id}",
-        "GET /api/v2/import/jobs/{job_id}/errors",
-        "POST /api/v2/import/jobs/{job_id}/commit",
-        "POST /api/v2/import/jobs/{job_id}/cancel"
-      ],
-      "database": {
-        "models": [
-          "ImportJob",
-          "ImportFile",
-          "StagingRow",
-          "TableRegistry",
-          "SchemaVersion"
-        ]
-      },
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "job-state-machine"
-      },
-      "subfeatures": [
-        {
-          "id": "create-import-job",
-          "displayName": "建立 import job",
-          "businessCapability": "從已驗證資料建立匯入工作。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "import job"
-          ]
-        },
-        {
-          "id": "create-import-job-from-upload-job",
-          "displayName": "從 upload job 建立 import job",
-          "businessCapability": "將 upload job 轉成 import pipeline 的輸入。",
-          "defaultSelected": true,
-          "dependencies": [
-            "create-import-job"
-          ],
-          "aliases": [
-            "upload job"
-          ]
-        },
-        {
-          "id": "staging-row-validation",
-          "displayName": "暫存列驗證",
-          "businessCapability": "驗證 staging rows 與目標資料表規則。",
-          "defaultSelected": true,
-          "dependencies": [
-            "create-import-job"
-          ],
-          "aliases": [
-            "staging"
-          ]
-        },
-        {
-          "id": "import-error-query",
-          "displayName": "錯誤列查詢",
-          "businessCapability": "查詢匯入工作中的錯誤列與錯誤原因。",
-          "defaultSelected": true,
-          "dependencies": [
-            "staging-row-validation"
-          ],
-          "aliases": [
-            "error rows"
-          ]
-        },
-        {
-          "id": "commit-production-records",
-          "displayName": "commit 到正式資料表",
-          "businessCapability": "將通過驗證的資料提交到正式資料表。",
-          "defaultSelected": true,
-          "dependencies": [
-            "staging-row-validation"
-          ],
-          "aliases": [
-            "commit"
-          ]
-        },
-        {
-          "id": "cancel-import",
-          "displayName": "取消匯入",
-          "businessCapability": "取消未完成的匯入工作並保留狀態。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "cancel"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "query-traceability-kit",
-      "displayName": "查詢與追溯",
-      "category": "business",
-      "required": false,
-      "businessCapability": "依 lot、日期、機台、模具、winder、product_id 查詢資料並顯示跨站點追溯鏈。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit",
-        "station-data-link-kit"
-      ],
-      "frontend": {
-        "pages": [
-          "frontend/src/pages/QueryPage.tsx"
-        ],
-        "components": [
-          "frontend/src/components/AdvancedSearch.tsx",
-          "frontend/src/components/DataQuery.tsx",
-          "frontend/src/components/TraceabilityFlow.tsx",
-          "frontend/src/components/GenericTraceabilityFlow.tsx"
-        ],
-        "services": [
-          "frontend/src/services/api.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_query_v2.py",
-          "backend/app/api/traceability.py"
-        ],
-        "services": [
-          "backend/app/services/traceability_flattener.py",
-          "backend/app/services/ut_flattener.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_query_v2",
-            "symbol": "router",
-            "prefix": "/api/v2/query",
-            "tags": [
-              "Query V2"
-            ],
-            "tenantScoped": true
-          },
-          {
-            "module": "app.api.traceability",
-            "symbol": "router",
-            "tags": [
-              "生產追溯"
-            ],
-            "tenantScoped": true
-          }
-        ]
-      },
-      "api": [
-        "GET /api/v2/query/lots",
-        "POST /api/v2/query/advanced",
-        "POST /api/v2/query/records/dynamic",
-        "GET /api/v2/query/records/stats",
-        "GET /api/v2/query/trace/{trace_key}",
-        "GET /product/{product_id}",
-        "GET /lot/{lot_no}",
-        "GET /winder/{lot_no}/{winder_number}"
-      ],
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "traceability-flow"
-      },
-      "subfeatures": [
-        {
-          "id": "lot-query",
-          "displayName": "lot 查詢",
-          "businessCapability": "依 lot 查詢跨站點資料。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "lot"
-          ]
-        },
-        {
-          "id": "product-id-query",
-          "displayName": "product_id 查詢",
-          "businessCapability": "依 product_id 查詢單一產品追溯資料。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "product id"
-          ]
-        },
-        {
-          "id": "advanced-filter",
-          "displayName": "進階篩選",
-          "businessCapability": "依日期、機台、模具、winder 等條件篩選。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "filter"
-          ]
-        },
-        {
-          "id": "traceability-detail",
-          "displayName": "追溯鏈詳情",
-          "businessCapability": "顯示跨站點追溯鏈與關聯摘要。",
-          "defaultSelected": true,
-          "dependencies": [
-            "lot-query",
-            "product-id-query"
-          ],
-          "aliases": [
-            "traceability",
-            "追溯"
-          ]
-        },
-        {
-          "id": "dynamic-field-query",
-          "displayName": "動態欄位查詢",
-          "businessCapability": "支援泛用站點與動態欄位查詢。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "dynamic field"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "analytics-kit",
-      "displayName": "分析與報表",
-      "category": "analytics",
-      "required": false,
-      "businessCapability": "提供分析儀表板、artifact 瀏覽、即時分析、客訴分析與 extraction analysis。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit",
-        "station-data-link-kit",
-        "query-traceability-kit"
-      ],
-      "runtimeDependencies": {
-        "python": ["pandas"]
-      },
-      "frontend": {
-        "pages": [
-          "frontend/src/pages/AnalyticsPage.tsx"
-        ],
-        "components": [
-          "frontend/src/components/analytics"
-        ],
-        "services": [
-          "frontend/src/services/analyticsArtifacts.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_analytics.py",
-          "backend/app/api/routes_ut.py"
-        ],
-        "services": [
-          "backend/app/services/analytics_external.py",
-          "backend/app/services/analytics_data_fetcher.py",
-          "backend/app/services/analytical_four_adapter.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_analytics",
-            "symbol": "router",
-            "tags": [
-              "Analytics"
-            ],
-            "tenantScoped": true
-          },
-          {
-            "module": "app.api.routes_ut",
-            "symbol": "router",
-            "tags": [
-              "UT Data"
-            ],
-            "tenantScoped": true
-          }
-        ]
-      },
-      "api": [
-        "GET /api/v2/analytics/flatten/monthly",
-        "GET /api/v2/analytics/flatten",
-        "POST /api/v2/analytics/analyze",
-        "GET /api/v2/analytics/artifacts",
-        "POST /api/v2/analytics/realtime-analysis",
-        "POST /api/v2/analytics/complaint-analysis",
-        "POST /api/v2/analytics/extraction-analysis"
-      ],
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "charts-with-sample-data"
-      },
-      "subfeatures": [
-        {
-          "id": "realtime-analysis",
-          "displayName": "即時分析",
-          "businessCapability": "對選定資料執行即時分析。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "realtime"
-          ],
-          "entitlement": {
-            "requiredPlan": "pro",
-            "featureKey": "realtime_analysis",
-            "description": "Realtime form analysis is a paid analytics capability."
-          }
-        },
-        {
-          "id": "complaint-analysis",
-          "displayName": "客訴分析",
-          "businessCapability": "針對客訴情境產生分析結果。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "complaint"
-          ],
-          "entitlement": {
-            "requiredPlan": "enterprise",
-            "featureKey": "complaint_analysis",
-            "description": "Complaint analysis is usually customized per customer."
-          }
-        },
-        {
-          "id": "artifact-browser",
-          "displayName": "artifact 瀏覽",
-          "businessCapability": "瀏覽分析產物與歷史 artifact。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "artifact"
-          ]
-        },
-        {
-          "id": "extraction-analysis",
-          "displayName": "extraction analysis",
-          "businessCapability": "分析抽取資料與特徵摘要。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "extraction"
-          ]
-        },
-        {
-          "id": "chart-summary",
-          "displayName": "圖表摘要",
-          "businessCapability": "以圖表顯示樣本數、異常與重點指標。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "chart"
-          ],
-          "options": [
-            {
-              "id": "color-palette",
-              "displayName": "圖表配色",
-              "type": "select",
-              "defaultValue": "production",
-              "choices": [
-                {
-                  "value": "production",
-                  "displayName": "正式營運"
-                },
-                {
-                  "value": "quality-alert",
-                  "displayName": "品質警示"
-                },
-                {
-                  "value": "cool-technical",
-                  "displayName": "冷色技術"
-                }
-              ]
-            },
-            {
-              "id": "chart-style",
-              "displayName": "圖表型態",
-              "type": "select",
-              "defaultValue": "mixed-kpi",
-              "choices": [
-                {
-                  "value": "mixed-kpi",
-                  "displayName": "KPI 混合圖"
-                },
-                {
-                  "value": "bar",
-                  "displayName": "長條圖"
-                },
-                {
-                  "value": "line",
-                  "displayName": "趨勢線"
-                }
-              ]
-            },
-            {
-              "id": "show-anomaly-colors",
-              "displayName": "異常色標",
-              "type": "boolean",
-              "defaultValue": true
-            }
-          ],
-          "entitlement": {
-            "requiredPlan": "pro",
-            "featureKey": "advanced_chart_summary",
-            "description": "Advanced chart rendering options require a paid plan."
-          }
-        }
-      ]
-    },
-    {
-      "id": "station-admin-kit",
-      "displayName": "站點與規則管理",
-      "category": "admin",
-      "required": false,
-      "businessCapability": "管理泛用站點、欄位 schema、驗證規則、分析欄位對應與站點連結。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit",
-        "station-data-link-kit"
-      ],
-      "featureFlags": [
-        "USE_GENERIC_SCHEMA"
-      ],
-      "frontend": {
-        "pages": [
-          "frontend/src/pages/ManagerPage.tsx"
-        ],
-        "components": [
-          "frontend/src/components/admin/StationManager.tsx",
-          "frontend/src/components/admin/StationLinkManager.tsx",
-          "frontend/src/components/admin/ValidationRuleManager.tsx",
-          "frontend/src/components/admin/AnalyticsMappingManager.tsx"
-        ],
-        "services": [
-          "frontend/src/services/stationApi.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_stations.py"
-        ],
-        "services": [
-          "backend/app/services/schema_service.py",
-          "backend/app/core/seed_stations.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_stations",
-            "symbol": "router",
-            "tags": [
-              "Stations (Generic)"
-            ],
-            "tenantScoped": true,
-            "featureFlag": "USE_GENERIC_SCHEMA"
-          }
-        ]
-      },
-      "database": {
-        "models": [
-          "Station",
-          "StationSchema",
-          "StationLink",
-          "ValidationRule",
-          "AnalyticsMapping"
-        ]
-      },
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "schema-builder"
-      },
-      "subfeatures": [
-        {
-          "id": "station-management",
-          "displayName": "站點管理",
-          "businessCapability": "管理站點清單與站點基本資料。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "station"
-          ]
-        },
-        {
-          "id": "schema-configuration",
-          "displayName": "schema 設定",
-          "businessCapability": "設定站點欄位 schema 與版本。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "schema"
-          ]
-        },
-        {
-          "id": "validation-rules",
-          "displayName": "驗證規則",
-          "businessCapability": "設定欄位驗證規則。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "rules"
-          ],
-          "entitlement": {
-            "requiredPlan": "enterprise",
-            "featureKey": "custom_validation_rules",
-            "description": "Custom validation rule management is an enterprise capability."
-          }
-        },
-        {
-          "id": "analytics-mapping",
-          "displayName": "分析欄位對應",
-          "businessCapability": "設定分析欄位與來源欄位對應。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "mapping"
-          ]
-        },
-        {
-          "id": "station-linking",
-          "displayName": "站點連結",
-          "businessCapability": "設定站點之間的追溯連結。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "link"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "audit-edit-kit",
-      "displayName": "稽核與資料修正",
-      "category": "governance",
-      "required": false,
-      "businessCapability": "允許資料修正時保留原因、前後差異與操作稽核紀錄。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit",
-        "station-data-link-kit"
-      ],
-      "frontend": {
-        "pages": [],
-        "components": [
-          "frontend/src/components/EditRecordModal.tsx"
-        ],
-        "services": []
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_edit.py",
-          "backend/app/api/routes_audit_events.py"
-        ],
-        "services": [
-          "backend/app/services/audit_events.py"
-        ],
-        "models": [
-          "backend/app/models/core/audit_event.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_edit",
-            "symbol": "router",
-            "prefix": "/api/edit",
-            "tags": [
-              "Inline Edit"
-            ],
-            "tenantScoped": true
-          },
-          {
-            "module": "app.api.routes_audit_events",
-            "symbol": "router",
-            "tags": [
-              "Audit Events"
-            ],
-            "tenantScoped": false
-          }
-        ]
-      },
-      "database": {
-        "models": [
-          "EditReason",
-          "RowEdit",
-          "AuditEvent"
-        ]
-      },
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "before-after-diff"
-      },
-      "subfeatures": [
-        {
-          "id": "edit-reason",
-          "displayName": "編輯原因",
-          "businessCapability": "要求資料修正時填寫原因。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "reason"
-          ]
-        },
-        {
-          "id": "record-correction",
-          "displayName": "資料修正",
-          "businessCapability": "允許修改資料並保留修改紀錄。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "edit"
-          ]
-        },
-        {
-          "id": "before-after-diff",
-          "displayName": "前後差異",
-          "businessCapability": "顯示修正前後差異。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "diff"
-          ]
-        },
-        {
-          "id": "audit-event-query",
-          "displayName": "稽核事件查詢",
-          "businessCapability": "查詢資料修正與操作稽核事件。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "audit"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "logs-ops-kit",
-      "displayName": "日誌與維運",
-      "category": "operations",
-      "required": false,
-      "businessCapability": "查看、搜尋、統計、清理與下載系統日誌。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit"
-      ],
-      "frontend": {
-        "pages": [],
-        "components": [
-          "frontend/src/components/SimpleLogViewer.tsx",
-          "frontend/src/components/LogViewer.tsx"
-        ],
-        "services": [
-          "frontend/src/services/logService.ts"
-        ]
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_logs.py"
-        ],
-        "services": [],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_logs",
-            "symbol": "router",
-            "prefix": "/api/logs",
-            "tags": [
-              "日誌管理"
-            ],
-            "tenantScoped": true
-          }
-        ]
-      },
-      "api": [
-        "GET /api/logs/files",
-        "GET /api/logs/view/{log_type}",
-        "GET /api/logs/stats",
-        "GET /api/logs/search",
-        "DELETE /api/logs/cleanup",
-        "GET /api/logs/download/{log_type}"
-      ],
-      "preview": {
-        "supportsRealtimePreview": false,
-        "previewMode": "sample-log-table"
-      },
-      "subfeatures": [
-        {
-          "id": "log-list",
-          "displayName": "日誌列表",
-          "businessCapability": "列出可檢視的系統日誌檔。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "logs"
-          ]
-        },
-        {
-          "id": "log-search",
-          "displayName": "日誌搜尋",
-          "businessCapability": "依關鍵字搜尋系統日誌。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "search"
-          ]
-        },
-        {
-          "id": "log-statistics",
-          "displayName": "日誌統計",
-          "businessCapability": "統計日誌量與錯誤概況。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "stats"
-          ]
-        },
-        {
-          "id": "cleanup-and-download",
-          "displayName": "清理與下載",
-          "businessCapability": "清理過期日誌並下載指定日誌。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "download",
-            "cleanup"
-          ]
-        }
-      ]
-    },
-    {
-      "id": "mod-subscription-kit",
-      "displayName": "MOD 訂閱串接",
-      "category": "integration",
-      "required": false,
-      "businessCapability": "串接 MOD 訂閱來源，接收訂閱狀態、方案、到期日與權益，供系統依訂閱方案啟用對應功能。",
-      "dependencies": [
-        "platform-core-kit",
-        "tenant-auth-kit"
-      ],
-      "featureFlags": [
-        "MOD_SUBSCRIPTION_ENABLED"
-      ],
-      "frontend": {
-        "pages": [],
-        "components": [],
-        "services": []
-      },
-      "backend": {
-        "routers": [
-          "backend/app/api/routes_mod_subscription.py"
-        ],
-        "services": [
-          "backend/app/services/mod_subscription.py"
-        ],
-        "models": [
-          "backend/app/models/mod_subscription.py"
-        ],
-        "routerRegistrations": [
-          {
-            "module": "app.api.routes_mod_subscription",
-            "symbol": "router",
-            "tags": [
-              "MOD 訂閱權益"
-            ],
-            "tenantScoped": true,
-            "featureFlag": "MOD_SUBSCRIPTION_ENABLED"
-          }
-        ]
-      },
-      "api": [
-        "POST /api/mod/subscriptions/sync",
-        "POST /api/mod/subscriptions/webhook",
-        "GET /api/mod/subscriptions/{external_subscription_id}",
-        "GET /api/mod/subscriptions/{external_subscription_id}/entitlements"
-      ],
-      "database": {
-        "models": [
-          "ModSubscription",
-          "ModSubscriptionEvent"
-        ]
-      },
-      "permissions": [
-        "admin",
-        "system integration"
-      ],
-      "externalServices": [
-        {
-          "id": "mod-subscription-provider",
-          "required": true,
-          "config": "MOD_API_BASE_URL"
-        }
-      ],
-      "preview": {
-        "supportsRealtimePreview": true,
-        "previewMode": "subscription-status-cards"
-      },
-      "subfeatures": [
-        {
-          "id": "subscription-status-sync",
-          "displayName": "訂閱狀態同步",
-          "businessCapability": "同步 MOD 訂閱狀態、方案、到期日與外部訂閱 ID。",
-          "defaultSelected": true,
-          "dependencies": [],
-          "aliases": [
-            "MOD",
-            "subscription",
-            "訂閱同步"
-          ],
-          "externalServices": [
-            {
-              "id": "mod-subscription-provider",
-              "config": "MOD_API_BASE_URL",
-              "required": true
-            }
-          ]
-        },
-        {
-          "id": "plan-entitlement-mapping",
-          "displayName": "方案權益映射",
-          "businessCapability": "將 MOD 方案映射成系統功能權益與可用模組。",
-          "defaultSelected": true,
-          "dependencies": [
-            "subscription-status-sync"
-          ],
-          "aliases": [
-            "entitlement",
-            "plan"
-          ]
-        },
-        {
-          "id": "subscription-webhook-receiver",
-          "displayName": "Webhook 接收",
-          "businessCapability": "接收 MOD 訂閱異動 webhook 並更新本地訂閱狀態。",
-          "defaultSelected": true,
-          "dependencies": [
-            "subscription-status-sync"
-          ],
-          "aliases": [
-            "webhook"
-          ],
-          "externalServices": [
-            {
-              "id": "mod-subscription-provider",
-              "config": "MOD_WEBHOOK_SECRET",
-              "required": true
-            }
-          ]
-        },
-        {
-          "id": "subscription-audit-log",
-          "displayName": "訂閱稽核紀錄",
-          "businessCapability": "保留訂閱同步、webhook 與權益變更事件。",
-          "defaultSelected": true,
-          "dependencies": [
-            "subscription-status-sync"
-          ],
-          "aliases": [
-            "audit",
-            "event log"
-          ]
-        }
-      ]
-    }
-  ]
+﻿{
+    "manifestVersion":  "0.1.0",
+    "name":  "form-analysis-kit-suite",
+    "displayName":  "Form Analysis Kit Suite",
+    "sourceSystem":  {
+                         "path":  "C:\\Users\\gslab\\Desktop\\Form-analysis-server-specify-kit",
+                         "appRoot":  "form-analysis-server",
+                         "frontendRoot":  "form-analysis-server/frontend",
+                         "backendRoot":  "form-analysis-server/backend"
+                     },
+    "defaultDatabaseRecommendation":  {
+                                          "engine":  "postgresql",
+                                          "reason":  "This system stores formal operating records, import history, traceability data, user permissions, and background processing results. PostgreSQL is recommended for long-term storage, backup, and multi-user production use."
+                                      },
+    "kits":  [
+                 {
+                     "id":  "platform-core-kit",
+                     "displayName":  "平台核心",
+                     "category":  "foundation",
+                     "required":  true,
+                     "businessCapability":  "提供應用程式啟動、設定、資料庫連線、健康檢查、共用樣式、語系與 API 呼叫基礎。",
+                     "dependencies":  [
+
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/fetchWrapper.ts",
+                                                       "frontend/src/services/a11y.ts"
+                                                   ],
+                                      "shellFiles":  [
+                                                         "frontend/src/App.tsx",
+                                                         "frontend/src/main.tsx",
+                                                         "frontend/src/i18n.ts",
+                                                         "frontend/src/locales"
+                                                     ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_health.py"
+                                                 ],
+                                     "core":  [
+                                                  "backend/app/main.py",
+                                                  "backend/app/core/config.py",
+                                                  "backend/app/core/database.py",
+                                                  "backend/app/core/logging.py",
+                                                  "backend/app/core/middleware.py",
+                                                  "backend/app/api/deps.py"
+                                              ],
+                                     "services":  [
+
+                                                  ],
+                                     "models":  [
+
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_health",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/healthz",
+                                                                     "tags":  [
+                                                                                  "Health Check"
+                                                                              ],
+                                                                     "tenantScoped":  false
+                                                                 }
+                                                             ]
+                                 },
+                     "database":  {
+                                      "models":  [
+
+                                                 ],
+                                      "migrations":  [
+                                                         "backend/alembic"
+                                                     ]
+                                  },
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "app-shell"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "app-shell",
+                                             "displayName":  "應用程式 shell",
+                                             "businessCapability":  "提供前端入口、共用版面、語系與樣式基礎。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "shell",
+                                                             "layout",
+                                                             "i18n"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "configuration-management",
+                                             "displayName":  "設定管理",
+                                             "businessCapability":  "集中管理環境設定與系統啟動設定。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "config",
+                                                             "env"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "database-connection",
+                                             "displayName":  "資料庫連線",
+                                             "businessCapability":  "提供後端資料庫連線、session 與 migration 基礎。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "database",
+                                                             "db"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "health-check",
+                                             "displayName":  "健康檢查",
+                                             "businessCapability":  "提供服務健康檢查 API 與維運探針。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "health",
+                                                             "status"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "api-client-foundation",
+                                             "displayName":  "API 呼叫基礎",
+                                             "businessCapability":  "提供前端 API wrapper、錯誤處理與可及性輔助。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "fetch",
+                                                             "api"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  10
+                 },
+                 {
+                     "id":  "tenant-auth-kit",
+                     "displayName":  "租戶與登入權限",
+                     "category":  "security",
+                     "required":  true,
+                     "businessCapability":  "讓不同公司或部門隔離資料，並管理登入、API key、使用者角色與管理員權限。",
+                     "dependencies":  [
+                                          "platform-core-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/RegisterPage.tsx",
+                                                    "frontend/src/pages/AdminPage.tsx",
+                                                    "frontend/src/pages/ManagerPage.tsx"
+                                                ],
+                                      "components":  [
+
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/auth.ts",
+                                                       "frontend/src/services/adminAuth.ts",
+                                                       "frontend/src/services/tenant.ts",
+                                                       "frontend/src/services/tenantMap.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_auth.py",
+                                                     "backend/app/api/routes_tenants.py"
+                                                 ],
+                                     "core":  [
+                                                  "backend/app/core/auth.py",
+                                                  "backend/app/core/bootstrap.py",
+                                                  "backend/app/core/password.py",
+                                                  "backend/app/core/tenant_resolver.py"
+                                              ],
+                                     "services":  [
+
+                                                  ],
+                                     "models":  [
+                                                    "backend/app/models/core/tenant.py",
+                                                    "backend/app/models/core/tenant_user.py",
+                                                    "backend/app/models/core/tenant_api_key.py"
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_auth",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api/auth",
+                                                                     "tags":  [
+                                                                                  "Authentication"
+                                                                              ],
+                                                                     "tenantScoped":  false
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.routes_tenants",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "Tenants"
+                                                                              ],
+                                                                     "tenantScoped":  false
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "GET /api/auth/whoami",
+                                 "POST /api/auth/login",
+                                 "POST /api/auth/me/password",
+                                 "GET /api/auth/users",
+                                 "POST /api/auth/admin/tenant-api-keys",
+                                 "GET /api/tenants",
+                                 "POST /api/tenants"
+                             ],
+                     "database":  {
+                                      "models":  [
+                                                     "Tenant",
+                                                     "TenantUser",
+                                                     "TenantApiKey"
+                                                 ]
+                                  },
+                     "permissions":  [
+                                         "admin",
+                                         "manager",
+                                         "tenant user"
+                                     ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "mock-auth-session"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "tenant-list-and-create",
+                                             "displayName":  "租戶列表與建立",
+                                             "businessCapability":  "建立與瀏覽租戶，作為資料隔離邊界。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "tenant",
+                                                             "租戶"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "user-login",
+                                             "displayName":  "使用者登入",
+                                             "businessCapability":  "提供使用者登入、身份確認與密碼更新。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "login",
+                                                             "auth",
+                                                             "登入"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "api-key-issue",
+                                             "displayName":  "API key 發行",
+                                             "businessCapability":  "為租戶或管理端發行 API key。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "api key",
+                                                             "token"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "user-management",
+                                             "displayName":  "使用者管理",
+                                             "businessCapability":  "管理使用者角色、狀態與權限。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "users",
+                                                             "roles"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "admin-unlock",
+                                             "displayName":  "管理員解鎖",
+                                             "businessCapability":  "提供管理員操作入口與解鎖流程。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "admin",
+                                                             "管理員"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  20
+                 },
+                 {
+                     "id":  "station-data-link-kit",
+                     "displayName":  "站點資料串聯",
+                     "category":  "data-model",
+                     "required":  true,
+                     "businessCapability":  "保存並標準化多站點製程資料，將 P1/P2/P3 或未來新增站點依 lot、winder、product_id 串成可追溯資料鏈。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+
+                                                     ],
+                                      "services":  [
+
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+
+                                                 ],
+                                     "models":  [
+                                                    "backend/app/models/base_record.py",
+                                                    "backend/app/models/p1_record.py",
+                                                    "backend/app/models/p2_record.py",
+                                                    "backend/app/models/p3_record.py",
+                                                    "backend/app/models/p2_item_v2.py",
+                                                    "backend/app/models/p3_item_v2.py",
+                                                    "backend/app/models/generic_record.py",
+                                                    "backend/app/models/station.py",
+                                                    "backend/app/models/validation_rule.py",
+                                                    "backend/app/models/analytics_mapping.py"
+                                                ],
+                                     "services":  [
+                                                      "backend/app/utils/normalization.py",
+                                                      "backend/app/services/product_id_generator.py",
+                                                      "backend/app/services/production_date_extractor.py"
+                                                  ]
+                                 },
+                     "database":  {
+                                      "models":  [
+                                                     "P1Record",
+                                                     "P2Record",
+                                                     "P2ItemV2",
+                                                     "P3Record",
+                                                     "P3ItemV2",
+                                                     "GenericRecord",
+                                                     "GenericRecordItem"
+                                                 ]
+                                  },
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "data-relationship-cards"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "station-data-model",
+                                             "displayName":  "站點資料模型",
+                                             "businessCapability":  "定義站點資料、明細列與跨站點關聯。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "station",
+                                                             "站點"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "p123-compatibility-adapter",
+                                             "displayName":  "P1/P2/P3 相容層",
+                                             "businessCapability":  "保留既有 P1/P2/P3 資料表與欄位相容。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "P1",
+                                                             "P2",
+                                                             "P3"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "new-station-definition",
+                                             "displayName":  "新站點資料定義",
+                                             "businessCapability":  "支援未來新增站點與泛用資料模型。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "generic station"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "lot-normalization",
+                                             "displayName":  "lot normalization",
+                                             "businessCapability":  "標準化 lot 與 winder 等追溯鍵。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "lot",
+                                                             "normalize"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "product-id-generation",
+                                             "displayName":  "product_id 產生",
+                                             "businessCapability":  "依規則產生或整理 product_id。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "product id"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "generic-record",
+                                             "displayName":  "generic record",
+                                             "businessCapability":  "提供泛用記錄與明細模型。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "generic record"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  30
+                 },
+                 {
+                     "id":  "upload-validation-kit",
+                     "displayName":  "檔案上傳與驗證",
+                     "category":  "workflow",
+                     "required":  false,
+                     "businessCapability":  "使用者上傳 CSV、Excel 或 PDF，系統建立上傳工作、驗證內容、顯示錯誤並允許修正。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit"
+                                      ],
+                     "optionalDependencies":  [
+                                                  "import-pipeline-kit"
+                                              ],
+                     "runtimeDependencies":  {
+                                                 "python":  [
+                                                                "openpyxl",
+                                                                "pandas",
+                                                                "python-multipart"
+                                                            ]
+                                             },
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/UploadPage.tsx"
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/FileUpload.tsx",
+                                                         "frontend/src/components/CSVEditor.tsx"
+                                                     ],
+                                      "hooks":  [
+                                                    "frontend/src/hooks/useUpload.ts"
+                                                ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_upload.py",
+                                                     "backend/app/api/routes_validate.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/validation.py",
+                                                      "backend/app/services/pdf_conversion.py"
+                                                  ],
+                                     "models":  [
+                                                    "backend/app/models/upload_job.py",
+                                                    "backend/app/models/upload_error.py",
+                                                    "backend/app/models/pdf_upload.py",
+                                                    "backend/app/models/pdf_conversion_job.py"
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_upload",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api",
+                                                                     "tags":  [
+                                                                                  "檔案上傳"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.routes_validate",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api",
+                                                                     "tags":  [
+                                                                                  "驗證結果查詢"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "POST /api/upload",
+                                 "GET /api/upload/{process_id}/status",
+                                 "POST /api/upload/{process_id}/validate",
+                                 "PUT /api/upload/{process_id}/content",
+                                 "GET /api/upload/pdf/service-status",
+                                 "POST /api/upload/pdf/{process_id}/convert",
+                                 "POST /api/upload/pdf/{process_id}/convert/ingest"
+                             ],
+                     "database":  {
+                                      "models":  [
+                                                     "UploadJob",
+                                                     "UploadError",
+                                                     "PdfUpload",
+                                                     "PdfConversionJob"
+                                                 ]
+                                  },
+                     "externalServices":  [
+                                              {
+                                                  "id":  "pdf-conversion-service",
+                                                  "required":  false,
+                                                  "config":  "PDF_SERVER_URL"
+                                              }
+                                          ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "upload-simulation"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "csv-excel-upload-validation",
+                                             "displayName":  "CSV / Excel 上傳驗證",
+                                             "businessCapability":  "上傳 CSV 或 Excel 並建立 upload job。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "csv",
+                                                             "excel",
+                                                             "上傳",
+                                                             "upload"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "csv-excel-error-summary",
+                                             "displayName":  "CSV / Excel 錯誤摘要",
+                                             "businessCapability":  "彙整驗證錯誤並顯示可修正摘要。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "csv-excel-upload-validation"
+                                                              ],
+                                             "aliases":  [
+                                                             "error",
+                                                             "validation",
+                                                             "錯誤"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "csv-content-correction",
+                                             "displayName":  "CSV 內容修正",
+                                             "businessCapability":  "允許修正 CSV 內容並重新驗證。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "csv-excel-upload-validation",
+                                                                  "csv-excel-error-summary"
+                                                              ],
+                                             "aliases":  [
+                                                             "edit csv",
+                                                             "修正"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "pdf-upload-option",
+                                             "displayName":  "PDF 上傳選項",
+                                             "businessCapability":  "允許上傳 PDF，並保留轉換前的 upload 狀態。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "pdf",
+                                                             "pdf upload"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "pdf-to-csv-binding",
+                                             "displayName":  "PDF 轉 CSV 綁定",
+                                             "businessCapability":  "將 PDF 送往外部轉換服務並取回 CSV。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "pdf-upload-option"
+                                                              ],
+                                             "aliases":  [
+                                                             "pdf convert",
+                                                             "PDF_SERVER_URL"
+                                                         ],
+                                             "externalServices":  [
+                                                                      {
+                                                                          "id":  "pdf-conversion-service",
+                                                                          "config":  "PDF_SERVER_URL",
+                                                                          "required":  true
+                                                                      }
+                                                                  ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "pdf_to_csv",
+                                                                 "description":  "PDF to CSV conversion is a paid/customized capability."
+                                                             }
+                                         },
+                                         {
+                                             "id":  "converted-result-ingest-upload-job",
+                                             "displayName":  "轉換結果匯入 upload job",
+                                             "businessCapability":  "把 PDF 轉換結果回寫成可驗證與匯入的 upload job。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "pdf-to-csv-binding",
+                                                                  "csv-excel-upload-validation"
+                                                              ],
+                                             "aliases":  [
+                                                             "ingest",
+                                                             "匯入 upload job"
+                                                         ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "pdf_to_csv_ingest",
+                                                                 "description":  "Ingesting converted PDF results requires the PDF conversion entitlement."
+                                                             }
+                                         }
+                                     ],
+                     "installOrder":  40
+                 },
+                 {
+                     "id":  "import-pipeline-kit",
+                     "displayName":  "資料匯入流程",
+                     "category":  "workflow",
+                     "required":  false,
+                     "businessCapability":  "將已驗證檔案轉成匯入工作，暫存、驗證、提交到正式 P1/P2/P3 資料表。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit"
+                                      ],
+                     "runtimeDependencies":  {
+                                                 "python":  [
+                                                                "pandas"
+                                                            ]
+                                             },
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/api.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_import.py",
+                                                     "backend/app/api/routes_import_v2.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/import_v2.py",
+                                                      "backend/app/services/csv_field_mapper.py",
+                                                      "backend/app/services/generic_validator.py"
+                                                  ],
+                                     "models":  [
+                                                    "backend/app/models/import_job.py",
+                                                    "backend/app/models/core/schema_registry.py"
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_import",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api",
+                                                                     "tags":  [
+                                                                                  "資料匯入"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.routes_import_v2",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api/v2/import",
+                                                                     "tags":  [
+                                                                                  "Import V2"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "POST /api/v2/import/jobs",
+                                 "POST /api/v2/import/jobs/from-upload-job",
+                                 "GET /api/v2/import/jobs/{job_id}",
+                                 "GET /api/v2/import/jobs/{job_id}/errors",
+                                 "POST /api/v2/import/jobs/{job_id}/commit",
+                                 "POST /api/v2/import/jobs/{job_id}/cancel"
+                             ],
+                     "database":  {
+                                      "models":  [
+                                                     "ImportJob",
+                                                     "ImportFile",
+                                                     "StagingRow",
+                                                     "TableRegistry",
+                                                     "SchemaVersion"
+                                                 ]
+                                  },
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "job-state-machine"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "create-import-job",
+                                             "displayName":  "建立 import job",
+                                             "businessCapability":  "從已驗證資料建立匯入工作。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "import job"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "create-import-job-from-upload-job",
+                                             "displayName":  "從 upload job 建立 import job",
+                                             "businessCapability":  "將 upload job 轉成 import pipeline 的輸入。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "create-import-job"
+                                                              ],
+                                             "aliases":  [
+                                                             "upload job"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "staging-row-validation",
+                                             "displayName":  "暫存列驗證",
+                                             "businessCapability":  "驗證 staging rows 與目標資料表規則。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "create-import-job"
+                                                              ],
+                                             "aliases":  [
+                                                             "staging"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "import-error-query",
+                                             "displayName":  "錯誤列查詢",
+                                             "businessCapability":  "查詢匯入工作中的錯誤列與錯誤原因。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "staging-row-validation"
+                                                              ],
+                                             "aliases":  [
+                                                             "error rows"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "commit-production-records",
+                                             "displayName":  "commit 到正式資料表",
+                                             "businessCapability":  "將通過驗證的資料提交到正式資料表。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "staging-row-validation"
+                                                              ],
+                                             "aliases":  [
+                                                             "commit"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "cancel-import",
+                                             "displayName":  "取消匯入",
+                                             "businessCapability":  "取消未完成的匯入工作並保留狀態。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "cancel"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  50
+                 },
+                 {
+                     "id":  "query-traceability-kit",
+                     "displayName":  "查詢與追溯",
+                     "category":  "business",
+                     "required":  false,
+                     "businessCapability":  "依 lot、日期、機台、模具、winder、product_id 查詢資料並顯示跨站點追溯鏈。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/QueryPage.tsx"
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/AdvancedSearch.tsx",
+                                                         "frontend/src/components/DataQuery.tsx",
+                                                         "frontend/src/components/TraceabilityFlow.tsx",
+                                                         "frontend/src/components/GenericTraceabilityFlow.tsx"
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/api.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_query_v2.py",
+                                                     "backend/app/api/traceability.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/traceability_flattener.py",
+                                                      "backend/app/services/ut_flattener.py"
+                                                  ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_query_v2",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api/v2/query",
+                                                                     "tags":  [
+                                                                                  "Query V2"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.traceability",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "生產追溯"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "GET /api/v2/query/lots",
+                                 "POST /api/v2/query/advanced",
+                                 "POST /api/v2/query/records/dynamic",
+                                 "GET /api/v2/query/records/stats",
+                                 "GET /api/v2/query/trace/{trace_key}",
+                                 "GET /product/{product_id}",
+                                 "GET /lot/{lot_no}",
+                                 "GET /winder/{lot_no}/{winder_number}"
+                             ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "traceability-flow"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "lot-query",
+                                             "displayName":  "lot 查詢",
+                                             "businessCapability":  "依 lot 查詢跨站點資料。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "lot"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "product-id-query",
+                                             "displayName":  "product_id 查詢",
+                                             "businessCapability":  "依 product_id 查詢單一產品追溯資料。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "product id"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "advanced-filter",
+                                             "displayName":  "進階篩選",
+                                             "businessCapability":  "依日期、機台、模具、winder 等條件篩選。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "filter"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "traceability-detail",
+                                             "displayName":  "追溯鏈詳情",
+                                             "businessCapability":  "顯示跨站點追溯鏈與關聯摘要。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "lot-query",
+                                                                  "product-id-query"
+                                                              ],
+                                             "aliases":  [
+                                                             "traceability",
+                                                             "追溯"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "dynamic-field-query",
+                                             "displayName":  "動態欄位查詢",
+                                             "businessCapability":  "支援泛用站點與動態欄位查詢。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "dynamic field"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  60
+                 },
+                 {
+                     "id":  "analytics-kit",
+                     "displayName":  "分析與報表",
+                     "category":  "analytics",
+                     "required":  false,
+                     "businessCapability":  "提供分析儀表板、artifact 瀏覽、即時分析、客訴分析與 extraction analysis。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit",
+                                          "query-traceability-kit"
+                                      ],
+                     "runtimeDependencies":  {
+                                                 "python":  [
+                                                                "pandas"
+                                                            ]
+                                             },
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/AnalyticsPage.tsx"
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/analytics"
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/analyticsArtifacts.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_analytics.py",
+                                                     "backend/app/api/routes_ut.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/analytics_external.py",
+                                                      "backend/app/services/analytics_data_fetcher.py",
+                                                      "backend/app/services/analytical_four_adapter.py"
+                                                  ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_analytics",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "Analytics"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.routes_ut",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "UT Data"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "GET /api/v2/analytics/flatten/monthly",
+                                 "GET /api/v2/analytics/flatten",
+                                 "POST /api/v2/analytics/analyze",
+                                 "GET /api/v2/analytics/artifacts",
+                                 "POST /api/v2/analytics/realtime-analysis",
+                                 "POST /api/v2/analytics/complaint-analysis",
+                                 "POST /api/v2/analytics/extraction-analysis"
+                             ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "charts-with-sample-data"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "realtime-analysis",
+                                             "displayName":  "即時分析",
+                                             "businessCapability":  "對選定資料執行即時分析。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "realtime"
+                                                         ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "realtime_analysis",
+                                                                 "description":  "Realtime form analysis is a paid analytics capability."
+                                                             }
+                                         },
+                                         {
+                                             "id":  "complaint-analysis",
+                                             "displayName":  "客訴分析",
+                                             "businessCapability":  "針對客訴情境產生分析結果。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "complaint"
+                                                         ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "enterprise",
+                                                                 "featureKey":  "complaint_analysis",
+                                                                 "description":  "Complaint analysis is usually customized per customer."
+                                                             }
+                                         },
+                                         {
+                                             "id":  "artifact-browser",
+                                             "displayName":  "artifact 瀏覽",
+                                             "businessCapability":  "瀏覽分析產物與歷史 artifact。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "artifact"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "extraction-analysis",
+                                             "displayName":  "extraction analysis",
+                                             "businessCapability":  "分析抽取資料與特徵摘要。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "extraction"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "chart-summary",
+                                             "displayName":  "圖表摘要",
+                                             "businessCapability":  "以圖表顯示樣本數、異常與重點指標。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "chart"
+                                                         ],
+                                             "options":  [
+                                                             {
+                                                                 "id":  "color-palette",
+                                                                 "displayName":  "圖表配色",
+                                                                 "type":  "select",
+                                                                 "defaultValue":  "production",
+                                                                 "choices":  [
+                                                                                 {
+                                                                                     "value":  "production",
+                                                                                     "displayName":  "正式營運"
+                                                                                 },
+                                                                                 {
+                                                                                     "value":  "quality-alert",
+                                                                                     "displayName":  "品質警示"
+                                                                                 },
+                                                                                 {
+                                                                                     "value":  "cool-technical",
+                                                                                     "displayName":  "冷色技術"
+                                                                                 }
+                                                                             ]
+                                                             },
+                                                             {
+                                                                 "id":  "chart-style",
+                                                                 "displayName":  "圖表型態",
+                                                                 "type":  "select",
+                                                                 "defaultValue":  "mixed-kpi",
+                                                                 "choices":  [
+                                                                                 {
+                                                                                     "value":  "mixed-kpi",
+                                                                                     "displayName":  "KPI 混合圖"
+                                                                                 },
+                                                                                 {
+                                                                                     "value":  "bar",
+                                                                                     "displayName":  "長條圖"
+                                                                                 },
+                                                                                 {
+                                                                                     "value":  "line",
+                                                                                     "displayName":  "趨勢線"
+                                                                                 }
+                                                                             ]
+                                                             },
+                                                             {
+                                                                 "id":  "show-anomaly-colors",
+                                                                 "displayName":  "異常色標",
+                                                                 "type":  "boolean",
+                                                                 "defaultValue":  true
+                                                             }
+                                                         ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "advanced_chart_summary",
+                                                                 "description":  "Advanced chart rendering options require a paid plan."
+                                                             }
+                                         }
+                                     ],
+                     "installOrder":  70
+                 },
+                 {
+                     "id":  "station-admin-kit",
+                     "displayName":  "站點與規則管理",
+                     "category":  "admin",
+                     "required":  false,
+                     "businessCapability":  "管理泛用站點、欄位 schema、驗證規則、分析欄位對應與站點連結。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit"
+                                      ],
+                     "featureFlags":  [
+                                          "USE_GENERIC_SCHEMA"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/ManagerPage.tsx"
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/admin/StationManager.tsx",
+                                                         "frontend/src/components/admin/StationLinkManager.tsx",
+                                                         "frontend/src/components/admin/ValidationRuleManager.tsx",
+                                                         "frontend/src/components/admin/AnalyticsMappingManager.tsx"
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/stationApi.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_stations.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/schema_service.py",
+                                                      "backend/app/core/seed_stations.py"
+                                                  ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_stations",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "Stations (Generic)"
+                                                                              ],
+                                                                     "tenantScoped":  true,
+                                                                     "featureFlag":  "USE_GENERIC_SCHEMA"
+                                                                 }
+                                                             ]
+                                 },
+                     "database":  {
+                                      "models":  [
+                                                     "Station",
+                                                     "StationSchema",
+                                                     "StationLink",
+                                                     "ValidationRule",
+                                                     "AnalyticsMapping"
+                                                 ]
+                                  },
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "schema-builder"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "station-management",
+                                             "displayName":  "站點管理",
+                                             "businessCapability":  "管理站點清單與站點基本資料。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "station"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "schema-configuration",
+                                             "displayName":  "schema 設定",
+                                             "businessCapability":  "設定站點欄位 schema 與版本。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "schema"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "validation-rules",
+                                             "displayName":  "驗證規則",
+                                             "businessCapability":  "設定欄位驗證規則。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "rules"
+                                                         ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "enterprise",
+                                                                 "featureKey":  "custom_validation_rules",
+                                                                 "description":  "Custom validation rule management is an enterprise capability."
+                                                             }
+                                         },
+                                         {
+                                             "id":  "analytics-mapping",
+                                             "displayName":  "分析欄位對應",
+                                             "businessCapability":  "設定分析欄位與來源欄位對應。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "mapping"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "station-linking",
+                                             "displayName":  "站點連結",
+                                             "businessCapability":  "設定站點之間的追溯連結。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "link"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  80
+                 },
+                 {
+                     "id":  "audit-edit-kit",
+                     "displayName":  "稽核與資料修正",
+                     "category":  "governance",
+                     "required":  false,
+                     "businessCapability":  "允許資料修正時保留原因、前後差異與操作稽核紀錄。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/EditRecordModal.tsx"
+                                                     ],
+                                      "services":  [
+
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_edit.py",
+                                                     "backend/app/api/routes_audit_events.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/audit_events.py"
+                                                  ],
+                                     "models":  [
+                                                    "backend/app/models/core/audit_event.py"
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_edit",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api/edit",
+                                                                     "tags":  [
+                                                                                  "Inline Edit"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 },
+                                                                 {
+                                                                     "module":  "app.api.routes_audit_events",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "Audit Events"
+                                                                              ],
+                                                                     "tenantScoped":  false
+                                                                 }
+                                                             ]
+                                 },
+                     "database":  {
+                                      "models":  [
+                                                     "EditReason",
+                                                     "RowEdit",
+                                                     "AuditEvent"
+                                                 ]
+                                  },
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "before-after-diff"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "edit-reason",
+                                             "displayName":  "編輯原因",
+                                             "businessCapability":  "要求資料修正時填寫原因。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "reason"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "record-correction",
+                                             "displayName":  "資料修正",
+                                             "businessCapability":  "允許修改資料並保留修改紀錄。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "edit"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "before-after-diff",
+                                             "displayName":  "前後差異",
+                                             "businessCapability":  "顯示修正前後差異。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "diff"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "audit-event-query",
+                                             "displayName":  "稽核事件查詢",
+                                             "businessCapability":  "查詢資料修正與操作稽核事件。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "audit"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  85
+                 },
+                 {
+                     "id":  "logs-ops-kit",
+                     "displayName":  "日誌與維運",
+                     "category":  "operations",
+                     "required":  false,
+                     "businessCapability":  "查看、搜尋、統計、清理與下載系統日誌。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+                                                         "frontend/src/components/SimpleLogViewer.tsx",
+                                                         "frontend/src/components/LogViewer.tsx"
+                                                     ],
+                                      "services":  [
+                                                       "frontend/src/services/logService.ts"
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_logs.py"
+                                                 ],
+                                     "services":  [
+
+                                                  ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_logs",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api/logs",
+                                                                     "tags":  [
+                                                                                  "日誌管理"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "GET /api/logs/files",
+                                 "GET /api/logs/view/{log_type}",
+                                 "GET /api/logs/stats",
+                                 "GET /api/logs/search",
+                                 "DELETE /api/logs/cleanup",
+                                 "GET /api/logs/download/{log_type}"
+                             ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  false,
+                                     "previewMode":  "sample-log-table"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "log-list",
+                                             "displayName":  "日誌列表",
+                                             "businessCapability":  "列出可檢視的系統日誌檔。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "logs"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "log-search",
+                                             "displayName":  "日誌搜尋",
+                                             "businessCapability":  "依關鍵字搜尋系統日誌。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "search"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "log-statistics",
+                                             "displayName":  "日誌統計",
+                                             "businessCapability":  "統計日誌量與錯誤概況。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "stats"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "cleanup-and-download",
+                                             "displayName":  "清理與下載",
+                                             "businessCapability":  "清理過期日誌並下載指定日誌。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "download",
+                                                             "cleanup"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  90
+                 },
+                 {
+                     "id":  "mod-subscription-kit",
+                     "displayName":  "MOD 訂閱串接",
+                     "category":  "integration",
+                     "required":  false,
+                     "businessCapability":  "串接 MOD 訂閱來源，接收訂閱狀態、方案、到期日與權益，供系統依訂閱方案啟用對應功能。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit"
+                                      ],
+                     "featureFlags":  [
+                                          "MOD_SUBSCRIPTION_ENABLED"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+
+                                                ],
+                                      "components":  [
+
+                                                     ],
+                                      "services":  [
+
+                                                   ]
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_mod_subscription.py"
+                                                 ],
+                                     "services":  [
+                                                      "backend/app/services/mod_subscription.py"
+                                                  ],
+                                     "models":  [
+                                                    "backend/app/models/mod_subscription.py"
+                                                ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_mod_subscription",
+                                                                     "symbol":  "router",
+                                                                     "tags":  [
+                                                                                  "MOD 訂閱權益"
+                                                                              ],
+                                                                     "tenantScoped":  true,
+                                                                     "featureFlag":  "MOD_SUBSCRIPTION_ENABLED"
+                                                                 }
+                                                             ]
+                                 },
+                     "api":  [
+                                 "POST /api/mod/subscriptions/sync",
+                                 "POST /api/mod/subscriptions/webhook",
+                                 "GET /api/mod/subscriptions/{external_subscription_id}",
+                                 "GET /api/mod/subscriptions/{external_subscription_id}/entitlements"
+                             ],
+                     "database":  {
+                                      "models":  [
+                                                     "ModSubscription",
+                                                     "ModSubscriptionEvent"
+                                                 ]
+                                  },
+                     "permissions":  [
+                                         "admin",
+                                         "system integration"
+                                     ],
+                     "externalServices":  [
+                                              {
+                                                  "id":  "mod-subscription-provider",
+                                                  "required":  true,
+                                                  "config":  "MOD_API_BASE_URL"
+                                              }
+                                          ],
+                     "preview":  {
+                                     "supportsRealtimePreview":  true,
+                                     "previewMode":  "subscription-status-cards"
+                                 },
+                     "subfeatures":  [
+                                         {
+                                             "id":  "subscription-status-sync",
+                                             "displayName":  "訂閱狀態同步",
+                                             "businessCapability":  "同步 MOD 訂閱狀態、方案、到期日與外部訂閱 ID。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "MOD",
+                                                             "subscription",
+                                                             "訂閱同步"
+                                                         ],
+                                             "externalServices":  [
+                                                                      {
+                                                                          "id":  "mod-subscription-provider",
+                                                                          "config":  "MOD_API_BASE_URL",
+                                                                          "required":  true
+                                                                      }
+                                                                  ]
+                                         },
+                                         {
+                                             "id":  "plan-entitlement-mapping",
+                                             "displayName":  "方案權益映射",
+                                             "businessCapability":  "將 MOD 方案映射成系統功能權益與可用模組。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "subscription-status-sync"
+                                                              ],
+                                             "aliases":  [
+                                                             "entitlement",
+                                                             "plan"
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "subscription-webhook-receiver",
+                                             "displayName":  "Webhook 接收",
+                                             "businessCapability":  "接收 MOD 訂閱異動 webhook 並更新本地訂閱狀態。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "subscription-status-sync"
+                                                              ],
+                                             "aliases":  [
+                                                             "webhook"
+                                                         ],
+                                             "externalServices":  [
+                                                                      {
+                                                                          "id":  "mod-subscription-provider",
+                                                                          "config":  "MOD_WEBHOOK_SECRET",
+                                                                          "required":  true
+                                                                      }
+                                                                  ]
+                                         },
+                                         {
+                                             "id":  "subscription-audit-log",
+                                             "displayName":  "訂閱稽核紀錄",
+                                             "businessCapability":  "保留訂閱同步、webhook 與權益變更事件。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+                                                                  "subscription-status-sync"
+                                                              ],
+                                             "aliases":  [
+                                                             "audit",
+                                                             "event log"
+                                                         ]
+                                         }
+                                     ],
+                     "installOrder":  95
+                 }
+             ]
 }
