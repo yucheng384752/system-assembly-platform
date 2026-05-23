@@ -1146,8 +1146,8 @@ function renderDatabaseRecommendation() {
   const displayName = engine === "postgresql" ? "PostgreSQL" : "SQLite";
   document.querySelector("#db-engine").textContent = displayName;
   document.querySelector("#db-reason").textContent = engine === "postgresql"
-    ? "正式營運、追溯、背景匯入與分析需求建議使用 PostgreSQL。"
-    : "本機 Demo 或低風險測試可使用 SQLite 快速啟動。";
+    ? "建議使用 PostgreSQL 作為正式資料庫。這套系統會保存匯入紀錄、批號追溯、使用者權限與背景處理結果，需要可長期保存、備份、多人同時使用的資料庫。"
+    : "如果只是本機展示、單人測試或可重建資料，可先使用 SQLite 快速啟動；正式使用前再切換到 PostgreSQL。";
   document.querySelector("#db-meter-fill").style.width = `${Math.min(100, 40 + score * 8)}%`;
 }
 
@@ -1868,7 +1868,10 @@ async function downloadPackage() {
     const dateStr = new Date().toISOString().slice(0, 16).replace("T", " ");
     const zip = new JSZip();
     zip.file("recipe.json", recipeJsonText());
-    zip.file("deploy.ps1", buildDeployPs1(recipe, dateStr));
+    // UTF-8 BOM (﻿) ensures Windows PowerShell 5.1 reads the file as UTF-8
+    // instead of the system ANSI code page; without BOM, multi-byte Chinese characters
+    // are misread and corrupt the PS parser's brace-matching, causing MissingEndCurlyBrace.
+    zip.file("deploy.ps1", "﻿" + buildDeployPs1(recipe, dateStr));
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
