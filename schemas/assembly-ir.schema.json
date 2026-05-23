@@ -1,0 +1,202 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://form-system-kit-composer.local/schemas/assembly-ir.schema.json",
+  "title": "Form System Kit Composer Assembly IR",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "irVersion",
+    "generatedAt",
+    "sourceRecipe",
+    "selectedKits",
+    "featureFlags",
+    "frontend",
+    "backend",
+    "database",
+    "dependencies",
+    "env",
+    "scripts",
+    "entitlements",
+    "runtimeStateTopology"
+  ],
+  "properties": {
+    "irVersion": { "type": "string", "minLength": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "sourceRecipe": {
+      "type": "object",
+      "required": ["id", "resolvedPlanPath", "sourceManifest"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "resolvedPlanPath": { "type": "string" },
+        "sourceManifest": { "type": "string" },
+        "databaseRecommendation": { "type": ["object", "null"] }
+      }
+    },
+    "selectedKits": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/selectedKit" }
+    },
+    "featureFlags": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    },
+    "frontend": {
+      "type": "object",
+      "required": ["sources", "navigation"],
+      "additionalProperties": true,
+      "properties": {
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "navigation": { "type": "array", "items": { "$ref": "#/$defs/frontendNavigation" } }
+      }
+    },
+    "backend": {
+      "type": "object",
+      "required": ["sources", "enabledApis", "requiredModels", "routerRegistrations"],
+      "additionalProperties": true,
+      "properties": {
+        "sources": { "type": "array", "items": { "type": "string" } },
+        "enabledApis": { "type": "array", "items": { "type": "string" } },
+        "requiredModels": { "type": "array", "items": { "type": "string" } },
+        "routerRegistrations": { "type": "array", "items": { "$ref": "#/$defs/backendRouterRegistration" } }
+      }
+    },
+    "database": {
+      "type": "object",
+      "required": ["engine", "selectedByUserIntent", "physicalFirstStorage", "baselines"],
+      "additionalProperties": true,
+      "properties": {
+        "engine": { "type": "string" },
+        "selectedByUserIntent": { "type": ["object", "null"] },
+        "physicalFirstStorage": {
+          "type": "object",
+          "required": ["strategy", "decisions"],
+          "properties": {
+            "strategy": { "type": "string" },
+            "decisions": { "type": "array", "items": { "$ref": "#/$defs/storageDecision" } }
+          },
+          "additionalProperties": true
+        },
+        "baselines": {
+          "type": "object",
+          "additionalProperties": true,
+          "properties": {
+            "defaultDbSchema": { "type": ["object", "null"] },
+            "daihuiFormSchema": { "type": ["object", "null"] }
+          }
+        }
+      }
+    },
+    "dependencies": {
+      "type": "object",
+      "required": ["baseline"],
+      "additionalProperties": true,
+      "properties": {
+        "baseline": { "type": ["object", "null"] }
+      }
+    },
+    "env": {
+      "type": "object",
+      "additionalProperties": {
+        "type": ["string", "number", "integer", "boolean", "null"]
+      }
+    },
+    "scripts": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "entitlements": {
+      "type": "object",
+      "required": ["checks", "planMatrix"],
+      "additionalProperties": true,
+      "properties": {
+        "checks": { "type": "array", "items": { "type": "object", "additionalProperties": true } },
+        "planMatrix": { "type": "object", "additionalProperties": { "type": "array", "items": { "type": "string" } } }
+      }
+    },
+    "runtimeStateTopology": {
+      "type": "object",
+      "required": ["nodes", "edges"],
+      "additionalProperties": true,
+      "properties": {
+        "nodes": { "type": "array", "items": { "$ref": "#/$defs/runtimeNode" } },
+        "edges": { "type": "array", "items": { "$ref": "#/$defs/runtimeEdge" } }
+      }
+    }
+  },
+  "$defs": {
+    "selectedKit": {
+      "type": "object",
+      "required": ["id", "displayName", "category", "required", "selectedSubfeatures"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "displayName": { "type": "string" },
+        "category": { "type": "string" },
+        "required": { "type": "boolean" },
+        "selectedSubfeatures": { "type": "array", "items": { "type": "string" } },
+        "selectedSubfeatureOptions": { "type": ["object", "null"], "additionalProperties": true }
+      }
+    },
+    "frontendNavigation": {
+      "type": "object",
+      "required": ["tab", "labelKey", "kit", "pages", "services"],
+      "additionalProperties": true,
+      "properties": {
+        "tab": { "type": "string" },
+        "labelKey": { "type": "string" },
+        "kit": { "type": "string" },
+        "visibleWhen": { "type": ["string", "null"] },
+        "pages": { "type": "array", "items": { "type": "string" } },
+        "services": { "type": "array", "items": { "type": "string" } }
+      }
+    },
+    "backendRouterRegistration": {
+      "type": "object",
+      "required": ["kit", "module", "symbol", "tenantScoped"],
+      "additionalProperties": true,
+      "properties": {
+        "kit": { "type": "string" },
+        "module": { "type": "string" },
+        "symbol": { "type": "string" },
+        "prefix": { "type": ["string", "null"] },
+        "tags": { "type": "array", "items": { "type": "string" } },
+        "tenantScoped": { "type": "boolean" },
+        "featureFlag": { "type": ["string", "null"] }
+      }
+    },
+    "storageDecision": {
+      "type": "object",
+      "required": ["subject", "storage", "reason"],
+      "additionalProperties": true,
+      "properties": {
+        "subject": { "type": "string" },
+        "storage": { "type": "string" },
+        "reason": { "type": "string" },
+        "kitOwner": { "type": ["string", "null"] }
+      }
+    },
+    "runtimeNode": {
+      "type": "object",
+      "required": ["id", "kind"],
+      "additionalProperties": true,
+      "properties": {
+        "id": { "type": "string" },
+        "kind": { "type": "string" },
+        "owner": { "type": ["string", "null"] }
+      }
+    },
+    "runtimeEdge": {
+      "type": "object",
+      "required": ["from", "to", "kind"],
+      "additionalProperties": true,
+      "properties": {
+        "from": { "type": "string" },
+        "to": { "type": "string" },
+        "kind": { "type": "string" }
+      }
+    }
+  }
+}

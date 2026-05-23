@@ -480,6 +480,24 @@ class PdfConvertOutputsResponse(BaseModel):
     outputs: list[PdfConvertOutputFile]
 '@
 
+$assemblyIrPackagePath = "assembly\assembly-ir.json"
+$assemblyIrPath = Join-Path $OutputDirectory $assemblyIrPackagePath
+& (Join-Path $ProjectRoot "tools\generate-assembly-ir.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputPath $assemblyIrPath
+
+& (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -IRPath $assemblyIrPath `
+    -OutputDirectory (Join-Path $OutputDirectory "assembly\backend-registry")
+
+& (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -IRPath $assemblyIrPath `
+    -OutputDirectory (Join-Path $OutputDirectory "assembly\frontend-registry")
+
 & (Join-Path $ProjectRoot "tools\generate-dependency-files.ps1") `
     -ProjectRoot $ProjectRoot `
     -SystemDirectory $OutputDirectory `
@@ -1266,6 +1284,7 @@ $manifest = [ordered]@{
     dependencyManifest = "dependency-manifest.json"
     dependencyPlan = "dependency-plan.json"
     dbBootstrapPlan = "db-bootstrap-plan.json"
+    assemblyIr = $assemblyIrPackagePath
     status = "runnable-envelope"
 }
 $manifest | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 (Join-Path $outputPath "package-manifest.json")

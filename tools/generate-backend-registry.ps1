@@ -1,6 +1,7 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
     [string]$ResolvedPlanPath = "assembly\resolved-plan.json",
+    [string]$IRPath = "",
     [string]$OutputDirectory = "assembly\backend-registry"
 )
 
@@ -39,8 +40,14 @@ function ConvertTo-SettingsName([string]$Value) {
 $resolvedPlanFullPath = Join-Path $ProjectRoot $ResolvedPlanPath
 $outputFullPath = Join-Path $ProjectRoot $OutputDirectory
 
-$plan = Read-JsonUtf8 $resolvedPlanFullPath
-$registrations = @($plan.backendRouterRegistrations)
+$irFullPath = if ([string]::IsNullOrWhiteSpace($IRPath)) { "" } else { Join-Path $ProjectRoot $IRPath }
+if (-not [string]::IsNullOrWhiteSpace($irFullPath) -and (Test-Path $irFullPath)) {
+    $ir = Read-JsonUtf8 $irFullPath
+    $registrations = @($ir.backend.routerRegistrations)
+} else {
+    $plan = Read-JsonUtf8 $resolvedPlanFullPath
+    $registrations = @($plan.backendRouterRegistrations)
+}
 
 if (-not (Test-Path $outputFullPath)) {
     New-Item -ItemType Directory -Force $outputFullPath | Out-Null

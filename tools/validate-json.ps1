@@ -8,8 +8,10 @@ $files = @(
     "kits\form-analysis.kit-manifest.json",
     "assembly\form-analysis-original.recipe.json",
     "assembly\mvp-import-flow.recipe.json",
+    "assembly\assembly-ir.json",
     "schemas\kit.schema.json",
-    "schemas\recipe.schema.json"
+    "schemas\recipe.schema.json",
+    "schemas\assembly-ir.schema.json"
 )
 
 foreach ($file in $files) {

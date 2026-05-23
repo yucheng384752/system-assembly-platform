@@ -32,6 +32,27 @@ Run-Step "Python registry compile" {
 }
 Run-Step "Frontend registry" { & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "DB plan" { & (Join-Path $ProjectRoot "tools\generate-db-plan.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "Assembly IR" {
+    & (Join-Path $ProjectRoot "tools\generate-assembly-ir.ps1") -ProjectRoot $ProjectRoot
+    Get-Content -Raw -Encoding UTF8 (Join-Path $ProjectRoot "assembly\assembly-ir.json") | ConvertFrom-Json | Out-Null
+}
+Run-Step "Daihui schema plan" {
+    $ir = Get-Content -Raw -Encoding UTF8 (Join-Path $ProjectRoot "assembly\assembly-ir.json") | ConvertFrom-Json
+    if (-not $ir.database.baselines.daihuiFormSchema) { throw "Assembly IR is missing Daihui schema baseline data" }
+    if (@($ir.database.physicalFirstStorage.decisions | Where-Object { ([string]$_.subject).StartsWith("daihui.") }).Count -eq 0) {
+        throw "Assembly IR did not emit Daihui storage decisions"
+    }
+}
+Run-Step "Registry generation from Assembly IR" {
+    & (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") `
+        -ProjectRoot $ProjectRoot `
+        -IRPath "assembly\assembly-ir.json"
+    & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
+        -ProjectRoot $ProjectRoot `
+        -IRPath "assembly\assembly-ir.json"
+    $python = "C:\Users\gslab\.cache\codex-runtimes\codex-primary-runtime\dependencies\python\python.exe"
+    & $python -m py_compile (Join-Path $ProjectRoot "assembly\backend-registry\backend_router_registry.py")
+}
 Run-Step "Entitlement plan" { & (Join-Path $ProjectRoot "tools\generate-entitlement-plan.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "MVP extraction" { & (Join-Path $ProjectRoot "tools\extract-mvp-flow.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "UploadPage refactor" { & (Join-Path $ProjectRoot "tools\test-upload-page-refactor.ps1") -ProjectRoot $ProjectRoot }

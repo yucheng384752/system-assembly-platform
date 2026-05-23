@@ -2,6 +2,7 @@ param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
     [string]$RecipePath = "assembly\form-analysis-original.recipe.json",
     [string]$ManifestPath = "kits\form-analysis.kit-manifest.json",
+    [string]$IRPath = "",
     [string]$OutputDirectory = "assembly\frontend-registry"
 )
 
@@ -18,34 +19,55 @@ function ConvertTo-TypeScriptString([string]$Value) {
     return "'" + $Value.Replace("\", "\\").Replace("'", "\'") + "'"
 }
 
-$recipe = Read-JsonUtf8 (Join-Path $ProjectRoot $RecipePath)
-$manifest = Read-JsonUtf8 (Join-Path $ProjectRoot $ManifestPath)
+function ConvertTo-TypeScriptStringArray([object[]]$Values) {
+    $items = @($Values | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) } | ForEach-Object { ConvertTo-TypeScriptString ([string]$_) })
+    return "[" + ($items -join ", ") + "]"
+}
+
 $outputFullPath = Join-Path $ProjectRoot $OutputDirectory
 
 if (-not (Test-Path $outputFullPath)) {
     New-Item -ItemType Directory -Force $outputFullPath | Out-Null
 }
 
-$kitMap = @{}
-foreach ($kit in @($manifest.kits)) {
-    $kitMap[[string]$kit.id] = $kit
-}
-
 $tabs = New-Object System.Collections.Generic.List[object]
-foreach ($nav in @($recipe.frontendNavigation)) {
-    if (-not @($recipe.enabledKits).Contains([string]$nav.kit)) {
-        continue
+$irFullPath = if ([string]::IsNullOrWhiteSpace($IRPath)) { "" } else { Join-Path $ProjectRoot $IRPath }
+if (-not [string]::IsNullOrWhiteSpace($irFullPath) -and (Test-Path $irFullPath)) {
+    $ir = Read-JsonUtf8 $irFullPath
+    foreach ($nav in @($ir.frontend.navigation)) {
+        $tabs.Add([ordered]@{
+            tab = $nav.tab
+            labelKey = $nav.labelKey
+            kit = $nav.kit
+            visibleWhen = $nav.visibleWhen
+            pages = @($nav.pages)
+            services = @($nav.services)
+        })
+    }
+} else {
+    $recipe = Read-JsonUtf8 (Join-Path $ProjectRoot $RecipePath)
+    $manifest = Read-JsonUtf8 (Join-Path $ProjectRoot $ManifestPath)
+
+    $kitMap = @{}
+    foreach ($kit in @($manifest.kits)) {
+        $kitMap[[string]$kit.id] = $kit
     }
 
-    $kit = $kitMap[[string]$nav.kit]
-    $tabs.Add([ordered]@{
-        tab = $nav.tab
-        labelKey = $nav.labelKey
-        kit = $nav.kit
-        visibleWhen = $nav.visibleWhen
-        pages = @($kit.frontend.pages)
-        services = @($kit.frontend.services)
-    })
+    foreach ($nav in @($recipe.frontendNavigation)) {
+        if (-not @($recipe.enabledKits).Contains([string]$nav.kit)) {
+            continue
+        }
+
+        $kit = $kitMap[[string]$nav.kit]
+        $tabs.Add([ordered]@{
+            tab = $nav.tab
+            labelKey = $nav.labelKey
+            kit = $nav.kit
+            visibleWhen = $nav.visibleWhen
+            pages = @($kit.frontend.pages)
+            services = @($kit.frontend.services)
+        })
+    }
 }
 
 $jsonPath = Join-Path $outputFullPath "frontend-tab-registry.json"
@@ -64,8 +86,8 @@ $lines.Add("};")
 $lines.Add("")
 $lines.Add("export const frontendTabRegistry: FrontendTabRegistration[] = [")
 foreach ($tab in $tabs) {
-    $pages = "[" + (@($tab.pages) | ForEach-Object { ConvertTo-TypeScriptString ([string]$_) }) -join ", " + "]"
-    $services = "[" + (@($tab.services) | ForEach-Object { ConvertTo-TypeScriptString ([string]$_) }) -join ", " + "]"
+    $pages = ConvertTo-TypeScriptStringArray @($tab.pages)
+    $services = ConvertTo-TypeScriptStringArray @($tab.services)
     $lines.Add("  {")
     $lines.Add("    tab: $(ConvertTo-TypeScriptString ([string]$tab.tab)),")
     $lines.Add("    labelKey: $(ConvertTo-TypeScriptString ([string]$tab.labelKey)),")
