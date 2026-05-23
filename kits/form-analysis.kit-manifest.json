@@ -1672,7 +1672,53 @@
                                                     "backend/app/models/generic_record.py"
                                                 ]
                                  },
-                     "installOrder":  55
+                     "installOrder":  55,
+                     "subfeatures":  [
+                                         {
+                                             "id":  "form-type-management",
+                                             "displayName":  "表單類型管理",
+                                             "businessCapability":  "建立、查詢、刪除通用表單類型（Station），是其他子功能的基礎。",
+                                             "defaultSelected":  true,
+                                             "required":  true,
+                                             "dependencies":  [],
+                                             "aliases":  ["station", "表單類型", "form type"]
+                                         },
+                                         {
+                                             "id":  "form-schema-editor",
+                                             "displayName":  "欄位 Schema 編輯器",
+                                             "businessCapability":  "在 FormsPage 中以視覺化表格定義每個表單類型的欄位結構（StationSchema），支援欄位類型、必填、主鍵標記。",
+                                             "defaultSelected":  true,
+                                             "required":  false,
+                                             "dependencies":  ["form-type-management"],
+                                             "aliases":  ["schema", "欄位", "field", "schema editor"]
+                                         },
+                                         {
+                                             "id":  "form-record-upload",
+                                             "displayName":  "CSV 資料上傳",
+                                             "businessCapability":  "上傳 CSV 至指定表單類型，批次建立 GenericRecord，支援類型強制轉換與重複批號控制。",
+                                             "defaultSelected":  true,
+                                             "required":  false,
+                                             "dependencies":  ["form-type-management", "form-schema-editor"],
+                                             "aliases":  ["upload", "上傳", "import", "csv upload"],
+                                             "options":  [
+                                                             {
+                                                                 "id":  "allow-duplicate-lots",
+                                                                 "displayName":  "允許重複批號",
+                                                                 "type":  "boolean",
+                                                                 "defaultValue":  false
+                                                             }
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "form-record-browser",
+                                             "displayName":  "紀錄瀏覽與管理",
+                                             "businessCapability":  "分頁瀏覽通用表單的所有 GenericRecord，支援動態欄位顯示與單筆刪除。",
+                                             "defaultSelected":  true,
+                                             "required":  false,
+                                             "dependencies":  ["form-type-management"],
+                                             "aliases":  ["browse", "record", "紀錄", "查詢", "records"]
+                                         }
+                                     ]
                  }
              ]
 }
