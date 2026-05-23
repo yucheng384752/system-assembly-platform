@@ -1495,7 +1495,7 @@ export function FileDropArea({ onFiles }: FileDropAreaProps) {
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
       >
-        <div className="upload-drop-icon">⬆</div>
+        <div className="upload-drop-icon">&#8679;</div>
         <p className="upload-drop-main-text">{t("upload.dropMain")}</p>
         <p className="upload-drop-sub-text">{t("upload.dropSub")}</p>
         <label className="upload-drop-button">

@@ -1,0 +1,446 @@
+﻿{
+    "generatedAt":  "2026-05-24T01:42:27",
+    "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢",
+    "strategy":  "hybrid-generic",
+    "sampleScope":  "partial",
+    "forms":  [
+                  {
+                      "formCode":  "daihui_entry",
+                      "displayName":  "入庫單",
+                      "sampleFile":  "entry_horizontal.csv",
+                      "samplePath":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\entry_horizontal.csv",
+                      "rowCount":  1,
+                      "headers":  [
+                                      "表單名稱",
+                                      "入庫日期",
+                                      "規格",
+                                      "批號",
+                                      "數量",
+                                      "總重量"
+                                  ],
+                      "headerFingerprint":  "158c147b072fb296e7253ea1cf06a44217f030c6c03bcbe2b508eaac44ab6b18",
+                      "fields":  [
+                                     {
+                                         "sourceName":  "表單名稱",
+                                         "fieldKey":  "form_name",
+                                         "role":  "form_name",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "入庫單"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "入庫日期",
+                                         "fieldKey":  "entry_date",
+                                         "role":  "date",
+                                         "declaredType":  "Date",
+                                         "sampleValues":  [
+                                                              "2026.05.12"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "規格",
+                                         "fieldKey":  "specification",
+                                         "role":  "product",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "SAC0307-B"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "批號",
+                                         "fieldKey":  "lot_no",
+                                         "role":  "lot",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "8601251712"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "數量",
+                                         "fieldKey":  "quantity",
+                                         "role":  "quantity",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "50"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "總重量",
+                                         "fieldKey":  "total_weight",
+                                         "role":  "weight",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "1001.5"
+                                                          ],
+                                         "nullable":  false
+                                     }
+                                 ]
+                  },
+                  {
+                      "formCode":  "daihui_inspection",
+                      "displayName":  "錫棒製程檢查表",
+                      "sampleFile":  "inspection_horizontal.csv",
+                      "samplePath":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\inspection_horizontal.csv",
+                      "rowCount":  1,
+                      "headers":  [
+                                      "表單名稱",
+                                      "品名",
+                                      "製造日期",
+                                      "批號",
+                                      "重量_實測值",
+                                      "鑄模溫度_實測值",
+                                      "品質判定"
+                                  ],
+                      "headerFingerprint":  "1c0fcbd2a81bc9e227c4048817db906fdf8f176082593b9cf33994d78abfbdd5",
+                      "fields":  [
+                                     {
+                                         "sourceName":  "表單名稱",
+                                         "fieldKey":  "form_name",
+                                         "role":  "form_name",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "錫棒製程檢查表"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "品名",
+                                         "fieldKey":  "product_name",
+                                         "role":  "product",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "SAC0307"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "製造日期",
+                                         "fieldKey":  "manufactured_date",
+                                         "role":  "date",
+                                         "declaredType":  "Date",
+                                         "sampleValues":  [
+                                                              "2025.12.19"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "批號",
+                                         "fieldKey":  "lot_no",
+                                         "role":  "lot",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "8601251712"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "重量_實測值",
+                                         "fieldKey":  "measured_weight",
+                                         "role":  "weight",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "20.03"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "鑄模溫度_實測值",
+                                         "fieldKey":  "measured_casting_temperature",
+                                         "role":  "measurement",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "280"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "品質判定",
+                                         "fieldKey":  "quality_result",
+                                         "role":  "quality_result",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "OK"
+                                                          ],
+                                         "nullable":  false
+                                     }
+                                 ]
+                  },
+                  {
+                      "formCode":  "daihui_material",
+                      "displayName":  "領料退料單",
+                      "sampleFile":  "material_horizontal.csv",
+                      "samplePath":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\material_horizontal.csv",
+                      "rowCount":  1,
+                      "headers":  [
+                                      "表單名稱",
+                                      "單據類型",
+                                      "領料日期",
+                                      "原料卡號",
+                                      "領料重量",
+                                      "領料人"
+                                  ],
+                      "headerFingerprint":  "2ae5201d2ea68f13dd0774feeaf3cff2f2533411fc9f9b8093c54a73d3b01b36",
+                      "fields":  [
+                                     {
+                                         "sourceName":  "表單名稱",
+                                         "fieldKey":  "form_name",
+                                         "role":  "form_name",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "領料退料單"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "單據類型",
+                                         "fieldKey":  "document_type",
+                                         "role":  "status",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "領料"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "領料日期",
+                                         "fieldKey":  "material_issue_date",
+                                         "role":  "date",
+                                         "declaredType":  "Date",
+                                         "sampleValues":  [
+                                                              "2026.05.12"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "原料卡號",
+                                         "fieldKey":  "material_code",
+                                         "role":  "material",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "MAT-099"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "領料重量",
+                                         "fieldKey":  "issued_weight",
+                                         "role":  "weight",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "25.5"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "領料人",
+                                         "fieldKey":  "issued_by",
+                                         "role":  "actor",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "Yucheng"
+                                                          ],
+                                         "nullable":  false
+                                     }
+                                 ]
+                  },
+                  {
+                      "formCode":  "daihui_production",
+                      "displayName":  "生產紀錄卡",
+                      "sampleFile":  "production_horizontal.csv",
+                      "samplePath":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\production_horizontal.csv",
+                      "rowCount":  1,
+                      "headers":  [
+                                      "表單名稱",
+                                      "生產品名",
+                                      "生產批號",
+                                      "原料重量",
+                                      "熔解溫度",
+                                      "產出數量"
+                                  ],
+                      "headerFingerprint":  "504a14bd1b7b0be94e95adaf6480926b4d6e1443010ef434c1988e6fe69da75d",
+                      "fields":  [
+                                     {
+                                         "sourceName":  "表單名稱",
+                                         "fieldKey":  "form_name",
+                                         "role":  "form_name",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "生產紀錄卡"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "生產品名",
+                                         "fieldKey":  "product_name",
+                                         "role":  "product",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "錫條"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "生產批號",
+                                         "fieldKey":  "production_batch_no",
+                                         "role":  "lot",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "SN-2026-001"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "原料重量",
+                                         "fieldKey":  "material_weight",
+                                         "role":  "weight",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "500"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "熔解溫度",
+                                         "fieldKey":  "melting_temperature",
+                                         "role":  "measurement",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "300"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "產出數量",
+                                         "fieldKey":  "output_quantity",
+                                         "role":  "quantity",
+                                         "declaredType":  "Decimal",
+                                         "sampleValues":  [
+                                                              "485"
+                                                          ],
+                                         "nullable":  false
+                                     }
+                                 ]
+                  },
+                  {
+                      "formCode":  "daihui_quality",
+                      "displayName":  "成品品質檢驗表",
+                      "sampleFile":  "quality_horizontal.csv",
+                      "samplePath":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\quality_horizontal.csv",
+                      "rowCount":  1,
+                      "headers":  [
+                                      "表單名稱",
+                                      "產品類型",
+                                      "檢驗日期",
+                                      "外觀判定",
+                                      "成份分析",
+                                      "不良數"
+                                  ],
+                      "headerFingerprint":  "e5c7e000de7b61eb69a868d3d35f80723d6ef8a17a44e0b733febe8d7bc4826c",
+                      "fields":  [
+                                     {
+                                         "sourceName":  "表單名稱",
+                                         "fieldKey":  "form_name",
+                                         "role":  "form_name",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "成品品質檢驗表"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "產品類型",
+                                         "fieldKey":  "product_type",
+                                         "role":  "product",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "錫棒"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "檢驗日期",
+                                         "fieldKey":  "inspection_date",
+                                         "role":  "date",
+                                         "declaredType":  "Date",
+                                         "sampleValues":  [
+                                                              "2026.05.12"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "外觀判定",
+                                         "fieldKey":  "appearance_result",
+                                         "role":  "quality_result",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "合格"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "成份分析",
+                                         "fieldKey":  "composition_analysis",
+                                         "role":  "quality_detail",
+                                         "declaredType":  "String",
+                                         "sampleValues":  [
+                                                              "符合標準"
+                                                          ],
+                                         "nullable":  false
+                                     },
+                                     {
+                                         "sourceName":  "不良數",
+                                         "fieldKey":  "defect_count",
+                                         "role":  "quantity",
+                                         "declaredType":  "Integer",
+                                         "sampleValues":  [
+                                                              "0"
+                                                          ],
+                                         "nullable":  false
+                                     }
+                                 ]
+                  }
+              ],
+    "sampleFiles":  [
+                        {
+                            "formCode":  "daihui_entry",
+                            "file":  "entry_horizontal.csv",
+                            "path":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\entry_horizontal.csv",
+                            "rowCount":  1,
+                            "headerFingerprint":  "158c147b072fb296e7253ea1cf06a44217f030c6c03bcbe2b508eaac44ab6b18"
+                        },
+                        {
+                            "formCode":  "daihui_inspection",
+                            "file":  "inspection_horizontal.csv",
+                            "path":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\inspection_horizontal.csv",
+                            "rowCount":  1,
+                            "headerFingerprint":  "1c0fcbd2a81bc9e227c4048817db906fdf8f176082593b9cf33994d78abfbdd5"
+                        },
+                        {
+                            "formCode":  "daihui_material",
+                            "file":  "material_horizontal.csv",
+                            "path":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\material_horizontal.csv",
+                            "rowCount":  1,
+                            "headerFingerprint":  "2ae5201d2ea68f13dd0774feeaf3cff2f2533411fc9f9b8093c54a73d3b01b36"
+                        },
+                        {
+                            "formCode":  "daihui_production",
+                            "file":  "production_horizontal.csv",
+                            "path":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\production_horizontal.csv",
+                            "rowCount":  1,
+                            "headerFingerprint":  "504a14bd1b7b0be94e95adaf6480926b4d6e1443010ef434c1988e6fe69da75d"
+                        },
+                        {
+                            "formCode":  "daihui_quality",
+                            "file":  "quality_horizontal.csv",
+                            "path":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢\\quality_horizontal.csv",
+                            "rowCount":  1,
+                            "headerFingerprint":  "e5c7e000de7b61eb69a868d3d35f80723d6ef8a17a44e0b733febe8d7bc4826c"
+                        }
+                    ]
+}

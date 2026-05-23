@@ -56,27 +56,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
-    # Startup - production safety checks
-    _env = (getattr(settings, "environment", "") or "").strip().lower()
-    _is_dev = _env in ("development", "dev", "test", "local")
-    if not _is_dev:
-        if not settings.database_url or "app_secure_password" in settings.database_url:
-            raise RuntimeError(
-                "DATABASE_URL must be set to a non-default value in production. "
-                "Set DATABASE_URL in your .env file."
-            )
-        if not settings.secret_key or len(settings.secret_key) < 32:
-            raise RuntimeError(
-                "SECRET_KEY must be at least 32 characters in production. "
-                "Set SECRET_KEY in your .env file."
-            )
-        if (getattr(settings, "auth_mode", "off") or "").strip().lower() == "off":
-            raise RuntimeError(
-                "AUTH_MODE=off is not allowed in production. Set AUTH_MODE=api_key in .env."
-            )
-
     # Startup - 驗證PostgreSQL或SQLite配置
-    if settings.database_url and not settings.database_url.startswith(
+    if not settings.database_url.startswith(
         "postgresql"
     ) and not settings.database_url.startswith("sqlite"):
         raise ValueError(
@@ -239,9 +220,9 @@ app = FastAPI(
     - **production_date**: YYYY-MM-DD format
     """,
     version="1.0.0",
-    docs_url="/docs" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
-    redoc_url="/redoc" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
-    openapi_url="/openapi.json" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 

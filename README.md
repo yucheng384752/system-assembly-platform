@@ -260,6 +260,10 @@ logic moves back into `UploadPage.tsx`.
 
 New kits should follow `docs/kit-development-standard.md`.
 
+Architecture diagrams for customer-facing explanation and developer handoff are
+available in `docs/architecture-diagrams.md`. They cover system breakdown,
+function communication, and customer web input/output.
+
 Short version:
 
 - Define the business capability in the manifest first.

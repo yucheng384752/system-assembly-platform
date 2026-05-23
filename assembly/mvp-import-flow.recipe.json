@@ -13,7 +13,7 @@
       "needsBackgroundJobs": true
     },
     "engine": "postgresql",
-    "reasonForNonTechnicalUser": "MVP 需要租戶隔離、檔案上傳、匯入工作與正式資料表，因此建議使用 PostgreSQL。"
+    "reasonForNonTechnicalUser": "這個系統會保存正式匯入紀錄、使用者權限與背景處理結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。"
   },
   "enabledKits": [
     "platform-core-kit",
