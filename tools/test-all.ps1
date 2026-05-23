@@ -38,6 +38,16 @@ Run-Step "UploadPage refactor" { & (Join-Path $ProjectRoot "tools\test-upload-pa
 Run-Step "MVP extraction dry-run" { & (Join-Path $ProjectRoot "tools\extract-mvp-flow.ps1") -ProjectRoot $ProjectRoot -DryRun | Out-Null }
 Run-Step "GUI static smoke" { & (Join-Path $ProjectRoot "tools\test-gui-static.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "GUI recipe export" { & (Join-Path $ProjectRoot "tools\test-gui-recipe-export.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "Baseline contracts" {
+    $reqBaseline = Join-Path $ProjectRoot "assembly\baselines\default-requirements.baseline.json"
+    $dbBaseline  = Join-Path $ProjectRoot "assembly\baselines\default-db-schema.baseline.json"
+    if (-not (Test-Path $reqBaseline)) { throw "Missing: $reqBaseline" }
+    if (-not (Test-Path $dbBaseline))  { throw "Missing: $dbBaseline" }
+    $req = Get-Content -Raw -Encoding UTF8 $reqBaseline | ConvertFrom-Json
+    if ($req.python.packages.Count -eq 0) { throw "requirements baseline has no packages" }
+    $db = Get-Content -Raw -Encoding UTF8 $dbBaseline | ConvertFrom-Json
+    if ($db.tables.PSObject.Properties.Name.Count -eq 0) { throw "db schema baseline has no tables" }
+}
 Run-Step "Assemble generated system" { & (Join-Path $ProjectRoot "tools\assemble-system.ps1") -ProjectRoot $ProjectRoot -CreateZip }
 Run-Step "Dependency files" { & (Join-Path $ProjectRoot "tools\test-dependency-files.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "DB bootstrap" { & (Join-Path $ProjectRoot "tools\test-db-bootstrap.ps1") -ProjectRoot $ProjectRoot }

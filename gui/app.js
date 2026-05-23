@@ -1389,17 +1389,30 @@ function renderGeneration() {
     ["Database", recipe.database.engine],
     ["資料表", recipe.tableSchemas.length ? `${recipe.tableSchemas.length} 個（含欄位定義）` : "未上傳"],
   ].map(([title, body]) => `<div class="summary-item"><strong>${title}</strong><span>${body}</span></div>`).join("");
+  const rn = recipeName();
   elements.packageFileList.innerHTML = [
-    "dist/generated-system",
-    "dist/form-system-generated-package",
-    "assembly/resolved-plan.json",
-    "generated/mvp-import-flow",
-  ].map((item) => `<div class="dependency-item"><strong>${item}</strong><span>由 assembly workflow 產生或驗證。</span></div>`).join("");
+    [`assembly/${rn}.recipe.json`,        "recipe.json 的組裝輸入"],
+    [`assembly/${rn}-resolved-plan.json`, "kit 依賴解析結果"],
+    ["dist/generated-system",             "組裝後的系統目錄"],
+    [`dist/client-deploy-${rn}.zip`,      "客戶部署套件（最終輸出）"],
+  ].map(([item, desc]) => `<div class="dependency-item"><strong>${item}</strong><span>${desc}</span></div>`).join("");
   elements.assemblyCommandList.innerHTML = assemblyCommands().map((command) => `<div class="dependency-item"><code>${command}</code></div>`).join("");
   elements.recipeOutput.value = recipeJsonText();
 }
 
 // ── Recipe / 輸出 ─────────────────────────────────────────────────────────────
+function recipeName() {
+  const short = {
+    "data-import": "import",
+    "query-trace": "query",
+    "analytics":   "analytics",
+    "governance":  "admin",
+    "subscription":"sub",
+  };
+  const parts = Array.from(state.selectedFlows).map(f => short[f] || f);
+  return parts.length ? "form-system-" + parts.join("-") : "form-system";
+}
+
 function buildRecipe() {
   const selected = selectedKits();
   const tableSchemas = state.uploadedTables.map((t) => ({
@@ -1415,7 +1428,7 @@ function buildRecipe() {
   }));
   return {
     recipeVersion: "0.2.0",
-    name: "gui-selected-form-system",
+    name: recipeName(),
     sourceManifest: "kits/form-analysis.kit-manifest.json",
     selectedFlows: Array.from(state.selectedFlows),
     enabledKits: selected.map((item) => item.id),
@@ -1436,12 +1449,13 @@ function recipeJsonText() {
 }
 
 function assemblyCommands() {
+  const n = recipeName();
   return [
-    "powershell -ExecutionPolicy Bypass -File tools\\validate-recipe.ps1 -RecipePath assembly\\gui-selected-form-system.recipe.json",
-    "powershell -ExecutionPolicy Bypass -File tools\\resolve-recipe.ps1 -RecipePath assembly\\gui-selected-form-system.recipe.json -OutputPath assembly\\gui-selected-resolved-plan.json",
-    "powershell -ExecutionPolicy Bypass -File tools\\extract-mvp-flow.ps1",
-    "powershell -ExecutionPolicy Bypass -File tools\\assemble-system.ps1",
-    "powershell -ExecutionPolicy Bypass -File tools\\validate-generated-system.ps1 -GeneratedRoot dist\\generated-system",
+    `powershell -ExecutionPolicy Bypass -File tools\\validate-recipe.ps1 -RecipePath assembly\\${n}.recipe.json`,
+    `powershell -ExecutionPolicy Bypass -File tools\\resolve-recipe.ps1 -RecipePath assembly\\${n}.recipe.json -OutputPath assembly\\${n}-resolved-plan.json`,
+    `powershell -ExecutionPolicy Bypass -File tools\\assemble-system.ps1 -ResolvedPlanPath assembly\\${n}-resolved-plan.json`,
+    `powershell -ExecutionPolicy Bypass -File tools\\package-client-deploy.ps1 -RecipeName ${n}`,
+    `# 完成後客戶部署套件位於：dist\\client-deploy-${n}.zip`,
   ];
 }
 
@@ -1514,13 +1528,11 @@ function buildDeployPs1(recipe, dateStr) {
     `#`,
     `#  參數：`,
     `#    -ComposerRoot  kit-composer 專案路徑（預設：當前目錄）`,
-    `#    -SkipAssembly  跳過組裝，直接安裝 dist\\generated-system`,
-    `#    -Background    安裝完成後在背景啟動系統`,
+    `#    -SkipAssembly  跳過組裝，直接執行打包步驟（系統已組裝時使用）`,
     ``,
     `param(`,
     `    [string]$ComposerRoot = (Get-Location).Path,`,
-    `    [switch]$SkipAssembly,`,
-    `    [switch]$Background`,
+    `    [switch]$SkipAssembly`,
     `)`,
     ``,
     `$ErrorActionPreference = "Stop"`,
@@ -1557,35 +1569,25 @@ function buildDeployPs1(recipe, dateStr) {
     ``,
     `    # ── 4. 組裝系統`,
     `    Write-Host "組裝系統..." -ForegroundColor Cyan`,
-    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\assemble-system.ps1")`,
+    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\assemble-system.ps1") \``,
+    `        -ResolvedPlanPath $resolvedPath`,
     `}`,
     ``,
-    `$sysRoot = Join-Path $ComposerRoot "dist\\generated-system"`,
-    `if (-not (Test-Path $sysRoot)) {`,
-    `    Write-Error "找不到 $sysRoot。請先執行組裝步驟（移除 -SkipAssembly）。"`,
-    `    exit 1`,
-    `}`,
+    `# ── 5. 打包 client deploy ZIP`,
+    `Write-Host "打包 client deploy ZIP..." -ForegroundColor Cyan`,
+    `& powershell -ExecutionPolicy Bypass -File (Join-Path $ComposerRoot "tools\\package-client-deploy.ps1") \``,
+    `    -RecipeName $RecipeName`,
     ``,
-    `# ── 5. 安裝依賴`,
-    `Write-Host "安裝依賴..." -ForegroundColor Cyan`,
-    `& powershell -ExecutionPolicy Bypass -File (Join-Path $sysRoot "scripts\\install.ps1")`,
-    ``,
-    `# ── 6. 資料庫遷移`,
-    `Write-Host "執行資料庫遷移..." -ForegroundColor Cyan`,
-    `& powershell -ExecutionPolicy Bypass -File (Join-Path $sysRoot "scripts\\migrate.ps1")`,
-    ``,
-    `# ── 7. 啟動`,
+    `$clientZip = Join-Path $ComposerRoot "dist\\client-deploy-$RecipeName.zip"`,
     `Write-Host ""`,
-    `Write-Host "部署完成！" -ForegroundColor Green`,
-    `if ($Background) {`,
-    `    & powershell -ExecutionPolicy Bypass -File (Join-Path $sysRoot "scripts\\start.ps1") -Background`,
-    `    Write-Host "已在背景啟動。查看狀態："`,
-    `    Write-Host "  cd $sysRoot ; .\\scripts\\status.ps1" -ForegroundColor Yellow`,
-    `} else {`,
-    `    Write-Host "執行以下指令啟動系統："`,
-    `    Write-Host "  cd $sysRoot" -ForegroundColor Yellow`,
-    `    Write-Host "  .\\scripts\\start.ps1" -ForegroundColor Yellow`,
-    `}`,
+    `Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Green`,
+    `Write-Host "  完成！Client deploy ZIP 已產生：" -ForegroundColor Green`,
+    `Write-Host "  $clientZip" -ForegroundColor Yellow`,
+    `Write-Host ""`,
+    `Write-Host "  將此 ZIP 傳給部署人員，解壓後執行：" -ForegroundColor Gray`,
+    `Write-Host "    (Windows)  powershell -ExecutionPolicy Bypass -File deploy.ps1" -ForegroundColor Gray`,
+    `Write-Host "    (Linux)    bash deploy.sh" -ForegroundColor Gray`,
+    `Write-Host "════════════════════════════════════════════════════════" -ForegroundColor Green`,
   ];
   return L.join("\r\n");
 }
@@ -1691,10 +1693,16 @@ function buildDeploySh(recipe, dateStr) {
     `check_prerequisites`,
     ``,
     `# ═══════════════════════════════════════════════════════`,
-    `# 2. 安裝依賴`,
+    `# 2. 虛擬環境與依賴安裝`,
     `# ═══════════════════════════════════════════════════════`,
-    `echo "=== 安裝依賴 ==="`,
-    `pip3 install -r "\${SYS_ROOT}/backend/requirements.txt"`,
+    `echo "=== 設定虛擬環境 ==="`,
+    `VENV="\${SYS_ROOT}/.venv"`,
+    `python3 -m venv --clear "\${VENV}" || die "建立虛擬環境失敗。請執行：sudo apt install python3-venv"`,
+    `"\${VENV}/bin/pip" install --quiet --upgrade pip`,
+    `ok "虛擬環境：\${VENV}"`,
+    `echo ""`,
+    `echo "=== 安裝後端依賴 ==="`,
+    `"\${VENV}/bin/pip" install --quiet -r "\${SYS_ROOT}/backend/requirements.txt"`,
     `ok "後端依賴安裝完成"`,
     `if [ -f "\${SYS_ROOT}/frontend/package.json" ]; then`,
     `    npm --prefix "\${SYS_ROOT}/frontend" install`,
@@ -1713,7 +1721,13 @@ function buildDeploySh(recipe, dateStr) {
     `if [ -z "\${DATABASE_URL:-}" ]; then`,
     `    die "DATABASE_URL 未設定。\\n請建立 \${SYS_ROOT}/.env 並填入連線字串：\\n  DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/dbname"`,
     `fi`,
-    `(cd "\${SYS_ROOT}/backend" && python3 -m alembic upgrade head)`,
+    `if [ -f "\${SYS_ROOT}/backend/alembic.ini" ]; then`,
+    `    (cd "\${SYS_ROOT}/backend" && "\${VENV}/bin/python" -m alembic upgrade head)`,
+    `elif [ -f "\${SYS_ROOT}/backend/app/core/generated_db_bootstrap.py" ]; then`,
+    `    (cd "\${SYS_ROOT}/backend" && "\${VENV}/bin/python" -m app.core.generated_db_bootstrap)`,
+    `else`,
+    `    die "找不到 migration 工具（alembic.ini 或 generated_db_bootstrap.py）"`,
+    `fi`,
     `ok "資料庫遷移完成"`,
     `echo ""`,
     ``,
@@ -1723,7 +1737,7 @@ function buildDeploySh(recipe, dateStr) {
     `echo "=== 部署完成 ==="`,
     `if [ "\${BACKGROUND}" -eq 1 ]; then`,
     `    mkdir -p "\${SYS_ROOT}/logs"`,
-    `    (cd "\${SYS_ROOT}/backend" && nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
+    `    (cd "\${SYS_ROOT}/backend" && nohup "\${VENV}/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
     `    echo "$!" > "\${SYS_ROOT}/logs/backend.pid")`,
     `    ok "後端已在背景啟動  port=8000"`,
     `    info "日誌：\${SYS_ROOT}/logs/backend.log"`,
@@ -1732,8 +1746,8 @@ function buildDeploySh(recipe, dateStr) {
     `    fi`,
     `else`,
     `    info "啟動後端："`,
-    `    info "  cd \${SYS_ROOT}/backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"`,
-    `    info "  cd \${SYS_ROOT}/backend && python3 -m uvicorn app.main:app --reload  # 開發模式"`,
+    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"`,
+    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --reload  # 開發模式"`,
     `    if [ -f "\${SYS_ROOT}/frontend/package.json" ]; then`,
     `        info "啟動前端："`,
     `        info "  cd \${SYS_ROOT}/frontend && npm run dev"`,
@@ -1779,25 +1793,32 @@ function buildDeployReadme(recipe, dateStr) {
 | DB 引擎 | ${db} |
 | Kit 數量 | ${kits.length} |
 
-## 快速開始（Windows）
+## 快速開始（在 Kit Composer 開發機上執行）
+
+> 此 ZIP 為 **開發人員用**，需在安裝有 \`form-system-kit-composer\` 專案的 Windows 機器上執行。
 
 \`\`\`powershell
 # 在 form-system-kit-composer 專案根目錄執行
 powershell -ExecutionPolicy Bypass -File deploy.ps1
 
-# 完成組裝後直接在背景啟動
-powershell -ExecutionPolicy Bypass -File deploy.ps1 -Background
-
-# 若系統已組裝，跳過組裝只做安裝 + 啟動
+# 若系統已組裝，跳過組裝只做打包
 powershell -ExecutionPolicy Bypass -File deploy.ps1 -SkipAssembly
 \`\`\`
 
-## 快速開始（Linux / macOS）
+執行完成後，將產生 **client deploy ZIP**（位於 \`dist/\` 目錄）。
 
-> 需預先安裝 [PowerShell Core](https://aka.ms/install-powershell)（用於執行組裝工具）
+## 部署到目標機器（Client Deploy ZIP）
+
+將 \`dist/client-deploy-*.zip\` 解壓後，在目標機器執行：
+
+\`\`\`powershell
+# Windows
+powershell -ExecutionPolicy Bypass -File deploy.ps1
+\`\`\`
 
 \`\`\`bash
-bash deploy.sh /path/to/form-system-kit-composer
+# Linux / macOS
+bash deploy.sh
 \`\`\`
 
 ## 前置需求
@@ -1817,18 +1838,17 @@ ${kitLines}
 
 ${tables}
 
-## 部署完成後
+## 目標機器部署完成後
 
-系統啟動後預設端點：
+系統啟動後預設端點（目標機器）：
 
 - 後端 API：\`http://localhost:8000\`
 - API 文件：\`http://localhost:8000/docs\`
 - 前端介面：\`http://localhost:5173\`（開發模式）
 
-管理部署狀態：
+管理部署狀態（在解壓目錄的 \`system/\` 下執行）：
 
 \`\`\`powershell
-cd dist\\generated-system
 .\\scripts\\status.ps1    # 查看運作狀態
 .\\scripts\\stop.ps1      # 停止
 .\\scripts\\restart.ps1   # 重啟

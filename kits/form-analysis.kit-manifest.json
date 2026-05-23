@@ -403,6 +403,9 @@
       "optionalDependencies": [
         "import-pipeline-kit"
       ],
+      "runtimeDependencies": {
+        "python": ["openpyxl", "pandas", "python-multipart"]
+      },
       "frontend": {
         "pages": [
           "frontend/src/pages/UploadPage.tsx"
@@ -589,6 +592,9 @@
         "tenant-auth-kit",
         "station-data-link-kit"
       ],
+      "runtimeDependencies": {
+        "python": ["pandas"]
+      },
       "frontend": {
         "pages": [],
         "components": [],
@@ -860,6 +866,9 @@
         "station-data-link-kit",
         "query-traceability-kit"
       ],
+      "runtimeDependencies": {
+        "python": ["pandas"]
+      },
       "frontend": {
         "pages": [
           "frontend/src/pages/AnalyticsPage.tsx"

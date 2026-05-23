@@ -1,13 +1,24 @@
 param(
     [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
     [string]$SystemDirectory = "dist\generated-system",
-    [string]$DbPlanPath = "assembly\db-plan\db-assembly-plan.json"
+    [string]$DbPlanPath = "assembly\db-plan\db-assembly-plan.json",
+    [string]$BaselinePath = (Join-Path $PSScriptRoot "..\assembly\baselines\default-db-schema.baseline.json")
 )
 
 $ErrorActionPreference = "Stop"
 
 function Read-JsonUtf8([string]$Path) {
     return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
+}
+
+# Load DB schema baseline if available
+$schemaContract = $null
+if (Test-Path $BaselinePath) {
+    $schemaBaseline = Read-JsonUtf8 $BaselinePath
+    $schemaContract = [ordered]@{
+        baselineFile = (Resolve-Path $BaselinePath).Path
+        tables = $schemaBaseline.tables
+    }
 }
 
 $systemRoot = Join-Path $ProjectRoot $SystemDirectory
@@ -167,6 +178,10 @@ $bootstrapPlan = [ordered]@{
         "Run scripts\check-db.ps1 without -Connect for structural validation.",
         "Run scripts\check-db.ps1 -Connect to verify an actual database connection."
     )
+}
+
+if ($null -ne $schemaContract) {
+    $bootstrapPlan["schemaContract"] = $schemaContract
 }
 
 $bootstrapPlan | ConvertTo-Json -Depth 20 | Set-Content -Encoding UTF8 (Join-Path $systemRoot "db-bootstrap-plan.json")

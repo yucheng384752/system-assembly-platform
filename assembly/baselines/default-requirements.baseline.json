@@ -1,0 +1,40 @@
+{
+  "schemaVersion": "1.0",
+  "pythonMinVersion": "3.10",
+  "nodeMinVersion": "18",
+  "python": {
+    "packages": [
+      { "name": "asyncpg",           "spec": ">=0.29.0", "kits": ["platform-core-kit"],    "note": "no cp313 wheel for ==0.29.0; resolves to >=0.31.0 on Python 3.13" },
+      { "name": "fastapi",           "spec": "==0.115.0", "kits": ["platform-core-kit"] },
+      { "name": "greenlet",          "spec": ">=3.0.0",  "kits": ["platform-core-kit"],    "note": "implicit SQLAlchemy async dep; not detected by import scan" },
+      { "name": "httpx",             "spec": "==0.27.2",  "kits": ["platform-core-kit"] },
+      { "name": "pydantic",          "spec": "==2.9.2",   "kits": ["platform-core-kit"] },
+      { "name": "pydantic-settings", "spec": "==2.5.2",   "kits": ["platform-core-kit"] },
+      { "name": "python-dotenv",     "spec": "==1.0.1",   "kits": ["platform-core-kit"] },
+      { "name": "sqlalchemy",        "spec": "==2.0.36",  "kits": ["platform-core-kit"] },
+      { "name": "starlette",         "spec": "==0.38.6",  "kits": ["platform-core-kit"] },
+      { "name": "structlog",         "spec": "==24.4.0",  "kits": ["platform-core-kit"] },
+      { "name": "uvicorn[standard]", "spec": "==0.30.6",  "kits": ["platform-core-kit"] },
+      { "name": "openpyxl",          "spec": "==3.1.5",   "kits": ["upload-validation-kit"] },
+      { "name": "pandas",            "spec": "==2.2.3",   "kits": ["upload-validation-kit", "analytics-kit"] },
+      { "name": "python-multipart",  "spec": "==0.0.12",  "kits": ["upload-validation-kit"] }
+    ]
+  },
+  "node": {
+    "dependencies": {
+      "react":                            "18.3.1",
+      "react-dom":                        "18.3.1",
+      "react-i18next":                    "15.0.2",
+      "i18next":                          "23.15.2",
+      "i18next-browser-languagedetector": "8.0.0",
+      "lucide-react":                     "0.460.0"
+    },
+    "devDependencies": {
+      "@vitejs/plugin-react": "4.4.1",
+      "vite":                 "6.0.5",
+      "typescript":           "5.7.2",
+      "@types/react":         "18.3.12",
+      "@types/react-dom":     "18.3.1"
+    }
+  }
+}
