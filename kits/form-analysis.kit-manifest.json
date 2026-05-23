@@ -1633,6 +1633,46 @@
                                          }
                                      ],
                      "installOrder":  95
+                 },
+                 {
+                     "id":  "generic-forms-kit",
+                     "displayName":  "通用表格",
+                     "category":  "data",
+                     "required":  false,
+                     "businessCapability":  "提供 schema 驅動的通用表單類型與 JSONB 紀錄儲存。部署後管理者可自訂表單欄位、上傳資料，無需修改程式碼。",
+                     "dependencies":  [
+                                          "platform-core-kit",
+                                          "tenant-auth-kit",
+                                          "station-data-link-kit"
+                                      ],
+                     "frontend":  {
+                                      "pages":  [
+                                                    "frontend/src/pages/FormsPage.tsx"
+                                                ],
+                                      "tabId":  "forms",
+                                      "tabLabel":  "通用表格"
+                                  },
+                     "backend":  {
+                                     "routers":  [
+                                                     "backend/app/api/routes_generic_forms.py"
+                                                 ],
+                                     "routerRegistrations":  [
+                                                                 {
+                                                                     "module":  "app.api.routes_generic_forms",
+                                                                     "symbol":  "router",
+                                                                     "prefix":  "/api",
+                                                                     "tags":  [
+                                                                                  "Generic Forms"
+                                                                              ],
+                                                                     "tenantScoped":  true
+                                                                 }
+                                                             ],
+                                     "models":  [
+                                                    "backend/app/models/station.py",
+                                                    "backend/app/models/generic_record.py"
+                                                ]
+                                 },
+                     "installOrder":  55
                  }
              ]
 }

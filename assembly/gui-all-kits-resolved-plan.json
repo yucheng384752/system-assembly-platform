@@ -11,6 +11,7 @@
                              "platform-core-kit",
                              "tenant-auth-kit",
                              "station-data-link-kit",
+                             "generic-forms-kit",
                              "upload-validation-kit",
                              "import-pipeline-kit",
                              "query-traceability-kit",
@@ -422,6 +423,17 @@
                                                     ],
                                            "tenantScoped":  true,
                                            "featureFlag":  "MOD_SUBSCRIPTION_ENABLED"
+                                       },
+                                       {
+                                           "kit":  "generic-forms-kit",
+                                           "module":  "app.api.routes_generic_forms",
+                                           "symbol":  "router",
+                                           "prefix":  "/api",
+                                           "tags":  [
+                                                        "Generic Forms"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
                                        }
                                    ],
     "externalServices":  [

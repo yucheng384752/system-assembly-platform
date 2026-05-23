@@ -7,6 +7,7 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { FormsPage } from "./pages/FormsPage";
 import { ToastContainer } from "./components/common/ToastContainer";
 import LogViewer from "./components/SimpleLogViewer";
 import "./styles/app.css";
@@ -14,7 +15,7 @@ import "./styles/app.css";
 import { getAdminApiKeyValue, isAdminUnlockedInSession } from "./services/adminAuth";
 import { getFontScaleId, setFontScaleId, type FontScaleId } from "./services/a11y";
 
-type MainTab = "upload" | "query" | "analysis" | "register" | "manager" | "admin" | "logs";
+type MainTab = "upload" | "query" | "analysis" | "forms" | "register" | "manager" | "admin" | "logs";
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -128,6 +129,12 @@ function App() {
           >
             {t('tabs.analysis')}
           </button>
+          <button
+            className={`app-main-tab ${tab === "forms" ? "is-active" : ""}`}
+            onClick={() => setTab("forms")}
+          >
+            通用表格
+          </button>
           {canShowManager ? (
             <button
               className={`app-main-tab ${tab === "manager" ? "is-active" : ""}`}
@@ -171,6 +178,8 @@ function App() {
           <QueryPage />
         ) : tab === "analysis" ? (
           <AnalyticsPage />
+        ) : tab === "forms" ? (
+          <FormsPage />
         ) : tab === "manager" ? (
           <ManagerPage />
         ) : tab === "admin" ? (

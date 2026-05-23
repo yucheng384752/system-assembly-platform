@@ -163,5 +163,16 @@
                  ],
         "tenantScoped":  true,
         "featureFlag":  null
+    },
+    {
+        "kit":  "generic-forms-kit",
+        "module":  "app.api.routes_generic_forms",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "Generic Forms"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
     }
 ]

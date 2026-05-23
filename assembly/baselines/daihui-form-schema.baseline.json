@@ -1,0 +1,144 @@
+{
+  "schemaVersion": "1.0",
+  "packId": "daihui-form-schema",
+  "displayName": "Daihui Form Schema Pack",
+  "strategy": "hybrid-generic",
+  "sampleScope": "partial",
+  "sourceDirectory": "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢",
+  "notes": [
+    "These forms are represented as generic form schemas, not dedicated physical tables.",
+    "Common query fields are extracted to generic_records; original fields remain in JSONB data.",
+    "Traceability links are inferred by lot/material/batch identifiers and should not be hard foreign keys until more samples are confirmed."
+  ],
+  "domainTables": {
+    "form_definitions": {
+      "storage": "table_registry",
+      "purpose": "One row per Daihui form type."
+    },
+    "form_schema_versions": {
+      "storage": "schema_versions",
+      "purpose": "Versioned CSV/header schema for each Daihui form type."
+    },
+    "form_records": {
+      "storage": "generic_records",
+      "purpose": "One imported business record per source row, with common fields extracted and full raw data preserved."
+    }
+  },
+  "commonRecordFields": [
+    { "name": "tenant_id", "type": "UUID", "source": "runtime" },
+    { "name": "form_code", "type": "String(50)", "source": "schemaPack" },
+    { "name": "form_name", "type": "String(100)", "sourceColumn": "表單名稱" },
+    { "name": "record_date", "type": "Date", "sourceRole": "date" },
+    { "name": "lot_no", "type": "String(100)", "sourceRole": "lot" },
+    { "name": "product_name", "type": "String(200)", "sourceRole": "product" },
+    { "name": "material_code", "type": "String(100)", "sourceRole": "material" },
+    { "name": "quantity", "type": "Decimal", "sourceRole": "quantity" },
+    { "name": "weight", "type": "Decimal", "sourceRole": "weight" },
+    { "name": "quality_result", "type": "String(50)", "sourceRole": "quality_result" },
+    { "name": "data", "type": "JSONB", "source": "fullSourceRow" },
+    { "name": "source_filename", "type": "String(255)", "source": "importFile" }
+  ],
+  "indexes": [
+    { "name": "ix_generic_records_tenant_form_code", "target": "generic_records", "columns": ["tenant_id", "form_code"] },
+    { "name": "ix_generic_records_tenant_lot_no", "target": "generic_records", "columns": ["tenant_id", "lot_no"] },
+    { "name": "ix_generic_records_tenant_record_date", "target": "generic_records", "columns": ["tenant_id", "record_date"] },
+    { "name": "ix_generic_records_data_gin", "target": "generic_records", "columns": ["data"], "using": "gin" }
+  ],
+  "relationships": [
+    { "from": "tenants.id", "to": "generic_records.tenant_id", "type": "1:N", "enforcement": "foreign-key" },
+    { "from": "form_definitions.table_code", "to": "generic_records.form_code", "type": "1:N", "enforcement": "logical" },
+    { "from": "schema_versions.id", "to": "generic_records.schema_version_id", "type": "1:N", "enforcement": "foreign-key" },
+    { "from": "entry.lot_no", "to": "inspection.lot_no", "type": "traceability", "enforcement": "logical" },
+    { "from": "material.material_code", "to": "production.material_code", "type": "traceability", "enforcement": "logical" },
+    { "from": "production.production_batch_no", "to": "quality.production_batch_no", "type": "traceability", "enforcement": "logical" }
+  ],
+  "forms": [
+    {
+      "formCode": "daihui_entry",
+      "displayName": "入庫單",
+      "sampleFile": "entry_horizontal.csv",
+      "dateColumn": "入庫日期",
+      "lotColumn": "批號",
+      "productColumn": "規格",
+      "quantityColumn": "數量",
+      "weightColumn": "總重量",
+      "fields": [
+        { "sourceName": "表單名稱", "fieldKey": "form_name", "type": "String", "role": "form_name" },
+        { "sourceName": "入庫日期", "fieldKey": "entry_date", "type": "Date", "role": "date" },
+        { "sourceName": "規格", "fieldKey": "specification", "type": "String", "role": "product" },
+        { "sourceName": "批號", "fieldKey": "lot_no", "type": "String", "role": "lot" },
+        { "sourceName": "數量", "fieldKey": "quantity", "type": "Decimal", "role": "quantity" },
+        { "sourceName": "總重量", "fieldKey": "total_weight", "type": "Decimal", "role": "weight" }
+      ]
+    },
+    {
+      "formCode": "daihui_inspection",
+      "displayName": "錫棒製程檢查表",
+      "sampleFile": "inspection_horizontal.csv",
+      "dateColumn": "製造日期",
+      "lotColumn": "批號",
+      "productColumn": "品名",
+      "weightColumn": "重量_實測值",
+      "qualityColumn": "品質判定",
+      "fields": [
+        { "sourceName": "表單名稱", "fieldKey": "form_name", "type": "String", "role": "form_name" },
+        { "sourceName": "品名", "fieldKey": "product_name", "type": "String", "role": "product" },
+        { "sourceName": "製造日期", "fieldKey": "manufactured_date", "type": "Date", "role": "date" },
+        { "sourceName": "批號", "fieldKey": "lot_no", "type": "String", "role": "lot" },
+        { "sourceName": "重量_實測值", "fieldKey": "measured_weight", "type": "Decimal", "role": "weight" },
+        { "sourceName": "鑄模溫度_實測值", "fieldKey": "measured_casting_temperature", "type": "Decimal", "role": "measurement" },
+        { "sourceName": "品質判定", "fieldKey": "quality_result", "type": "String", "role": "quality_result" }
+      ]
+    },
+    {
+      "formCode": "daihui_material",
+      "displayName": "領料退料單",
+      "sampleFile": "material_horizontal.csv",
+      "dateColumn": "領料日期",
+      "materialColumn": "原料卡號",
+      "weightColumn": "領料重量",
+      "fields": [
+        { "sourceName": "表單名稱", "fieldKey": "form_name", "type": "String", "role": "form_name" },
+        { "sourceName": "單據類型", "fieldKey": "document_type", "type": "String", "role": "status" },
+        { "sourceName": "領料日期", "fieldKey": "material_issue_date", "type": "Date", "role": "date" },
+        { "sourceName": "原料卡號", "fieldKey": "material_code", "type": "String", "role": "material" },
+        { "sourceName": "領料重量", "fieldKey": "issued_weight", "type": "Decimal", "role": "weight" },
+        { "sourceName": "領料人", "fieldKey": "issued_by", "type": "String", "role": "actor" }
+      ]
+    },
+    {
+      "formCode": "daihui_production",
+      "displayName": "生產紀錄卡",
+      "sampleFile": "production_horizontal.csv",
+      "productColumn": "生產品名",
+      "lotColumn": "生產批號",
+      "weightColumn": "原料重量",
+      "quantityColumn": "產出數量",
+      "fields": [
+        { "sourceName": "表單名稱", "fieldKey": "form_name", "type": "String", "role": "form_name" },
+        { "sourceName": "生產品名", "fieldKey": "product_name", "type": "String", "role": "product" },
+        { "sourceName": "生產批號", "fieldKey": "production_batch_no", "type": "String", "role": "lot" },
+        { "sourceName": "原料重量", "fieldKey": "material_weight", "type": "Decimal", "role": "weight" },
+        { "sourceName": "熔解溫度", "fieldKey": "melting_temperature", "type": "Decimal", "role": "measurement" },
+        { "sourceName": "產出數量", "fieldKey": "output_quantity", "type": "Decimal", "role": "quantity" }
+      ]
+    },
+    {
+      "formCode": "daihui_quality",
+      "displayName": "成品品質檢驗表",
+      "sampleFile": "quality_horizontal.csv",
+      "dateColumn": "檢驗日期",
+      "productColumn": "產品類型",
+      "qualityColumn": "外觀判定",
+      "quantityColumn": "不良數",
+      "fields": [
+        { "sourceName": "表單名稱", "fieldKey": "form_name", "type": "String", "role": "form_name" },
+        { "sourceName": "產品類型", "fieldKey": "product_type", "type": "String", "role": "product" },
+        { "sourceName": "檢驗日期", "fieldKey": "inspection_date", "type": "Date", "role": "date" },
+        { "sourceName": "外觀判定", "fieldKey": "appearance_result", "type": "String", "role": "quality_result" },
+        { "sourceName": "成份分析", "fieldKey": "composition_analysis", "type": "String", "role": "quality_detail" },
+        { "sourceName": "不良數", "fieldKey": "defect_count", "type": "Integer", "role": "quantity" }
+      ]
+    }
+  ]
+}
