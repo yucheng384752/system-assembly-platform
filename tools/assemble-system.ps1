@@ -42,6 +42,20 @@ New-CleanDirectory $outputPath
 Copy-Tree (Join-Path $sourcePath "backend") (Join-Path $outputPath "backend")
 Copy-Tree (Join-Path $sourcePath "frontend") (Join-Path $outputPath "frontend")
 
+# Overlay kit-specific source files from kits/<id>/src/ into the assembled system.
+# Files are copied file-by-file to merge correctly into existing backend/ and frontend/ trees.
+foreach ($kitId in @($plan.resolvedKitOrder)) {
+    $kitSrcPath = Join-Path $ProjectRoot "kits\$kitId\src"
+    if (-not (Test-Path $kitSrcPath)) { continue }
+    Get-ChildItem -LiteralPath $kitSrcPath -Recurse -File | ForEach-Object {
+        $relativePath = $_.FullName.Substring($kitSrcPath.Length + 1)
+        $destPath = Join-Path $outputPath $relativePath
+        $destDir = Split-Path -Parent $destPath
+        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force $destDir | Out-Null }
+        Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force
+    }
+}
+
 # Keep generated backend compatible with Python 3.10 deployments.
 Get-ChildItem -LiteralPath (Join-Path $outputPath "backend") -Recurse -File -Filter *.py | ForEach-Object {
     $content = [string](Get-Content -Raw -Encoding UTF8 $_.FullName)
