@@ -2,7 +2,7 @@ import hashlib
 import logging
 import shutil
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import (
@@ -70,7 +70,7 @@ async def _mark_job_failed(job_id: uuid.UUID, error: Exception | str) -> None:
         prev_status = job.status
         job.status = ImportJobStatus.FAILED
         job.error_summary = {"error": error_text}
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "system"
         job.last_status_actor_api_key_id = None
         job.last_status_actor_label_snapshot = None
@@ -189,7 +189,7 @@ async def create_import_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -410,7 +410,7 @@ async def create_import_job_from_upload_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -604,7 +604,7 @@ async def commit_import_job(
             job.actor_label_snapshot = actor_api_key_label
             job.last_status_actor_api_key_id = actor_api_key_id
             job.last_status_actor_label_snapshot = actor_api_key_label
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "user"
         await db.commit()
         await db.refresh(job)
@@ -692,7 +692,7 @@ async def cancel_import_job(
             job.actor_label_snapshot = actor_api_key_label
             job.last_status_actor_api_key_id = actor_api_key_id
             job.last_status_actor_label_snapshot = actor_api_key_label
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "user"
         await db.commit()
 

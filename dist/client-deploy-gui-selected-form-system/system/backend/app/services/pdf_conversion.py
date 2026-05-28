@@ -7,7 +7,7 @@ import io
 import re
 import uuid
 import zipfile
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -360,7 +360,7 @@ async def _auto_ingest_converted_csvs(
             tenant_id=tenant_id,
             actor_api_key_id=actor_api_key_id,
             actor_label_snapshot=actor_api_key_label,
-            last_status_changed_at=datetime.now(UTC),
+            last_status_changed_at=datetime.now(timezone.utc),
             last_status_actor_kind="system",
             last_status_actor_api_key_id=actor_api_key_id,
             last_status_actor_label_snapshot=actor_api_key_label,
@@ -413,7 +413,7 @@ async def process_pdf_conversion_job_background(job_id: uuid.UUID) -> None:
             job.error_summary = _to_error_summary(
                 "PDF upload record not found", stage="load_upload"
             )
-            job.finished_at = datetime.now(UTC)
+            job.finished_at = datetime.now(timezone.utc)
             await db.commit()
             return
 
@@ -422,7 +422,7 @@ async def process_pdf_conversion_job_background(job_id: uuid.UUID) -> None:
 
         job.status = PdfConversionStatus.UPLOADING
         job.progress = 15
-        job.started_at = datetime.now(UTC)
+        job.started_at = datetime.now(timezone.utc)
         await db.commit()
     # --- DB session released here ---
 
@@ -489,7 +489,7 @@ async def process_pdf_conversion_job_background(job_id: uuid.UUID) -> None:
             job.status = PdfConversionStatus.FAILED
             job.progress = 100
             job.error_summary = _to_error_summary(convert_error, stage=convert_error_stage)
-            job.finished_at = datetime.now(UTC)
+            job.finished_at = datetime.now(timezone.utc)
             await db.commit()
             return
 
@@ -521,7 +521,7 @@ async def process_pdf_conversion_job_background(job_id: uuid.UUID) -> None:
             job.progress = 100
             job.output_path = selected_path
             job.output_paths = output_paths
-            job.finished_at = datetime.now(UTC)
+            job.finished_at = datetime.now(timezone.utc)
             job.error_summary = None
             await db.commit()
 
@@ -551,5 +551,5 @@ async def process_pdf_conversion_job_background(job_id: uuid.UUID) -> None:
             job.status = PdfConversionStatus.FAILED
             job.progress = 100
             job.error_summary = _to_error_summary(e, stage="convert")
-            job.finished_at = datetime.now(UTC)
+            job.finished_at = datetime.now(timezone.utc)
             await db.commit()

@@ -512,7 +512,8 @@ export function fileHasImportJob(file: UploadedFile): boolean {
 @'
 import type { UploadedFile } from "./uploadTypes";
 import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileIsUploadedButUnvalidated } from "./uploadEligibility";
-import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast } from "./uploadImportToastUtils";
+import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./uploadImportToastUtils";
+import { scheduleSinglePostImportCleanup } from "./uploadImportCleanupUtils";
 
 export type ValidateOutcome =
   | { outcome: "passed"; totalRows: number }
@@ -582,6 +583,23 @@ interface SingleImportOptions {
   setImportProgress: (fileId: string, progress: number) => void;
   completeImport: (fileId: string) => void;
   toImportProgress: (jobStatus: string) => number;
+  t: Translate;
+}
+
+interface SingleImportWorkflowOptions {
+  id: string;
+  target: UploadedFile;
+  commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  sleep: (ms: number) => Promise<void>;
+  filesRef: { current: UploadedFile[] };
+  beginImport: (fileIds: string[], progress: number) => void;
+  setImportProgress: (fileId: string, progress: number) => void;
+  completeImport: (fileId: string) => void;
+  resetImport: (fileIds: string[]) => void;
+  removeImportedFiles: (fileIds: string[]) => void;
+  toImportProgress: (jobStatus: string) => number;
+  showToast: ShowToast;
   t: Translate;
 }
 
@@ -852,9 +870,64 @@ export async function runSingleImport({
 
   completeImport(file.id);
 }
+
+export async function runSingleImportWorkflow({
+  id,
+  target,
+  commitImportJob,
+  fetchImportJob,
+  sleep,
+  filesRef,
+  beginImport,
+  setImportProgress,
+  completeImport,
+  resetImport,
+  removeImportedFiles,
+  toImportProgress,
+  showToast,
+  t,
+}: SingleImportWorkflowOptions): Promise<void> {
+  showSingleImportStartToast({ fileName: target.name, showToast, t });
+  beginImport([id], 20);
+
+  try {
+    await runSingleImport({
+      file: target,
+      commitImportJob,
+      fetchImportJob,
+      sleep,
+      setImportProgress,
+      completeImport,
+      toImportProgress,
+      t,
+    });
+
+    showSingleImportCompletedToast({ fileName: target.name, showToast, t });
+
+    scheduleSinglePostImportCleanup({
+      id,
+      filesRef,
+      removeImportedFiles,
+      showToast,
+      t,
+    });
+  } catch (err) {
+    console.error("Single import error:", err);
+    const errorMessage = err instanceof Error ? err.message : t("upload.errors.importError");
+    showImportErrorToast({ message: errorMessage, showToast, t });
+    resetImport([id]);
+  }
+}
 '@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadBatchOrchestrator.ts")
 
 @'
+import type { UploadedFile } from "./uploadTypes";
+import { buildUploadedCsvFilesFromPdfOutputs } from "./uploadFileUtils";
+import { showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./uploadPdfConvertToastUtils";
+
+type ShowToast = (kind: "success" | "error" | "info" | "warning", message: string, options?: { key?: string; durationMs?: number | null }) => void;
+type Translate = (key: string, options?: Record<string, unknown>) => string;
+
 type PdfConvertStatusResponse = {
   status?: string;
   progress?: number;
@@ -925,6 +998,99 @@ export async function runPdfConversion({
   }
 
   return { outcome: "still-processing" };
+}
+
+interface PdfConvertWorkflowOptions {
+  fileId: string;
+  processId: string;
+  filesRef: { current: UploadedFile[] };
+  triggerPdfConvert: (processId: string) => Promise<{ job_id?: string }>;
+  fetchPdfConvertStatus: (processId: string) => Promise<PdfConvertStatusResponse>;
+  fetchPdfConvertedCsvOutputs: (processId: string) => Promise<any>;
+  sleep: (ms: number) => Promise<void>;
+  attachPdfConvertJob: (fileId: string, jobId: string | undefined) => void;
+  updatePdfConvertProgress: (fileId: string, status: string, progress: number, errorText: string) => void;
+  replacePdfWithCsvFiles: (fileId: string, newFiles: UploadedFile[]) => void;
+  failPdfConvert: (fileId: string, errorText: string) => void;
+  beginPdfConvert: (fileId: string) => void;
+  toPdfConvertProgress: (convertStatus: string) => number;
+  showToast: ShowToast;
+  t: Translate;
+}
+
+export async function runPdfConvertWorkflow({
+  fileId,
+  processId,
+  filesRef,
+  triggerPdfConvert,
+  fetchPdfConvertStatus,
+  fetchPdfConvertedCsvOutputs,
+  sleep,
+  attachPdfConvertJob,
+  updatePdfConvertProgress,
+  replacePdfWithCsvFiles,
+  failPdfConvert,
+  beginPdfConvert,
+  toPdfConvertProgress,
+  showToast,
+  t,
+}: PdfConvertWorkflowOptions): Promise<boolean> {
+  beginPdfConvert(fileId);
+
+  try {
+    const conversionResult = await runPdfConversion({
+      processId,
+      triggerPdfConvert,
+      fetchPdfConvertStatus,
+      sleep,
+      attachPdfConvertJob: (jobId) => attachPdfConvertJob(fileId, jobId),
+      updatePdfConvertProgress: (status, progress, errorText) =>
+        updatePdfConvertProgress(fileId, status, progress, errorText),
+      toPdfConvertProgress,
+      fallbackErrorText: t("upload.toast.pdfConvertFailed"),
+    });
+
+    if (conversionResult.outcome === "completed") {
+      try {
+        showPdfConvertFetchingCsvToast({ processId, showToast, t });
+        const outputsResp = await fetchPdfConvertedCsvOutputs(processId);
+        const outputs = Array.isArray(outputsResp) ? outputsResp : (outputsResp?.outputs || []);
+
+        const newCsvFiles = await buildUploadedCsvFilesFromPdfOutputs(
+          outputs,
+          filesRef.current.map((file) => file.name)
+        );
+
+        if (newCsvFiles.length) {
+          replacePdfWithCsvFiles(fileId, newCsvFiles);
+          showPdfConvertGotCsvToast({ processId, count: newCsvFiles.length, showToast, t });
+        } else {
+          showPdfConvertNoCsvToast({ processId, showToast, t });
+        }
+      } catch (e: any) {
+        showPdfConvertOutputErrorToast({
+          processId,
+          message: e?.message || t("upload.toast.pdfConvertCreateCsvJobFailed"),
+          showToast,
+          t,
+        });
+      }
+      return true;
+    }
+
+    if (conversionResult.outcome === "failed") {
+      failPdfConvert(fileId, conversionResult.message || t("upload.toast.pdfConvertFailed"));
+      showPdfConvertFailedToast({ message: conversionResult.message || t("upload.toast.pdfConvertFailed"), showToast, t });
+      return false;
+    }
+
+    showPdfConvertStillProcessingToast({ showToast, t });
+    return false;
+  } catch (e: any) {
+    failPdfConvert(fileId, e?.message || t("upload.toast.pdfConvertFailed"));
+    showPdfConvertFailedToast({ message: e?.message || t("upload.toast.pdfConvertFailed"), showToast, t });
+    return false;
+  }
 }
 '@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadPdfConversionOrchestrator.ts")
 
@@ -3528,6 +3694,88 @@ $content = $content.Replace(
 $content = $content.Replace(
     'import { flattenImportValidationErrors } from "./upload/uploadValidationErrorUtils";' + "`n",
     ''
+)
+
+# Phase 28: Extract handlePdfConvert body into runPdfConvertWorkflow
+if ($content -notmatch "runPdfConvertWorkflow") {
+    $pdfConvertWorkflowPattern = '(?s)    beginPdfConvert\(fileId\);\r?\n\r?\n    try \{.*?      failPdfConvert\(fileId, e\?\.message \|\| t\(''upload\.toast\.pdfConvertFailed''\)\);\r?\n      showPdfConvertFailedToast\(\{ message: e\?\.message \|\| t\(''upload\.toast\.pdfConvertFailed''\), showToast, t \}\);\r?\n      return false;\r?\n    \}\r?\n  \};'
+    $pdfConvertWorkflowReplacement = @'
+    return await runPdfConvertWorkflow({
+      fileId,
+      processId: target.processId,
+      filesRef,
+      triggerPdfConvert: uploadApi.triggerPdfConvert,
+      fetchPdfConvertStatus: uploadApi.fetchPdfConvertStatus,
+      fetchPdfConvertedCsvOutputs: uploadApi.fetchPdfConvertedCsvOutputs,
+      sleep: delay,
+      attachPdfConvertJob,
+      updatePdfConvertProgress,
+      replacePdfWithCsvFiles,
+      failPdfConvert,
+      beginPdfConvert,
+      toPdfConvertProgress,
+      showToast,
+      t,
+    });
+  };
+'@
+    $content = [regex]::Replace($content, $pdfConvertWorkflowPattern, $pdfConvertWorkflowReplacement, 1)
+}
+
+$content = $content.Replace(
+    'import { runPdfConversion } from "./upload/uploadPdfConversionOrchestrator";',
+    'import { runPdfConvertWorkflow } from "./upload/uploadPdfConversionOrchestrator";'
+)
+
+$content = $content.Replace(
+    'import { showMissingPdfConvertProcessToast, showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./upload/uploadPdfConvertToastUtils";',
+    'import { showMissingPdfConvertProcessToast } from "./upload/uploadPdfConvertToastUtils";'
+)
+
+$content = $content.Replace(
+    'import { buildUploadedCsvFilesFromPdfOutputs, parseCsv } from "./upload/uploadFileUtils";',
+    'import { parseCsv } from "./upload/uploadFileUtils";'
+)
+
+# Phase 27: Extract single import orchestration into runSingleImportWorkflow
+if ($content -notmatch "runSingleImportWorkflow") {
+    $singleImportOrchestratorPattern = '(?s)    showSingleImportStartToast\(\{ fileName: target\.name, showToast, t \}\);\r?\n\r?\n    beginImport\(\[id\], 20\);\r?\n\r?\n    try \{.*?    \} catch \(err\) \{.*?      resetImport\(\[id\]\);\r?\n    \}\r?\n  \};'
+    $singleImportOrchestratorReplacement = @'
+
+    await runSingleImportWorkflow({
+      id,
+      target,
+      commitImportJob: uploadApi.commitImportJob,
+      fetchImportJob: uploadApi.fetchImportJob,
+      sleep: delay,
+      filesRef,
+      beginImport,
+      setImportProgress,
+      completeImport,
+      resetImport,
+      removeImportedFiles,
+      toImportProgress,
+      showToast,
+      t,
+    });
+  };
+'@
+    $content = [regex]::Replace($content, $singleImportOrchestratorPattern, $singleImportOrchestratorReplacement, 1)
+}
+
+$content = $content.Replace(
+    'import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImport, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$content = $content.Replace(
+    'import { showBatchImportUnavailableToast, showImportErrorToast, showMissingImportTargetToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./upload/uploadImportToastUtils";',
+    'import { showBatchImportUnavailableToast, showMissingImportTargetToast } from "./upload/uploadImportToastUtils";'
+)
+
+$content = $content.Replace(
+    'import { scheduleBatchPostImportCleanup, scheduleSinglePostImportCleanup } from "./upload/uploadImportCleanupUtils";',
+    'import { scheduleBatchPostImportCleanup } from "./upload/uploadImportCleanupUtils";'
 )
 
 Set-Content -Encoding UTF8 $uploadPagePath $content

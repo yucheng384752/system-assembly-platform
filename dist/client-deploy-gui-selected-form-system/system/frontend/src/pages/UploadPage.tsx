@@ -10,15 +10,15 @@ import { saveCsvChangesInFiles, updateCsvCellInFiles } from "./upload/uploadCsvE
 import { buildUploadFilesToAdd } from "./upload/uploadFileAddUtils";
 import { showFileAddResultToasts } from "./upload/uploadFileAddToastUtils";
 import { showCsvChangesAppliedToast, showCsvEditDisabledToast, showCsvSaveErrorToast } from "./upload/uploadCsvEditToastUtils";
-import { buildUploadedCsvFilesFromPdfOutputs, parseCsv } from "./upload/uploadFileUtils";
+import { parseCsv } from "./upload/uploadFileUtils";
 import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileHasImportJob, fileHasValidationErrors, fileIsUploadedButUnvalidated } from "./upload/uploadEligibility";
-import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImport, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";
-import { runPdfConversion } from "./upload/uploadPdfConversionOrchestrator";
-import { showMissingPdfConvertProcessToast, showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./upload/uploadPdfConvertToastUtils";
+import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";
+import { runPdfConvertWorkflow } from "./upload/uploadPdfConversionOrchestrator";
+import { showMissingPdfConvertProcessToast } from "./upload/uploadPdfConvertToastUtils";
 import { commitCsvValidationResult, runCsvValidationJob, runPdfValidation } from "./upload/uploadValidationOrchestrator";
 import { showValidationResultToast } from "./upload/uploadValidationToastUtils";
-import { showBatchImportUnavailableToast, showImportErrorToast, showMissingImportTargetToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./upload/uploadImportToastUtils";
-import { scheduleBatchPostImportCleanup, scheduleSinglePostImportCleanup } from "./upload/uploadImportCleanupUtils";
+import { showBatchImportUnavailableToast, showMissingImportTargetToast } from "./upload/uploadImportToastUtils";
+import { scheduleBatchPostImportCleanup } from "./upload/uploadImportCleanupUtils";
 import { toImportProgress, toPdfConvertProgress, toValidateProgress } from "./upload/uploadProgress";
 import { BatchActionBar } from "./upload/BatchActionBar";
 import { BatchImportConfirmModal } from "./upload/BatchImportConfirmModal";
@@ -171,62 +171,23 @@ export function UploadPage() {
       return false;
     }
 
-    beginPdfConvert(fileId);
-
-    try {
-      const conversionResult = await runPdfConversion({
-        processId: target.processId,
-        triggerPdfConvert: uploadApi.triggerPdfConvert,
-        fetchPdfConvertStatus: uploadApi.fetchPdfConvertStatus,
-        sleep: delay,
-        attachPdfConvertJob: (jobId) => attachPdfConvertJob(fileId, jobId),
-        updatePdfConvertProgress: (status, progress, errorText) =>
-          updatePdfConvertProgress(fileId, status, progress, errorText),
-        toPdfConvertProgress,
-        fallbackErrorText: t('upload.toast.pdfConvertFailed'),
-      });
-
-      if (conversionResult.outcome === 'completed') {
-        try {
-          showPdfConvertFetchingCsvToast({ processId: target.processId, showToast, t });
-          const outputsResp = await uploadApi.fetchPdfConvertedCsvOutputs(target.processId);
-          const outputs = Array.isArray(outputsResp) ? outputsResp : (outputsResp?.outputs || []);
-
-          const newCsvFiles = await buildUploadedCsvFilesFromPdfOutputs(
-            outputs,
-            filesRef.current.map((file) => file.name)
-          );
-
-          if (newCsvFiles.length) {
-            replacePdfWithCsvFiles(fileId, newCsvFiles);
-            showPdfConvertGotCsvToast({ processId: target.processId, count: newCsvFiles.length, showToast, t });
-          } else {
-            showPdfConvertNoCsvToast({ processId: target.processId, showToast, t });
-          }
-        } catch (e: any) {
-          showPdfConvertOutputErrorToast({
-            processId: target.processId,
-            message: e?.message || t('upload.toast.pdfConvertCreateCsvJobFailed'),
-            showToast,
-            t,
-          });
-        }
-        return true;
-      }
-
-      if (conversionResult.outcome === 'failed') {
-        failPdfConvert(fileId, conversionResult.message || t('upload.toast.pdfConvertFailed'));
-        showPdfConvertFailedToast({ message: conversionResult.message || t('upload.toast.pdfConvertFailed'), showToast, t });
-        return false;
-      }
-
-      showPdfConvertStillProcessingToast({ showToast, t });
-      return false;
-    } catch (e: any) {
-      failPdfConvert(fileId, e?.message || t('upload.toast.pdfConvertFailed'));
-      showPdfConvertFailedToast({ message: e?.message || t('upload.toast.pdfConvertFailed'), showToast, t });
-      return false;
-    }
+    return await runPdfConvertWorkflow({
+      fileId,
+      processId: target.processId,
+      filesRef,
+      triggerPdfConvert: uploadApi.triggerPdfConvert,
+      fetchPdfConvertStatus: uploadApi.fetchPdfConvertStatus,
+      fetchPdfConvertedCsvOutputs: uploadApi.fetchPdfConvertedCsvOutputs,
+      sleep: delay,
+      attachPdfConvertJob,
+      updatePdfConvertProgress,
+      replacePdfWithCsvFiles,
+      failPdfConvert,
+      beginPdfConvert,
+      toPdfConvertProgress,
+      showToast,
+      t,
+    });
   };
 
   const updateCell = (
@@ -315,40 +276,23 @@ export function UploadPage() {
       return;
     }
 
-    showSingleImportStartToast({ fileName: target.name, showToast, t });
 
-    beginImport([id], 20);
-
-    try {
-      await runSingleImport({
-        file: target,
-        commitImportJob: uploadApi.commitImportJob,
-        fetchImportJob: uploadApi.fetchImportJob,
-        sleep: delay,
-        setImportProgress,
-        completeImport,
-        toImportProgress,
-        t,
-      });
-
-      showSingleImportCompletedToast({ fileName: target.name, showToast, t });
-      
-      // 延遲後根據檔案數量決定行為
-      scheduleSinglePostImportCleanup({
-        id,
-        filesRef,
-        removeImportedFiles,
-        showToast,
-        t,
-      });
-      
-    } catch (err) {
-      console.error('Import error:', err);
-      const errorMessage = err instanceof Error ? err.message : t('upload.errors.importError');
-      showImportErrorToast({ message: errorMessage, showToast, t });
-      
-      resetImport([id]);
-    }
+    await runSingleImportWorkflow({
+      id,
+      target,
+      commitImportJob: uploadApi.commitImportJob,
+      fetchImportJob: uploadApi.fetchImportJob,
+      sleep: delay,
+      filesRef,
+      beginImport,
+      setImportProgress,
+      completeImport,
+      resetImport,
+      removeImportedFiles,
+      toImportProgress,
+      showToast,
+      t,
+    });
   };
 
   const handleRemoveFile = removeFile;
@@ -436,5 +380,9 @@ export function UploadPage() {
     </div>
   );
 }
+
+
+
+
 
 

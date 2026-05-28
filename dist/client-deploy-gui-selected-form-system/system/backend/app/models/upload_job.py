@@ -6,7 +6,7 @@
 
 import uuid
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import TYPE_CHECKING
 
 from sqlalchemy import DateTime, ForeignKey, Integer, LargeBinary, String, func
@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from app.models.upload_error import UploadError
 
 
-class JobStatus(StrEnum):
+class JobStatus(str, Enum):
     """上傳工作狀態列舉"""
 
     PENDING = "PENDING"  # 等待處理

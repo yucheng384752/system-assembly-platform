@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
@@ -10,7 +10,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from app.core.database import Base
 
 
-class PdfConversionStatus(StrEnum):
+class PdfConversionStatus(str, Enum):
     QUEUED = "QUEUED"
     UPLOADING = "UPLOADING"
     PROCESSING = "PROCESSING"

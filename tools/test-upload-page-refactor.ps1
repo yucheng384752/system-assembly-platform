@@ -96,8 +96,12 @@ if ($uploadPage -match "scheduleAfterDelay" -and $uploadPage -notmatch 'import \
     throw "UploadPage still imports scheduleAfterDelay directly after Phase 24 extraction."
 }
 
-if ($uploadPage -notmatch "buildUploadedCsvFilesFromPdfOutputs") {
-    throw "UploadPage does not use extracted PDF output CSV file builder."
+if ($pdfConversionOrchestrator -notmatch "buildUploadedCsvFilesFromPdfOutputs") {
+    throw "uploadPdfConversionOrchestrator does not use extracted PDF output CSV file builder."
+}
+
+if ($uploadPage -match "\bbuildUploadedCsvFilesFromPdfOutputs\b") {
+    throw "UploadPage still owns buildUploadedCsvFilesFromPdfOutputs; expected in orchestrator."
 }
 
 if ($uploadPage -notmatch "uploadBatchOrchestrator") {
@@ -180,12 +184,28 @@ if ($uploadPage -notmatch "runBatchImportWorkflow\(\{" -or $uploadPage -match "f
     throw "UploadPage does not delegate batch import commit/poll orchestration."
 }
 
-if ($uploadPage -notmatch "runSingleImport\(\{" -or $uploadPage -match "setImportProgress\(id, 60\)" -or $uploadPage -match "setImportProgress\(id, toImportProgress\(committedJob\.status\)\)" -or $uploadPage -match "completeImport\(id\)") {
-    throw "UploadPage does not delegate single import commit/poll orchestration."
+if ($uploadPage -notmatch "runSingleImportWorkflow\(\{") {
+    throw "UploadPage does not delegate single import orchestration to runSingleImportWorkflow."
 }
 
-if ($uploadPage -notmatch "runPdfConversion\(\{" -or $uploadPage -match "const maxTries = 1800" -or $uploadPage -match "consecutiveErrors" -or $uploadPage -match "for \(let i = 0; i < maxTries; i\+\+\)" -or $uploadPage -match "uploadApi\.fetchPdfConvertStatus\(target\.processId\)") {
-    throw "UploadPage does not delegate PDF conversion polling orchestration."
+if ($uploadPage -match "runSingleImport\(\{" -or $uploadPage -match "setImportProgress\(id, 60\)" -or $uploadPage -match "setImportProgress\(id, toImportProgress\(committedJob\.status\)\)" -or $uploadPage -match "completeImport\(id\)") {
+    throw "UploadPage still owns single import commit/poll details; expected in orchestrator."
+}
+
+if ($uploadPage -notmatch "runPdfConvertWorkflow\(\{") {
+    throw "UploadPage does not delegate PDF conversion to runPdfConvertWorkflow."
+}
+
+if ($uploadPage -match "runPdfConversion\(\{" -or $uploadPage -match "const maxTries = 1800" -or $uploadPage -match "consecutiveErrors" -or $uploadPage -match "for \(let i = 0; i < maxTries; i\+\+\)" -or $uploadPage -match "uploadApi\.fetchPdfConvertStatus\(target\.processId\)") {
+    throw "UploadPage still owns PDF conversion polling details; expected in orchestrator."
+}
+
+if ($pdfConversionOrchestrator -notmatch "export async function runPdfConvertWorkflow") {
+    throw "uploadPdfConversionOrchestrator is missing runPdfConvertWorkflow."
+}
+
+if ($pdfConversionOrchestrator -notmatch "buildUploadedCsvFilesFromPdfOutputs" -or $pdfConversionOrchestrator -notmatch "beginPdfConvert\(fileId\)") {
+    throw "uploadPdfConversionOrchestrator is missing expected runPdfConvertWorkflow internals."
 }
 
 if ($uploadPage -match "const buildCsvText =" -or $uploadPage -match "const shouldResetV2Job =" -or $uploadPage -match "csvData: \{ \.\.\.f\.csvData, rows \}" -or $uploadPage -match "new File\(\[csv_text\]" -or $uploadPage -match "const updatedFile = new File") {
@@ -224,12 +244,32 @@ if ($uploadPage -notmatch "showValidationResultToast," -or $uploadPage -match "u
     throw "UploadPage does not delegate validation result toast handling."
 }
 
-if ($uploadPage -notmatch "showSingleImportStartToast\(\{" -or $uploadPage -match "upload\.batchImport\.toast\.startSingle" -or $uploadPage -match "upload\.batchImport\.toast\.completedBatch" -or $uploadPage -match "upload\.batchImport\.toast\.allDone" -or $uploadPage -match "upload\.toast\.importStarting" -or $uploadPage -match "upload\.toast\.importCompleted" -or $uploadPage -match "upload\.toast\.pageResetContinueUpload") {
-    throw "UploadPage does not delegate import result toast handling."
+if ($uploadPage -match "upload\.batchImport\.toast\.startSingle" -or $uploadPage -match "upload\.batchImport\.toast\.completedBatch" -or $uploadPage -match "upload\.batchImport\.toast\.allDone" -or $uploadPage -match "upload\.toast\.importStarting" -or $uploadPage -match "upload\.toast\.importCompleted" -or $uploadPage -match "upload\.toast\.pageResetContinueUpload") {
+    throw "UploadPage still owns import result toast details."
 }
 
-if ($uploadPage -notmatch "showPdfConvertFetchingCsvToast\(\{" -or $uploadPage -notmatch "showPdfConvertGotCsvToast\(\{" -or $uploadPage -notmatch "showPdfConvertStillProcessingToast\(\{" -or $uploadPage -match "upload\.toast\.pdfConvertFetchingCsv" -or $uploadPage -match "upload\.toast\.pdfConvertGotCsv" -or $uploadPage -match "upload\.toast\.pdfConvertNoCsv" -or $uploadPage -match "upload\.toast\.pdfConvertStillProcessing" -or $uploadPage -match "upload\.toast\.missingProcessIdUploadPdf") {
-    throw "UploadPage does not delegate PDF conversion toast handling."
+if ($uploadPage -match "showSingleImportStartToast\(\{" -or $uploadPage -match "showSingleImportCompletedToast\(\{" -or $uploadPage -match "showImportErrorToast\(\{" -or $uploadPage -match "scheduleSinglePostImportCleanup\(\{") {
+    throw "UploadPage still owns single import toast/cleanup helpers; expected in orchestrator."
+}
+
+if ($batchOrchestrator -notmatch "export async function runSingleImportWorkflow") {
+    throw "uploadBatchOrchestrator is missing runSingleImportWorkflow."
+}
+
+if ($batchOrchestrator -notmatch "showSingleImportStartToast" -or $batchOrchestrator -notmatch "showSingleImportCompletedToast") {
+    throw "uploadBatchOrchestrator is missing single import toast helpers."
+}
+
+if ($batchOrchestrator -notmatch "scheduleSinglePostImportCleanup") {
+    throw "uploadBatchOrchestrator is missing scheduleSinglePostImportCleanup."
+}
+
+if ($uploadPage -match "showPdfConvertFetchingCsvToast\(\{" -or $uploadPage -match "showPdfConvertGotCsvToast\(\{" -or $uploadPage -match "showPdfConvertStillProcessingToast\(\{" -or $uploadPage -match "upload\.toast\.pdfConvertFetchingCsv" -or $uploadPage -match "upload\.toast\.pdfConvertGotCsv" -or $uploadPage -match "upload\.toast\.pdfConvertNoCsv" -or $uploadPage -match "upload\.toast\.pdfConvertStillProcessing" -or $uploadPage -match "upload\.toast\.missingProcessIdUploadPdf") {
+    throw "UploadPage still owns PDF conversion toast helpers; expected in orchestrator."
+}
+
+if ($pdfConversionOrchestrator -notmatch "showPdfConvertFetchingCsvToast" -or $pdfConversionOrchestrator -notmatch "showPdfConvertGotCsvToast" -or $pdfConversionOrchestrator -notmatch "showPdfConvertStillProcessingToast") {
+    throw "uploadPdfConversionOrchestrator is missing PDF conversion toast helpers."
 }
 
 if ($uploadPage -match 'import \{ ProgressBar \}') {
@@ -306,20 +346,32 @@ if ($uploadPage -notmatch "beginCsvValidation," `
     throw "UploadPage does not delegate CSV validation state transitions to workflow hook actions."
 }
 
-if ($uploadPage -notmatch "beginPdfConvert\(fileId\)" `
-    -or $uploadPage -notmatch "attachPdfConvertJob: \(jobId\) => attachPdfConvertJob\(fileId, jobId\)" `
-    -or $uploadPage -notmatch "updatePdfConvertProgress\(fileId, status, progress, errorText\)" `
-    -or $uploadPage -notmatch "replacePdfWithCsvFiles\(fileId, newCsvFiles\)" `
-    -or $uploadPage -notmatch "failPdfConvert\(fileId, e\?\.message \|\| t\('upload\.toast\.pdfConvertFailed'\)\)") {
-    throw "UploadPage does not delegate PDF conversion state transitions to workflow hook actions."
+if ($uploadPage -notmatch "beginPdfConvert," `
+    -or $uploadPage -notmatch "attachPdfConvertJob," `
+    -or $uploadPage -notmatch "updatePdfConvertProgress," `
+    -or $uploadPage -notmatch "replacePdfWithCsvFiles," `
+    -or $uploadPage -notmatch "failPdfConvert,") {
+    throw "UploadPage does not pass PDF conversion workflow hooks to runPdfConvertWorkflow."
+}
+
+if ($uploadPage -match "beginPdfConvert\(fileId\)" `
+    -or $uploadPage -match "attachPdfConvertJob: \(jobId\) =>" `
+    -or $uploadPage -match "updatePdfConvertProgress\(fileId, status" `
+    -or $uploadPage -match "replacePdfWithCsvFiles\(fileId, newCsvFiles\)" `
+    -or $uploadPage -match "failPdfConvert\(fileId, e\?\.message") {
+    throw "UploadPage still owns PDF conversion state transition calls; expected in orchestrator."
 }
 
 if ($uploadPage -notmatch "beginImport," `
-    -or $uploadPage -notmatch "beginImport\(\[id\], 20\)" `
     -or $uploadPage -notmatch "runBatchImportWorkflow\(\{" `
-    -or $uploadPage -notmatch "runSingleImport\(\{" `
-    -or $uploadPage -notmatch "resetImport\(\[id\]\)") {
+    -or $uploadPage -notmatch "runSingleImportWorkflow\(\{") {
     throw "UploadPage does not delegate import state transitions to workflow hook actions."
+}
+
+if ($uploadPage -match "beginImport\(\[id\], 20\)" `
+    -or $uploadPage -match "runSingleImport\(\{" `
+    -or $uploadPage -match "resetImport\(\[id\]\)") {
+    throw "UploadPage still owns single import orchestration detail; expected in runSingleImportWorkflow."
 }
 
 $forbiddenPdfTransitions = @(
@@ -610,8 +662,8 @@ if ($importToastUtils -notmatch "export function showBatchImportStartToast" -or 
     throw "Upload import toast utilities are missing expected toast behavior."
 }
 
-if ($uploadPage -notmatch "scheduleBatchPostImportCleanup\(\{" -or $uploadPage -notmatch "scheduleSinglePostImportCleanup\(\{") {
-    throw "UploadPage does not delegate post-import cleanup scheduling to helpers."
+if ($uploadPage -notmatch "scheduleBatchPostImportCleanup\(\{") {
+    throw "UploadPage does not delegate batch post-import cleanup scheduling to helper."
 }
 
 if ($importCleanupUtils -notmatch "export function scheduleBatchPostImportCleanup" `

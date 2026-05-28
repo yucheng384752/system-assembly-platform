@@ -7,7 +7,7 @@
 import hashlib
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import (
@@ -123,7 +123,7 @@ async def _create_upload_job_from_csv_bytes(
         tenant_id=tenant_id,
         actor_api_key_id=actor_api_key_id,
         actor_label_snapshot=actor_api_key_label,
-        last_status_changed_at=datetime.now(UTC),
+        last_status_changed_at=datetime.now(timezone.utc),
         last_status_actor_kind="user",
         last_status_actor_api_key_id=actor_api_key_id,
         last_status_actor_label_snapshot=actor_api_key_label,
@@ -149,7 +149,7 @@ async def _create_upload_job_from_csv_bytes(
     validation_result = file_validation_service.validate_file(file_content, filename)
 
     upload_job.status = JobStatus.VALIDATED
-    upload_job.last_status_changed_at = datetime.now(UTC)
+    upload_job.last_status_changed_at = datetime.now(timezone.utc)
     upload_job.last_status_actor_kind = "user"
     upload_job.last_status_actor_api_key_id = actor_api_key_id
     upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -259,7 +259,7 @@ async def _create_v2_import_job_from_upload_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -384,7 +384,7 @@ async def validate_upload_job(
     )
 
     upload_job.status = JobStatus.VALIDATED
-    upload_job.last_status_changed_at = datetime.now(UTC)
+    upload_job.last_status_changed_at = datetime.now(timezone.utc)
     upload_job.last_status_actor_kind = "user"
     upload_job.last_status_actor_api_key_id = actor_api_key_id
     upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -522,7 +522,7 @@ async def update_upload_content(
         )
 
         upload_job.status = JobStatus.VALIDATED
-        upload_job.last_status_changed_at = datetime.now(UTC)
+        upload_job.last_status_changed_at = datetime.now(timezone.utc)
         upload_job.last_status_actor_kind = "user"
         upload_job.last_status_actor_api_key_id = actor_api_key_id
         upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -624,7 +624,7 @@ async def update_upload_content(
                 getattr(http_request, "state", None), "auth_api_key_label", None
             )
             upload_job.status = JobStatus.PENDING
-            upload_job.last_status_changed_at = datetime.now(UTC)
+            upload_job.last_status_changed_at = datetime.now(timezone.utc)
             upload_job.last_status_actor_kind = "user"
             upload_job.last_status_actor_api_key_id = actor_api_key_id
             upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -867,7 +867,7 @@ async def upload_file(
             tenant_id=tenant_id,
             actor_api_key_id=actor_api_key_id,
             actor_label_snapshot=actor_api_key_label,
-            last_status_changed_at=datetime.now(UTC),
+            last_status_changed_at=datetime.now(timezone.utc),
             last_status_actor_kind="user",
             last_status_actor_api_key_id=actor_api_key_id,
             last_status_actor_label_snapshot=actor_api_key_label,
@@ -893,7 +893,7 @@ async def upload_file(
 
             # 5. 更新上傳工作統計資訊
             upload_job.status = JobStatus.VALIDATED
-            upload_job.last_status_changed_at = datetime.now(UTC)
+            upload_job.last_status_changed_at = datetime.now(timezone.utc)
             upload_job.last_status_actor_kind = "user"
             upload_job.last_status_actor_api_key_id = actor_api_key_id
             upload_job.last_status_actor_label_snapshot = actor_api_key_label

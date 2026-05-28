@@ -1,6 +1,7 @@
 ﻿import type { UploadedFile } from "./uploadTypes";
 import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileIsUploadedButUnvalidated } from "./uploadEligibility";
-import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast } from "./uploadImportToastUtils";
+import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./uploadImportToastUtils";
+import { scheduleSinglePostImportCleanup } from "./uploadImportCleanupUtils";
 
 export type ValidateOutcome =
   | { outcome: "passed"; totalRows: number }
@@ -70,6 +71,23 @@ interface SingleImportOptions {
   setImportProgress: (fileId: string, progress: number) => void;
   completeImport: (fileId: string) => void;
   toImportProgress: (jobStatus: string) => number;
+  t: Translate;
+}
+
+interface SingleImportWorkflowOptions {
+  id: string;
+  target: UploadedFile;
+  commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  sleep: (ms: number) => Promise<void>;
+  filesRef: { current: UploadedFile[] };
+  beginImport: (fileIds: string[], progress: number) => void;
+  setImportProgress: (fileId: string, progress: number) => void;
+  completeImport: (fileId: string) => void;
+  resetImport: (fileIds: string[]) => void;
+  removeImportedFiles: (fileIds: string[]) => void;
+  toImportProgress: (jobStatus: string) => number;
+  showToast: ShowToast;
   t: Translate;
 }
 
@@ -339,4 +357,52 @@ export async function runSingleImport({
   }
 
   completeImport(file.id);
+}
+
+export async function runSingleImportWorkflow({
+  id,
+  target,
+  commitImportJob,
+  fetchImportJob,
+  sleep,
+  filesRef,
+  beginImport,
+  setImportProgress,
+  completeImport,
+  resetImport,
+  removeImportedFiles,
+  toImportProgress,
+  showToast,
+  t,
+}: SingleImportWorkflowOptions): Promise<void> {
+  showSingleImportStartToast({ fileName: target.name, showToast, t });
+  beginImport([id], 20);
+
+  try {
+    await runSingleImport({
+      file: target,
+      commitImportJob,
+      fetchImportJob,
+      sleep,
+      setImportProgress,
+      completeImport,
+      toImportProgress,
+      t,
+    });
+
+    showSingleImportCompletedToast({ fileName: target.name, showToast, t });
+
+    scheduleSinglePostImportCleanup({
+      id,
+      filesRef,
+      removeImportedFiles,
+      showToast,
+      t,
+    });
+  } catch (err) {
+    console.error("Single import error:", err);
+    const errorMessage = err instanceof Error ? err.message : t("upload.errors.importError");
+    showImportErrorToast({ message: errorMessage, showToast, t });
+    resetImport([id]);
+  }
 }

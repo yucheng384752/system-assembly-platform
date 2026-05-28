@@ -3,7 +3,7 @@ import json
 import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -96,7 +96,7 @@ class ImportService:
         actor_kind: str = "system",
     ) -> None:
         job.status = status
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = actor_kind
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_label_snapshot
