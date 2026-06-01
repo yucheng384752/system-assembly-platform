@@ -23,8 +23,12 @@ describes the frontend pages, backend routers, database objects, permissions,
 configuration, dependencies, preview data, and optional entitlement gates needed
 to deliver one business capability.
 
-Users select capabilities in a GUI, export the selected recipe JSON, and run the
-assembly tooling to produce a system package with operational scripts.
+Users select capabilities in a GUI, fill in deployment configuration and license
+information, then download the recipe JSON and a ready-to-deploy package. The
+package includes all backend/frontend source, a database bootstrap plan, systemd
+service template, initial deployment environment file, and an RSA-signed license
+certificate. Every download action is logged to `data/operations.jsonl` for audit
+and DR backup.
 
 The intended operator flow for a generated package is:
 
@@ -59,14 +63,16 @@ supervision, and startup.
 
 ```text
 assembly/     Recipe files, resolved plans, and database assembly plans.
+data/         Runtime data written by the GUI server (operations.jsonl).
 dist/         Generated runnable system output and packaged folder.
 docs/         Product, architecture, kit, and development documentation.
 generated/    Extracted source slices from the target system.
-gui/          Static GUI prototype for selecting kits and exporting recipes.
+gui/          GUI server (Node.js) for kit selection, recipe export, and logging.
 kits/         Kit manifest source of truth.
 schemas/      JSON schemas for kit manifests and recipes.
 templates/    Assembly and package templates.
 tools/        PowerShell and Node automation for validation and generation.
+tools/keys/   RSA key pair for license signing (private key gitignored).
 ```
 
 Important files:
@@ -99,7 +105,7 @@ requiring full production dependency installation.
 
 ## Start The GUI
 
-The GUI is a static prototype. The repository includes a local Node server:
+The GUI runs as a Node.js server with persistent API endpoints:
 
 ```powershell
 node tools\serve-gui.cjs
@@ -111,6 +117,13 @@ Then open:
 http://127.0.0.1:4173/
 ```
 
+The server exposes two API endpoints in addition to static file serving:
+
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/api/log` | POST | Append one operation record to `data/operations.jsonl` |
+| `/api/logs` | GET | Return all operation records as a JSON array |
+
 The GUI supports:
 
 - Guided architecture questions.
@@ -119,8 +132,11 @@ The GUI supports:
 - Chart summary options.
 - Database recommendation and standardization notes.
 - Runtime envelope and dependency manifest status.
-- Recipe JSON export.
+- **Step 4 — 部署設定**：授權資訊（licensee name, email, expiry days）、部署初始設定（DB connection, initial manager account）。
+- Recipe JSON export (Step 4 `licensee` and `deploymentConfig` written in; passwords excluded).
+- Deploy-init.env download (credentials only, browser-side, not saved to recipe).
 - Assembly command output.
+- **05 操作記錄** page: view and export `data/operations.jsonl` from inside the GUI.
 
 ## Core Workflow
 
@@ -165,10 +181,26 @@ Validate the generated system:
 .\tools\validate-generated-system.ps1 -GeneratedRoot .\dist\generated-system
 ```
 
-Package the generated output:
+Package the generated output (also signs the license and embeds `license.lic`):
 
 ```powershell
-.\tools\package-system.ps1
+.\tools\package-client-deploy.ps1
+```
+
+Generate a license certificate only (reads latest recipe in `assembly/`):
+
+```powershell
+.\tools\sign-package.ps1
+# or with explicit paths:
+.\tools\sign-package.ps1 -RecipePath .\assembly\my.recipe.json -PackageZipPath .\dist\my.zip
+```
+
+Back up operation logs and recipes to a timestamped directory (DR):
+
+```powershell
+.\tools\backup-composer-data.ps1
+# or to a network share:
+.\tools\backup-composer-data.ps1 -BackupRoot \\server\share\composer-backup
 ```
 
 ## Generated Package
@@ -176,30 +208,88 @@ Package the generated output:
 The assembled package is intended to be operable after extraction. Its important
 runtime files include:
 
-- `.env.example`
+- `recipe.json` — selected kit configuration (no passwords).
+- `deploy.sh` — Linux deployment script (auto-detects `deploy-init.env`).
+- `deploy-init.env` — *(operator-provided)* initial DB credentials and manager account; not shipped inside the package zip, downloaded separately via the GUI.
+- `license.lic` — RSA-PSS signed license certificate (JSON + base64 signature).
+- `form-system.service` — systemd unit template (`__SYS_ROOT__` placeholder for install path).
+- `.gitignore` — protects `system/.env` and `deploy-init.env` from accidental commit.
 - `dependency-manifest.json`
-- `dependency-plan.json`
 - `db-bootstrap-plan.json`
-- `package-manifest.json`
 - `backend\requirements.txt`
-- `frontend\package.json`
-- `backend\app\core\generated_db_bootstrap.py`
-- `backend\app\models\__init__.py`
+- `backend\app\core\license.py` — startup license verification (non-blocking).
 - `scripts\check-prerequisites.ps1`
-- `scripts\check-db.ps1`
 - `scripts\install.ps1`
 - `scripts\migrate.ps1`
-- `scripts\smoke-start.ps1`
 - `scripts\start.ps1`
 - `scripts\status.ps1`
 - `scripts\stop.ps1`
-- `scripts\restart.ps1`
 
 Database bootstrap is generated from the assembly database plan. If Alembic is
 available in the generated backend, migration uses Alembic. Otherwise the
 generated SQLAlchemy bootstrap script creates the selected tables.
 
+On Linux deployments with systemd available, `deploy.sh` prints the three-step
+systemd installation instructions after a successful deploy:
+
+```bash
+sudo sed -i 's|__SYS_ROOT__|/opt/form-system|g' form-system.service
+sudo cp form-system.service /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now form-system
+```
+
 Process supervision writes pid files under `runtime` and log files under `logs`.
+
+## License Signing
+
+The composer uses RSA-2048 asymmetric signing via Node.js `crypto`. The private
+key never leaves the composer machine; only the public key is embedded in the
+generated system.
+
+**First-time setup** (run once; skipped if keys already exist):
+
+```powershell
+.\tools\generate-license-keys.ps1
+```
+
+Outputs:
+- `tools\keys\signing-private-key.pem` — gitignored, keep safe.
+- `tools\keys\signing-public-key.pem` — embedded in `license.py`.
+
+**Sign a package** (also called automatically by `package-client-deploy.ps1`):
+
+```powershell
+.\tools\sign-package.ps1
+```
+
+Outputs written to the same directory as the recipe:
+- `license.lic` — JSON payload + RSA-PSS/SHA-256 base64 signature.
+- `<name>.sig.json` — zip SHA-256 hash + signature (when `--PackageZipPath` given).
+
+**Runtime verification**: the generated system's `backend/app/core/license.py`
+verifies the certificate on startup. A failed check logs a warning but does not
+block the application from starting.
+
+## Operation Logs and DR Backup
+
+Every download action in the GUI (recipe JSON, deploy package, deploy-init.env)
+is recorded by the server to `data/operations.jsonl` via `POST /api/log`.
+
+Each line is a JSON object:
+
+```json
+{ "ts": "2026-06-01T10:00:00Z", "ip": "127.0.0.1", "action": "download-package", "recipeName": "form-system-import", "kits": ["platform-core-kit", "upload-validation-kit"], "licensee": "" }
+```
+
+View and export logs from inside the GUI on the **05 操作記錄** page.
+
+Back up logs and all recipe files to a timestamped directory:
+
+```powershell
+.\tools\backup-composer-data.ps1
+# offsite / network share:
+.\tools\backup-composer-data.ps1 -BackupRoot \\server\share\composer-backup
+```
 
 ## Validation
 
@@ -230,28 +320,18 @@ powershell -ExecutionPolicy Bypass -File .\tools\test-all.ps1
 
 ## UploadPage Refactor State
 
-The MVP frontend upload page has been progressively split into focused modules
-under:
+The MVP frontend upload page refactor (Phase 29) is complete. Logic has been
+progressively split into focused modules under:
 
 ```text
 generated\mvp-import-flow\form-analysis-server\frontend\src\pages\upload
 ```
 
-The refactor currently separates:
-
-- Shared upload types.
-- File parsing and file construction helpers.
-- Upload eligibility predicates.
-- API client setup.
-- Upload workflow state transitions.
-- Batch validation, conversion, and import orchestration.
-- PDF conversion orchestration.
-- CSV edit and save mechanics.
-- Validation error normalization.
-- Toast routing.
-- Batch import cleanup scheduling.
-- File drop area, uploaded file card, batch action bar, and confirmation modal
-  components.
+Extracted modules cover: shared upload types, file parsing, upload eligibility
+predicates, API client setup, workflow state transitions, batch
+validation/conversion/import orchestration, PDF conversion orchestration, CSV
+edit and save mechanics, validation error normalization, toast routing, batch
+import cleanup scheduling, and all sub-components.
 
 `tools\test-upload-page-refactor.ps1` reapplies the refactor and fails if major
 logic moves back into `UploadPage.tsx`.
@@ -355,14 +435,25 @@ docs: update project readme
 
 ## Recommended Next Work
 
-The next engineering priority is continuing the UploadPage production refactor.
-Good candidates are:
+Completed features as of 2026-06-01:
 
-1. Move remaining final CSV validation result dispatch out of `UploadPage.tsx`
-   when additional simplification is needed.
-2. Continue shrinking page-owned import and validation orchestration.
-3. Keep extending `tools\test-upload-page-refactor.ps1` so generated refactors
-   remain repeatable.
+| Feature | Description | Status |
+|---------|-------------|--------|
+| B | Kit CSS 打包 | ✓ Done |
+| C | deploy-init.env GUI 輸入 + auto-detect in deploy.sh | ✓ Done |
+| D1 | GUI Server 化 (API log endpoints) | ✓ Done |
+| D2 | 生成系統 systemd service 模板 | ✓ Done |
+| E1/E2 | GUI 操作記錄頁面 | ✓ Done |
+| E3 | DR 備援腳本 | ✓ Done |
+| A | License RSA 簽章 + 後端驗證 | ✓ Done |
+| UploadPage | Phase 29 refactor | ✓ Done |
+
+Good candidates for next work:
+
+1. Add `GET /api/logs?action=&from=&to=` query filter support to the log server.
+2. Extend kit coverage: add new kit manifests beyond the current platform/upload/PDF/query kits.
+3. Build a `tools\rotate-license-keys.ps1` that regenerates the key pair and re-embeds the public key into `license.py` for key rotation.
+4. Add a GitHub Actions or CI workflow that runs `.\tools\test-all.ps1` on push.
 
 For the complete handoff and implementation history, read `HANDOFF.md` and
 `TODO.md`.
