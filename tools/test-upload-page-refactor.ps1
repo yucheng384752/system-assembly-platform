@@ -128,8 +128,8 @@ if ($uploadPage -notmatch "uploadValidationOrchestrator") {
     throw "UploadPage does not import extracted validation helpers."
 }
 
-if ($uploadPage -notmatch "uploadValidationToastUtils") {
-    throw "UploadPage does not import extracted validation toast helper."
+if ($validationOrchestrator -notmatch "uploadValidationToastUtils") {
+    throw "uploadValidationOrchestrator does not import uploadValidationToastUtils."
 }
 
 if ($uploadPage -notmatch "uploadImportToastUtils") {
@@ -228,20 +228,36 @@ if ($uploadPage -notmatch "showCsvEditDisabledToast\(\{" -or $uploadPage -notmat
     throw "UploadPage does not delegate CSV edit/save toast handling."
 }
 
-if ($uploadPage -notmatch "runPdfValidation\(\{" -or $uploadPage -match "uploadApi\.uploadPdf\(target\.file, target\.name\)" -or $uploadPage -match "completePdfUpload\(fileId, data\.process_id\)" -or $uploadPage -match "failPdfValidation\(fileId\);\r?\n\s*const msg") {
-    throw "UploadPage does not delegate PDF validation helper logic."
+if ($uploadPage -notmatch "runValidateWorkflow\(\{") {
+    throw "UploadPage does not delegate validation to runValidateWorkflow."
 }
 
-if ($uploadPage -notmatch "runCsvValidationJob\(\{" -or $uploadPage -match "const createImportJob = async \(allowDuplicate: boolean\)" -or $uploadPage -match "DUPLICATE_FILE_CONTENT" -or $uploadPage -match "const fileToUpload = target\.csvData" -or $uploadPage -match "for \(let i = 0; i < 120; i\+\+\)" -or $uploadPage -match "uploadApi\.fetchImportJob\(jobId\)") {
-    throw "UploadPage does not delegate CSV validation job orchestration."
+if ($uploadPage -match "runPdfValidation\(\{" -or $uploadPage -match "runCsvValidationJob\(\{" -or $uploadPage -match "commitCsvValidationResult\(\{") {
+    throw "UploadPage still owns validation orchestration details; expected in runValidateWorkflow."
+}
+
+if ($uploadPage -match "uploadApi\.uploadPdf\(target\.file, target\.name\)" -or $uploadPage -match "completePdfUpload\(fileId, data\.process_id\)" -or $uploadPage -match "failPdfValidation\(fileId\);\r?\n\s*const msg") {
+    throw "UploadPage still owns PDF validation helper details."
+}
+
+if ($uploadPage -match "const createImportJob = async \(allowDuplicate: boolean\)" -or $uploadPage -match "DUPLICATE_FILE_CONTENT" -or $uploadPage -match "const fileToUpload = target\.csvData" -or $uploadPage -match "for \(let i = 0; i < 120; i\+\+\)" -or $uploadPage -match "uploadApi\.fetchImportJob\(jobId\)") {
+    throw "UploadPage still owns CSV validation job details."
 }
 
 if ($uploadPage -match "\.flatMap\(\(row: any\)" -or $uploadPage -match "rowIndex0" -or $uploadPage -match "Row is invalid") {
     throw "UploadPage still owns validation error flattening logic."
 }
 
-if ($uploadPage -notmatch "showValidationResultToast," -or $uploadPage -match "upload\.toast\.pdfUploadedReadyToConvert" -or $uploadPage -match "upload\.toast\.validationFailedWithMessage" -or $uploadPage -match "upload\.toast\.validationDoneWithInvalidRowsNoEdit" -or $uploadPage -match "upload\.toast\.validationPassedAllRows") {
-    throw "UploadPage does not delegate validation result toast handling."
+if ($uploadPage -match "showValidationResultToast") {
+    throw "UploadPage still owns validation result toast; expected in runValidateWorkflow."
+}
+
+if ($validationOrchestrator -notmatch "export async function runValidateWorkflow") {
+    throw "uploadValidationOrchestrator is missing runValidateWorkflow."
+}
+
+if ($validationOrchestrator -notmatch "runPdfValidation\(\{" -or $validationOrchestrator -notmatch "runCsvValidationJob\(\{" -or $validationOrchestrator -notmatch "failCsvValidation\(fileId\)") {
+    throw "uploadValidationOrchestrator is missing expected runValidateWorkflow internals."
 }
 
 if ($uploadPage -match "upload\.batchImport\.toast\.startSingle" -or $uploadPage -match "upload\.batchImport\.toast\.completedBatch" -or $uploadPage -match "upload\.batchImport\.toast\.allDone" -or $uploadPage -match "upload\.toast\.importStarting" -or $uploadPage -match "upload\.toast\.importCompleted" -or $uploadPage -match "upload\.toast\.pageResetContinueUpload") {
@@ -342,7 +358,7 @@ if ($uploadPage -notmatch "beginCsvValidation," `
     -or $uploadPage -notmatch "completeValidationFailure," `
     -or $uploadPage -notmatch "completeValidationWithErrors," `
     -or $uploadPage -notmatch "completeValidationPassed," `
-    -or $uploadPage -notmatch "failCsvValidation\(fileId\)") {
+    -or $uploadPage -notmatch "failCsvValidation,") {
     throw "UploadPage does not delegate CSV validation state transitions to workflow hook actions."
 }
 
@@ -675,8 +691,8 @@ if ($importCleanupUtils -notmatch "export function scheduleBatchPostImportCleanu
 }
 
 # Phase 25: commitCsvValidationResult extraction
-if ($uploadPage -notmatch 'commitCsvValidationResult') {
-    throw "UploadPage does not delegate CSV validation result dispatch to commitCsvValidationResult."
+if ($validationOrchestrator -notmatch 'commitCsvValidationResult') {
+    throw "uploadValidationOrchestrator does not contain commitCsvValidationResult."
 }
 
 if ($uploadPage -match 'import \{ flattenImportValidationErrors \}') {
