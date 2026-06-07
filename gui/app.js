@@ -128,7 +128,6 @@ async function start() {
   bindDatabaseInputs();
   bindToolbarActions();
   bindDeployConfigInputs();
-  bindLogsView();
   bindSearch();
   bindFlows();
   bindCsvUpload();
@@ -364,15 +363,6 @@ function bindToolbarActions() {
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
   document.querySelector("#download-deploy-init-env")?.addEventListener("click", downloadDeployInitEnv);
-  document.querySelector("#refresh-logs")?.addEventListener("click", loadLogs);
-  document.querySelector("#export-logs")?.addEventListener("click", exportLogs);
-}
-
-function bindLogsView() {
-  // Auto-load when user navigates to logs view
-  document.querySelector('[data-view="logs"]')?.addEventListener("click", () => {
-    setTimeout(loadLogs, 0);
-  });
 }
 
 function bindDeployConfigInputs() {
@@ -2216,45 +2206,6 @@ function recordOperation(action, extra = {}) {
   });
   fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body })
     .catch(() => {});
-}
-
-async function loadLogs() {
-  const container = document.querySelector("#log-table-container");
-  if (!container) return;
-  try {
-    const res = await fetch("/api/logs");
-    if (!res.ok) throw new Error(res.status);
-    const records = await res.json();
-    if (!records.length) {
-      container.innerHTML = `<p style="color:var(--ink-3);font-size:13px;">目前尚無記錄。透過伺服器模式（<code>node tools/serve-gui.cjs</code>）執行 GUI 才會記錄操作。</p>`;
-      return;
-    }
-    const rows = records.map((r) => {
-      const ts = new Date(r.ts).toLocaleString("zh-TW");
-      return `<tr><td>${ts}</td><td><code>${esc(r.action)}</code></td><td>${esc(r.recipeName)}</td><td style="font-size:11px;">${(r.kits || []).map(esc).join(", ")}</td><td>${esc(r.licensee)}</td></tr>`;
-    }).join("");
-    container.innerHTML = `<table class="log-table"><thead><tr><th>時間</th><th>動作</th><th>Recipe</th><th>Kits</th><th>帳號</th></tr></thead><tbody>${rows}</tbody></table>`;
-  } catch {
-    container.innerHTML = `<p style="color:var(--ink-3);font-size:13px;">無法取得記錄（Server 未啟動？）</p>`;
-  }
-}
-
-function exportLogs() {
-  fetch("/api/logs")
-    .then((r) => r.json())
-    .then((records) => {
-      const content = records.map((r) => JSON.stringify(r)).join("\n");
-      const blob = new Blob([content], { type: "text/plain" });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `composer-operations-${new Date().toISOString().slice(0, 10)}.jsonl`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    })
-    .catch(() => alert("無法取得記錄（Server 未啟動？）"));
 }
 
 function showDeployConfigError(msg) {
