@@ -184,7 +184,17 @@ Validate the generated system:
 Package the generated output (also signs the license and embeds `license.lic`):
 
 ```powershell
+# 預設（licensee 留空）
 .\tools\package-client-deploy.ps1
+
+# 指定被授權方（用於 demo 或正式交付）
+.\tools\package-client-deploy.ps1 `
+    -LicenseeName "Demo 展示版" `
+    -LicenseeEmail "demo@example.com" `
+    -ExpiresAfterDays 90
+
+# 指定 recipe（不使用最新 recipe 時）
+.\tools\package-client-deploy.ps1 -RecipeName "gui-all-kits" -LicenseeName "客戶公司" -LicenseeEmail "admin@client.com" -ExpiresAfterDays 365
 ```
 
 Generate a license certificate only (reads latest recipe in `assembly/`):
@@ -259,12 +269,27 @@ Outputs:
 **Sign a package** (also called automatically by `package-client-deploy.ps1`):
 
 ```powershell
+# 最簡呼叫（讀取 assembly/ 最新 recipe）
 .\tools\sign-package.ps1
+
+# 明確指定被授權方與有效期（直接交付時使用）
+.\tools\sign-package.ps1 `
+    -LicenseeName "客戶公司" `
+    -LicenseeEmail "admin@client.com" `
+    -ExpiresAfterDays 365 `
+    -PackageZipPath .\dist\client-deploy-gui-selected-form-system.zip
+
+# 含機器指紋綁定（防止 license 複製到其他機器）
+.\tools\sign-package.ps1 `
+    -MachineId "$(cat /etc/machine-id)" `
+    -LicenseeName "客戶公司" `
+    -LicenseeEmail "admin@client.com" `
+    -ExpiresAfterDays 365
 ```
 
 Outputs written to the same directory as the recipe:
 - `license.lic` — JSON payload + RSA-PSS/SHA-256 base64 signature.
-- `<name>.sig.json` — zip SHA-256 hash + signature (when `--PackageZipPath` given).
+- `<name>.sig.json` — zip SHA-256 hash + signature (when `-PackageZipPath` given).
 
 **Runtime verification**: the generated system's `backend/app/core/license.py`
 verifies the certificate on startup. A failed check logs a warning but does not

@@ -45,7 +45,8 @@ const privateKey = fs.readFileSync(privateKeyPath, "utf8");
 
 const recipeLicensee = recipe.licensee || {};
 const now = new Date();
-const days = Number(licDaysOverride || recipeLicensee.expiresAfterDays || 365);
+const daysRaw = (licDaysOverride && licDaysOverride !== "__none__") ? licDaysOverride : recipeLicensee.expiresAfterDays;
+const days = (daysRaw && Number(daysRaw) > 0) ? Number(daysRaw) : 365;
 const expiresAt = new Date(now.getTime() + days * 86400000).toISOString().replace(/\.\d+Z$/, "Z");
 
 // Machine fingerprint: SHA-256 of /etc/machine-id (trimmed)

@@ -1,8 +1,11 @@
 param(
-    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
-    [string]$RecipeName  = '',
-    [string]$OutputDir   = 'dist',
-    [switch]$SkipZip
+    [string]$ProjectRoot      = (Resolve-Path "$PSScriptRoot\..").Path,
+    [string]$RecipeName       = '',
+    [string]$OutputDir        = 'dist',
+    [switch]$SkipZip,
+    [string]$LicenseeName     = '',
+    [string]$LicenseeEmail    = '',
+    [int]$ExpiresAfterDays    = 0
 )
 
 $ErrorActionPreference = 'Stop'
@@ -1020,7 +1023,10 @@ if (-not $SkipZip) {
             -RecipePath $recipePath `
             -PackageZipPath $zipPath `
             -PrivateKeyPath $privKey `
-            -OutputDir $stageDir
+            -OutputDir $stageDir `
+            -LicenseeName $LicenseeName `
+            -LicenseeEmail $LicenseeEmail `
+            -ExpiresAfterDays $ExpiresAfterDays
         # Copy license.lic into zip (re-compress with license)
         $licFile = Join-Path $stageDir 'license.lic'
         if (Test-Path $licFile) {
