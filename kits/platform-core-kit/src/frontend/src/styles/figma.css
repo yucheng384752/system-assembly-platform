@@ -1,0 +1,540 @@
+/* Figma 設計系統 CSS */
+
+/* 顏色變數 */
+:root {
+  /* 主要顏色 */
+  --primary-blue: #2563eb;
+  --primary-blue-hover: #1d4ed8;
+  --primary-blue-light: #dbeafe;
+  
+  /* 成功顏色 */
+  --success-green: #16a34a;
+  --success-green-light: #dcfce7;
+  
+  /* 警告顏色 */
+  --warning-orange: #ea580c;
+  --warning-orange-light: #fed7aa;
+  
+  /* 錯誤顏色 */
+  --error-red: #dc2626;
+  --error-red-light: #fecaca;
+  
+  /* 中性顏色 */
+  --gray-50: #f9fafb;
+  --gray-100: #f3f4f6;
+  --gray-200: #e5e7eb;
+  --gray-300: #d1d5db;
+  --gray-400: #9ca3af;
+  --gray-500: #6b7280;
+  --gray-600: #4b5563;
+  --gray-700: #374151;
+  --gray-800: #1f2937;
+  --gray-900: #111827;
+  
+  /* 白色與黑色 */
+  --white: #ffffff;
+  --black: #000000;
+  
+  /* 陰影 */
+  --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  
+  /* 圓角 */
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+  --radius-2xl: 1rem;
+  
+  /* 間距 */
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 0.75rem;
+  --spacing-lg: 1rem;
+  --spacing-xl: 1.5rem;
+  --spacing-2xl: 2rem;
+  --spacing-3xl: 3rem;
+}
+
+/* 上傳容器 */
+.figma-upload-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: var(--spacing-2xl);
+  background: var(--gray-50);
+  min-height: 100vh;
+}
+
+/* 上傳卡片 */
+.figma-upload-card {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-3xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+/* 標題 */
+.figma-title {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--gray-800);
+  margin-bottom: var(--spacing-2xl);
+  text-align: center;
+}
+
+.figma-subtitle {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--gray-700);
+  margin-bottom: var(--spacing-xl);
+}
+
+/* 上傳區域 */
+.figma-upload-area {
+  border: 2px dashed var(--gray-300);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-3xl);
+  text-align: center;
+  background: var(--gray-50);
+  transition: all 0.2s ease-in-out;
+  cursor: pointer;
+  position: relative;
+}
+
+.figma-upload-area:hover {
+  border-color: var(--primary-blue);
+  background: var(--primary-blue-light);
+}
+
+.figma-upload-area.dragging {
+  border-color: var(--primary-blue);
+  background: var(--primary-blue-light);
+  transform: scale(1.01);
+}
+
+/* 上傳圖示 */
+.figma-upload-icon {
+  width: 4rem;
+  height: 4rem;
+  margin: 0 auto var(--spacing-lg);
+  color: var(--gray-400);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--white);
+  border-radius: 50%;
+  box-shadow: var(--shadow-sm);
+}
+
+/* 上傳文字 */
+.figma-upload-text {
+  font-size: 1.125rem;
+  color: var(--gray-600);
+  margin-bottom: var(--spacing-sm);
+}
+
+.figma-upload-hint {
+  font-size: 0.875rem;
+  color: var(--gray-400);
+  margin-bottom: var(--spacing-xl);
+}
+
+/* 按鈕樣式 */
+.figma-button {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-weight: 600;
+  font-size: 0.875rem;
+  cursor: pointer;
+  transition: all 0.2s ease-in-out;
+  text-decoration: none;
+}
+
+.figma-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.figma-button-primary {
+  background: var(--primary-blue);
+  color: var(--white);
+}
+
+.figma-button-primary:hover:not(:disabled) {
+  background: var(--primary-blue-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.figma-button-secondary {
+  background: var(--white);
+  color: var(--gray-700);
+  border: 1px solid var(--gray-300);
+}
+
+.figma-button-secondary:hover:not(:disabled) {
+  background: var(--gray-50);
+  border-color: var(--gray-400);
+}
+
+.figma-button-success {
+  background: var(--success-green);
+  color: var(--white);
+}
+
+.figma-button-success:hover:not(:disabled) {
+  background: #15803d;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-lg);
+}
+
+.figma-button-warning {
+  background: var(--warning-orange);
+  color: var(--white);
+}
+
+.figma-button-warning:hover:not(:disabled) {
+  background: #c2410c;
+}
+
+/* 檔案列表 */
+.figma-file-list {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-2xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.figma-file-item {
+  display: flex;
+  align-items: center;
+  padding: var(--spacing-lg);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-md);
+  background: var(--gray-50);
+  transition: all 0.2s ease-in-out;
+}
+
+.figma-file-item:hover {
+  background: var(--white);
+  border-color: var(--primary-blue);
+  transform: translateX(4px);
+}
+
+.figma-file-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  margin-right: var(--spacing-lg);
+  color: var(--primary-blue);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--primary-blue-light);
+  border-radius: var(--radius-lg);
+}
+
+.figma-file-info {
+  flex: 1;
+}
+
+.figma-file-name {
+  font-weight: 600;
+  color: var(--gray-800);
+  margin-bottom: var(--spacing-xs);
+}
+
+.figma-file-size {
+  font-size: 0.875rem;
+  color: var(--gray-500);
+}
+
+.figma-file-status {
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  margin-left: var(--spacing-md);
+}
+
+.figma-file-status-uploading {
+  background: var(--warning-orange-light);
+  color: var(--warning-orange);
+}
+
+.figma-file-status-success {
+  background: var(--success-green-light);
+  color: var(--success-green);
+}
+
+.figma-file-status-error {
+  background: var(--error-red-light);
+  color: var(--error-red);
+}
+
+/* 進度條 */
+.figma-progress {
+  width: 100%;
+  height: 0.5rem;
+  background: var(--gray-200);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  margin: var(--spacing-sm) 0;
+}
+
+.figma-progress-bar {
+  height: 100%;
+  background: var(--primary-blue);
+  border-radius: var(--radius-sm);
+  transition: width 0.3s ease-in-out;
+}
+
+.figma-progress-success .figma-progress-bar {
+  background: var(--success-green);
+}
+
+/* 統計資訊卡片 */
+.figma-stats-card {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-2xl);
+  margin-bottom: var(--spacing-2xl);
+}
+
+.figma-stats-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-xl);
+}
+
+.figma-stat-item {
+  text-align: center;
+  padding: var(--spacing-xl);
+  border-radius: var(--radius-lg);
+  background: var(--gray-50);
+}
+
+.figma-stat-number {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: var(--spacing-sm);
+}
+
+.figma-stat-number-total {
+  color: var(--primary-blue);
+}
+
+.figma-stat-number-valid {
+  color: var(--success-green);
+}
+
+.figma-stat-number-invalid {
+  color: var(--error-red);
+}
+
+.figma-stat-label {
+  font-size: 0.875rem;
+  color: var(--gray-600);
+}
+
+/* 錯誤表格 */
+.figma-error-table {
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+  padding: var(--spacing-2xl);
+  margin-bottom: var(--spacing-2xl);
+  overflow: hidden;
+}
+
+.figma-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.figma-table th {
+  background: var(--gray-50);
+  padding: var(--spacing-lg);
+  text-align: left;
+  font-weight: 600;
+  color: var(--gray-700);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.figma-table td {
+  padding: var(--spacing-lg);
+  border-bottom: 1px solid var(--gray-100);
+  vertical-align: top;
+}
+
+.figma-table tr:hover {
+  background: var(--gray-50);
+}
+
+.figma-table .row-index {
+  font-weight: 600;
+  color: var(--primary-blue);
+  background: var(--primary-blue-light);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border-radius: var(--radius-sm);
+  display: inline-block;
+}
+
+.figma-table .field-name {
+  font-weight: 500;
+  color: var(--gray-700);
+}
+
+.figma-table .error-message {
+  color: var(--error-red);
+}
+
+/* 操作按鈕區域 */
+.figma-actions {
+  display: flex;
+  gap: var(--spacing-lg);
+  justify-content: center;
+  flex-wrap: wrap;
+  padding: var(--spacing-2xl);
+  background: var(--white);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+/* 隱藏的檔案輸入 */
+.figma-hidden-input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+  width: 0;
+  height: 0;
+}
+
+/* Toast 通知樣式 */
+.figma-toast {
+  background: var(--white);
+  border: 1px solid var(--gray-200);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: var(--spacing-lg);
+  max-width: 400px;
+  z-index: 1000;
+  animation: slideIn 0.3s ease-out;
+}
+
+.figma-toast-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.5rem;
+}
+
+@keyframes slideIn {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.figma-toast-success {
+  border-left: 4px solid var(--success-green);
+}
+
+.figma-toast-error {
+  border-left: 4px solid var(--error-red);
+}
+
+.figma-toast-warning {
+  border-left: 4px solid var(--warning-orange);
+}
+
+.figma-toast-info {
+  border-left: 4px solid var(--primary-blue);
+}
+
+/* 載入動畫 */
+.figma-loading {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid var(--gray-200);
+  border-radius: 50%;
+  border-top-color: var(--primary-blue);
+  animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 響應式設計 */
+@media (max-width: 768px) {
+  .figma-upload-container {
+    padding: var(--spacing-lg);
+  }
+  
+  .figma-upload-card,
+  .figma-file-list,
+  .figma-stats-card,
+  .figma-error-table {
+    padding: var(--spacing-lg);
+  }
+  
+  .figma-stats-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .figma-actions {
+    flex-direction: column;
+  }
+  
+  .figma-table {
+    font-size: 0.875rem;
+  }
+  
+  .figma-table th,
+  .figma-table td {
+    padding: var(--spacing-sm);
+  }
+}
+
+/* 無障礙設計 */
+.figma-button:focus,
+.figma-upload-area:focus-within {
+  outline: 2px solid var(--primary-blue);
+  outline-offset: 2px;
+}
+
+/* 列印樣式 */
+@media print {
+  .figma-upload-area,
+  .figma-actions {
+    display: none;
+  }
+  
+  .figma-upload-container {
+    background: var(--white);
+  }
+  
+  .figma-upload-card,
+  .figma-file-list,
+  .figma-stats-card,
+  .figma-error-table {
+    box-shadow: none;
+    border: 1px solid var(--gray-300);
+  }
+}
