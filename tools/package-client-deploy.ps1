@@ -83,10 +83,11 @@ $deployShContent = @'
 # __BAR__
 #
 #  Usage:
-#    bash deploy.sh
-#    bash deploy.sh --interactive
+#    bash deploy.sh --wizard                     # 互動式安裝精靈（推薦首次安裝）
+#    bash deploy.sh --interactive                # 逐項提問模式
+#    bash deploy.sh                              # 自動模式（需已有 deploy-init.env 或 .env）
 #    bash deploy.sh /opt/form-system --background
-#    bash deploy.sh /opt/form-system --interactive --background
+#    bash deploy.sh /opt/form-system --wizard --background
 
 set -euo pipefail
 
@@ -101,14 +102,16 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd)"
 SYS_ROOT=""
 BACKGROUND=0
 INTERACTIVE=0
+WIZARD=0
 VENV=""
 
 for _arg in "$@"; do
     case "$_arg" in
-        --background) BACKGROUND=1 ;;
-        --interactive) INTERACTIVE=1 ;;
-        --*) die "Unknown option: $_arg" ;;
-        *) SYS_ROOT="$_arg" ;;
+        --background)   BACKGROUND=1 ;;
+        --interactive)  INTERACTIVE=1 ;;
+        --wizard)       WIZARD=1; INTERACTIVE=1 ;;
+        --*)            die "Unknown option: $_arg" ;;
+        *)              SYS_ROOT="$_arg" ;;
     esac
 done
 
@@ -259,6 +262,166 @@ configure_env() {
     echo ""
 }
 
+# ── Wizard helpers ──────────────────────────────────────────────────────────
+
+wizard_welcome() {
+    clear 2>/dev/null || true
+    echo ""
+    echo "================================================================"
+    echo "  Form System 安裝精靈"
+    echo "  Recipe : __RNAME__"
+    echo "  Kits   : __RKITS__"
+    echo "================================================================"
+    echo ""
+    echo "  此精靈將引導您完成："
+    echo "    步驟 1／3  資料庫連線設定"
+    echo "    步驟 2／3  管理者帳號設定"
+    echo "    步驟 3／3  安全金鑰與確認"
+    echo ""
+    echo "  若已有 deploy-init.env，設定步驟將自動略過。"
+    echo "  按 Ctrl+C 可隨時取消。"
+    echo ""
+    read -r -p "  按 Enter 繼續..." _dummy
+    echo ""
+}
+
+_validate_nonempty() {
+    local val="$1" label="$2"
+    [ -n "$val" ] || { echo "  [!] ${label} 不得為空" >&2; return 1; }
+}
+
+_validate_port() {
+    local val="$1"
+    [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -ge 1 ] && [ "$val" -le 65535 ] || \
+        { echo "  [!] 連接埠須為 1–65535 的整數" >&2; return 1; }
+}
+
+_validate_password() {
+    local val="$1"
+    [ ${#val} -ge 8 ] || { echo "  [!] 密碼長度至少 8 個字元" >&2; return 1; }
+}
+
+wizard_step1_db() {
+    echo "──[ 步驟 1／3：資料庫連線 ]──────────────────────────────"
+    echo ""
+    echo "  支援 PostgreSQL（生產環境）。"
+    echo "  若不設定 DATABASE_URL，系統將自動改用 SQLite（僅限本機測試）。"
+    echo ""
+    local _host _port _name _user _pass
+    while true; do
+        read -r -p "  資料庫主機位址 [localhost]: " _host
+        _host="${_host:-localhost}"
+        _validate_nonempty "$_host" "主機位址" && break
+    done
+    while true; do
+        read -r -p "  資料庫連接埠 [5432]: " _port
+        _port="${_port:-5432}"
+        _validate_port "$_port" && break
+    done
+    while true; do
+        read -r -p "  資料庫名稱 [form_system]: " _name
+        _name="${_name:-form_system}"
+        _validate_nonempty "$_name" "資料庫名稱" && break
+    done
+    while true; do
+        read -r -p "  資料庫使用者 [form_system]: " _user
+        _user="${_user:-form_system}"
+        _validate_nonempty "$_user" "使用者名稱" && break
+    done
+    while true; do
+        read -rsp "  資料庫密碼: " _pass; echo ""
+        _validate_nonempty "$_pass" "密碼" && break
+    done
+    set_env_value DB_HOST     "$_host"
+    set_env_value DB_PORT     "$_port"
+    set_env_value DB_NAME     "$_name"
+    set_env_value DB_USERNAME "$_user"
+    set_env_value DB_PASSWORD "$_pass"
+    set_env_value DATABASE_URL "postgresql+asyncpg://${_user}:${_pass}@${_host}:${_port}/${_name}"
+    ok "資料庫設定完成"
+    echo ""
+}
+
+wizard_step2_auth() {
+    echo "──[ 步驟 2／3：管理者帳號 ]──────────────────────────────"
+    echo ""
+    echo "  設定系統初始 Manager 帳號，部署後可在後台新增或修改。"
+    echo "  首次登入後系統將要求修改密碼。"
+    echo ""
+    local _user _pass _pass2
+    while true; do
+        read -r -p "  Manager 帳號名稱 [manager]: " _user
+        _user="${_user:-manager}"
+        _validate_nonempty "$_user" "帳號名稱" && break
+    done
+    while true; do
+        read -rsp "  Manager 密碼（至少 8 碼）: " _pass; echo ""
+        _validate_password "$_pass" || continue
+        read -rsp "  確認密碼: " _pass2; echo ""
+        [ "$_pass" = "$_pass2" ] && break
+        echo "  [!] 兩次密碼不一致，請重新輸入" >&2
+    done
+    set_env_value BOOTSTRAP_MANAGER_ENABLED              "true"
+    set_env_value BOOTSTRAP_MANAGER_TENANT_CODE          "default"
+    set_env_value BOOTSTRAP_MANAGER_USERNAME             "$_user"
+    set_env_value BOOTSTRAP_MANAGER_PASSWORD             "$_pass"
+    set_env_value BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD "true"
+    ok "Manager 帳號設定完成"
+    echo ""
+}
+
+wizard_step3_secrets() {
+    echo "──[ 步驟 3／3：安全金鑰與確認 ]─────────────────────────"
+    echo ""
+    echo "  SECRET_KEY 用於 JWT / session 加密。"
+    echo "  輸入 'g' 可自動產生隨機金鑰（推薦）。"
+    echo ""
+    prompt_secret SECRET_KEY "SECRET_KEY" 1
+    set_env_value CORS_ORIGINS "http://localhost:5173,http://localhost:3000"
+    ok "安全金鑰設定完成"
+    echo ""
+}
+
+wizard_summary_confirm() {
+    echo "──[ 安裝確認 ]────────────────────────────────────────────"
+    echo ""
+    echo "  資料庫    : $(get_env_value DB_HOST):$(get_env_value DB_PORT) / $(get_env_value DB_NAME)"
+    echo "  DB 使用者 : $(get_env_value DB_USERNAME)"
+    echo "  Manager   : $(get_env_value BOOTSTRAP_MANAGER_USERNAME)"
+    echo "  CORS      : $(get_env_value CORS_ORIGINS)"
+    echo "  密碼      : *** (已設定，不顯示)"
+    echo ""
+    local _confirm
+    read -r -p "  確認設定正確，開始安裝？[y/N] " _confirm
+    echo ""
+    case "$_confirm" in
+        y|Y|yes|YES) ok "開始安裝..." ;;
+        *) die "安裝已取消。請重新執行 deploy.sh --wizard" ;;
+    esac
+}
+
+wizard_configure() {
+    if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
+        info "偵測到 deploy-init.env，載入預設設定..."
+        set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
+        cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
+        ok "Credentials loaded from deploy-init.env"
+        echo ""
+        return 0
+    fi
+    [ -f "${SYS_ROOT}/.env.example" ] || die ".env.example not found. Cannot create initial .env."
+    cp "${SYS_ROOT}/.env.example" "${SYS_ROOT}/.env"
+    wizard_step1_db
+    wizard_step2_auth
+    wizard_step3_secrets
+    wizard_summary_confirm
+    set -a; . "${SYS_ROOT}/.env"; set +a
+    [ -n "${DATABASE_URL:-}" ] || die "DATABASE_URL not set"
+    [ -n "${SECRET_KEY:-}" ]   || die "SECRET_KEY not set"
+    ok "Configuration OK"
+    echo ""
+}
+
 _MISSING=0
 check_cmd() {
     if command -v "$1" >/dev/null 2>&1; then
@@ -383,7 +546,12 @@ echo "Recipe  : __RNAME__"
 echo "SysRoot : ${SYS_ROOT}"
 echo ""
 
-configure_env
+if [ "${WIZARD}" -eq 1 ]; then
+    wizard_welcome
+    wizard_configure
+else
+    configure_env
+fi
 check_prerequisites
 setup_venv
 install_backend
@@ -642,31 +810,38 @@ $R.Add('unzip client-deploy-' + $rName + '.zip')
 $R.Add('cd client-deploy-' + $rName)
 $R.Add($tick3)
 $R.Add('')
-$R.Add('### 2. Configure environment')
+$R.Add('### 2. Install')
 $R.Add('')
-$R.Add('Interactive setup:')
+$R.Add('#### Option A — Guided Wizard (recommended for first-time install)')
+$R.Add('')
+$R.Add('Step-by-step prompts for database, manager account, and secret key. Validates input and shows a summary before proceeding.')
 $R.Add('')
 $R.Add($tick3 + 'bash')
-$R.Add('bash deploy.sh --interactive')
+$R.Add('bash deploy.sh --wizard')
 $R.Add($tick3)
 $R.Add('')
-$R.Add('Non-interactive setup:')
+$R.Add('To start the backend in the background after install:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('bash deploy.sh --wizard --background')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('#### Option B — Manual config (advanced)')
 $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('cp system/.env.example system/.env')
 $R.Add('nano system/.env')
-$R.Add('bash deploy.sh')
 $R.Add($tick3)
 $R.Add('')
-$R.Add('Required settings include:')
+$R.Add('Required fields:')
 $R.Add('')
 $R.Add($tick3)
-$R.Add('DATABASE_URL=postgresql+asyncpg://user:strongpassword@localhost:5432/form_db')
-$R.Add('SECRET_KEY=<random 64-character string>')
+$R.Add('DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/form_system')
+$R.Add('SECRET_KEY=<random-64-char-string>')
 $R.Add('CORS_ORIGINS=http://localhost:5173,http://localhost:3000')
-$R.Add('AUTH_MODE=api_key')
-$R.Add('ADMIN_API_KEYS=<comma-separated random keys>')
-$R.Add('ENVIRONMENT=production')
+$R.Add('BOOTSTRAP_MANAGER_ENABLED=true')
+$R.Add('BOOTSTRAP_MANAGER_USERNAME=manager')
+$R.Add('BOOTSTRAP_MANAGER_PASSWORD=<min-8-chars>')
 $R.Add($tick3)
 $R.Add('')
 $R.Add('Generate a strong SECRET_KEY:')
@@ -674,8 +849,6 @@ $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('python3 -c "import secrets; print(secrets.token_urlsafe(48))"')
 $R.Add($tick3)
-$R.Add('')
-$R.Add('### 3. Run deploy script')
 $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('bash deploy.sh')
