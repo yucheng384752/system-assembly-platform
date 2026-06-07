@@ -100,6 +100,18 @@ const state = {
   pkFkSuggestions: null,
   pkFkApplied: null,
   guideAnswers: {},
+  deployConfig: {
+    dbHost: 'localhost',
+    dbPort: '5432',
+    dbName: 'form_system',
+    dbUsername: 'form_system',
+    dbPassword: '',
+    dbPasswordConfirm: '',
+    mgrUsername: 'manager',
+    mgrPassword: '',
+    mgrPasswordConfirm: '',
+    mgrMustChange: true,
+  },
 };
 
 const elements = {};
@@ -115,6 +127,8 @@ async function start() {
   bindNavigation();
   bindDatabaseInputs();
   bindToolbarActions();
+  bindDeployConfigInputs();
+  bindLogsView();
   bindSearch();
   bindFlows();
   bindCsvUpload();
@@ -349,6 +363,36 @@ function bindToolbarActions() {
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
+  document.querySelector("#download-deploy-init-env")?.addEventListener("click", downloadDeployInitEnv);
+  document.querySelector("#refresh-logs")?.addEventListener("click", loadLogs);
+  document.querySelector("#export-logs")?.addEventListener("click", exportLogs);
+}
+
+function bindLogsView() {
+  // Auto-load when user navigates to logs view
+  document.querySelector('[data-view="logs"]')?.addEventListener("click", () => {
+    setTimeout(loadLogs, 0);
+  });
+}
+
+function bindDeployConfigInputs() {
+  const textFields = [
+    ["deploy-db-host",             "dbHost"],
+    ["deploy-db-port",             "dbPort"],
+    ["deploy-db-name",             "dbName"],
+    ["deploy-db-username",         "dbUsername"],
+    ["deploy-db-password",         "dbPassword"],
+    ["deploy-db-password-confirm", "dbPasswordConfirm"],
+    ["deploy-mgr-username",        "mgrUsername"],
+    ["deploy-mgr-password",        "mgrPassword"],
+    ["deploy-mgr-password-confirm","mgrPasswordConfirm"],
+  ];
+  textFields.forEach(([id, key]) => {
+    const el = document.querySelector(`#${id}`);
+    if (el) el.addEventListener("input", () => { state.deployConfig[key] = el.value; });
+  });
+  const mustChange = document.querySelector("#deploy-mgr-must-change");
+  if (mustChange) mustChange.addEventListener("change", () => { state.deployConfig.mgrMustChange = mustChange.checked; });
 }
 
 function bindSearch() {
@@ -1221,6 +1265,11 @@ function renderDatabaseRecommendation() {
     ? "建議使用 PostgreSQL 作為正式資料庫。這套系統會保存匯入紀錄、批號追溯、使用者權限與背景處理結果，需要可長期保存、備份、多人同時使用的資料庫。"
     : "如果只是本機展示、單人測試或可重建資料，可先使用 SQLite 快速啟動；正式使用前再切換到 PostgreSQL。";
   document.querySelector("#db-meter-fill").style.width = `${Math.min(100, 40 + score * 8)}%`;
+  const isPostgres = engine === "postgresql";
+  const dbFields = document.querySelector("#deploy-db-fields");
+  const sqliteNotice = document.querySelector("#deploy-sqlite-notice");
+  if (dbFields) dbFields.hidden = !isPostgres;
+  if (sqliteNotice) sqliteNotice.hidden = isPostgres;
 }
 
 function scoreByValue(id, weights) {
@@ -1513,6 +1562,18 @@ function buildRecipe() {
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
     },
+    deploymentConfig: {
+      database: {
+        host: state.deployConfig.dbHost,
+        port: parseInt(state.deployConfig.dbPort, 10) || 5432,
+        name: state.deployConfig.dbName,
+        username: state.deployConfig.dbUsername,
+      },
+      bootstrapManager: {
+        username: state.deployConfig.mgrUsername,
+        mustChangePassword: state.deployConfig.mgrMustChange,
+      },
+    },
   };
 }
 
@@ -1576,6 +1637,7 @@ function downloadRecipeJson() {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+  recordOperation("download-recipe");
 }
 
 // ── 部署套件下載 ──────────────────────────────────────────────────────────────
@@ -1883,7 +1945,12 @@ function buildDeploySh(recipe, dateStr) {
     `# 3. 資料庫遷移`,
     `# ═══════════════════════════════════════════════════════`,
     `echo "=== 資料庫遷移 ==="`,
-    `if [ -f "\${SYS_ROOT}/.env" ]; then`,
+    `if [ -f "\${SCRIPT_DIR}/deploy-init.env" ]; then`,
+    `    info "偵測到 deploy-init.env，自動套用憑證..."`,
+    `    set -a; . "\${SCRIPT_DIR}/deploy-init.env"; set +a`,
+    `    cp "\${SCRIPT_DIR}/deploy-init.env" "\${SYS_ROOT}/.env"`,
+    `    ok "已從 deploy-init.env 載入憑證"`,
+    `elif [ -f "\${SYS_ROOT}/.env" ]; then`,
     `    set -a && . "\${SYS_ROOT}/.env" && set +a`,
     `    info "已載入 \${SYS_ROOT}/.env"`,
     `fi`,
@@ -1937,6 +2004,14 @@ function buildDeploySh(recipe, dateStr) {
     `info "4. 設定 ENVIRONMENT=production 以關閉 /docs 及 /openapi.json"`,
     `info "5. 執行 pip-audit 與 npm audit 確認依賴無已知 CVE"`,
     `echo ""`,
+    `if command -v systemctl >/dev/null 2>&1; then`,
+    `    echo "──────────────────────────────────────────────────────"`,
+    `    info "偵測到 systemctl。若要設定開機自啟（需 root）："`,
+    `    info "  sudo sed -i 's|__SYS_ROOT__|'\${SYS_ROOT}'|g' \${SCRIPT_DIR}/form-system.service"`,
+    `    info "  sudo cp \${SCRIPT_DIR}/form-system.service /etc/systemd/system/"`,
+    `    info "  sudo systemctl daemon-reload && sudo systemctl enable --now form-system"`,
+    `    echo ""`,
+    `fi`,
   ];
   return L.join("\n");
 }
@@ -2065,6 +2140,7 @@ async function downloadPackage() {
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
+    recordOperation("download-package");
     btn.textContent = "已下載";
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   } catch (err) {
@@ -2072,6 +2148,123 @@ async function downloadPackage() {
     btn.textContent = "下載失敗";
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   }
+}
+
+function buildDeployInitEnv() {
+  const cfg = state.deployConfig;
+  const engine = computeDbEngine().engine;
+  const secretKey = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+  const lines = [
+    "# 由 Form System Kit Composer GUI 產生",
+    "# 本檔案含敏感資訊，請勿提交版控",
+    "",
+  ];
+  if (engine === "postgresql") {
+    const encoded = encodeURIComponent(cfg.dbPassword);
+    lines.push(`DB_HOST=${cfg.dbHost}`);
+    lines.push(`DB_PORT=${cfg.dbPort}`);
+    lines.push(`DB_NAME=${cfg.dbName}`);
+    lines.push(`DB_USERNAME=${cfg.dbUsername}`);
+    lines.push(`DB_PASSWORD=${cfg.dbPassword}`);
+    lines.push(`DATABASE_URL=postgresql+asyncpg://${cfg.dbUsername}:${encoded}@${cfg.dbHost}:${cfg.dbPort}/${cfg.dbName}`);
+  } else {
+    lines.push("DATABASE_URL=sqlite+aiosqlite:///./app.db");
+  }
+  lines.push(`SECRET_KEY=${secretKey}`);
+  lines.push("CORS_ORIGINS=http://localhost:5173");
+  lines.push("BOOTSTRAP_MANAGER_ENABLED=true");
+  lines.push("BOOTSTRAP_MANAGER_TENANT_CODE=default");
+  lines.push(`BOOTSTRAP_MANAGER_USERNAME=${cfg.mgrUsername}`);
+  lines.push(`BOOTSTRAP_MANAGER_PASSWORD=${cfg.mgrPassword}`);
+  lines.push(`BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD=${cfg.mgrMustChange}`);
+  return lines.join("\n");
+}
+
+function downloadDeployInitEnv() {
+  const cfg = state.deployConfig;
+  const engine = computeDbEngine().engine;
+  if (engine === "postgresql") {
+    if (!cfg.dbPassword) { showDeployConfigError("請輸入資料庫密碼"); return; }
+    if (cfg.dbPassword !== cfg.dbPasswordConfirm) { showDeployConfigError("資料庫密碼兩次輸入不一致"); return; }
+  }
+  if (!cfg.mgrPassword) { showDeployConfigError("請輸入管理帳號密碼"); return; }
+  if (cfg.mgrPassword !== cfg.mgrPasswordConfirm) { showDeployConfigError("管理帳號密碼兩次輸入不一致"); return; }
+  clearDeployConfigError();
+  const content = buildDeployInitEnv();
+  const blob = new Blob([content], { type: "text/plain" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "deploy-init.env";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+  recordOperation("download-deploy-env");
+  flashButton("#download-deploy-init-env", "已下載", "下載 deploy-init.env");
+}
+
+function recordOperation(action, extra = {}) {
+  const recipe = buildRecipe();
+  const body = JSON.stringify({
+    action,
+    recipeName: recipe.name,
+    kits: recipe.enabledKits,
+    licensee: state.deployConfig?.mgrUsername ?? "",
+    ...extra,
+  });
+  fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body })
+    .catch(() => {});
+}
+
+async function loadLogs() {
+  const container = document.querySelector("#log-table-container");
+  if (!container) return;
+  try {
+    const res = await fetch("/api/logs");
+    if (!res.ok) throw new Error(res.status);
+    const records = await res.json();
+    if (!records.length) {
+      container.innerHTML = `<p style="color:var(--ink-3);font-size:13px;">目前尚無記錄。透過伺服器模式（<code>node tools/serve-gui.cjs</code>）執行 GUI 才會記錄操作。</p>`;
+      return;
+    }
+    const rows = records.map((r) => {
+      const ts = new Date(r.ts).toLocaleString("zh-TW");
+      return `<tr><td>${ts}</td><td><code>${esc(r.action)}</code></td><td>${esc(r.recipeName)}</td><td style="font-size:11px;">${(r.kits || []).map(esc).join(", ")}</td><td>${esc(r.licensee)}</td></tr>`;
+    }).join("");
+    container.innerHTML = `<table class="log-table"><thead><tr><th>時間</th><th>動作</th><th>Recipe</th><th>Kits</th><th>帳號</th></tr></thead><tbody>${rows}</tbody></table>`;
+  } catch {
+    container.innerHTML = `<p style="color:var(--ink-3);font-size:13px;">無法取得記錄（Server 未啟動？）</p>`;
+  }
+}
+
+function exportLogs() {
+  fetch("/api/logs")
+    .then((r) => r.json())
+    .then((records) => {
+      const content = records.map((r) => JSON.stringify(r)).join("\n");
+      const blob = new Blob([content], { type: "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `composer-operations-${new Date().toISOString().slice(0, 10)}.jsonl`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    })
+    .catch(() => alert("無法取得記錄（Server 未啟動？）"));
+}
+
+function showDeployConfigError(msg) {
+  const el = document.querySelector("#deploy-config-error");
+  if (el) { el.textContent = msg; el.hidden = false; }
+}
+
+function clearDeployConfigError() {
+  const el = document.querySelector("#deploy-config-error");
+  if (el) { el.textContent = ""; el.hidden = true; }
 }
 
 // ── 工具函式 ──────────────────────────────────────────────────────────────────

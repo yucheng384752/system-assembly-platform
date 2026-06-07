@@ -22,6 +22,7 @@
           <button class="nav-item" data-view="database"><span>02</span>資料保存方式</button>
           <button class="nav-item" data-view="preview"><span>03</span>系統預覽</button>
           <button class="nav-item" data-view="generate"><span>04</span>輸出部署套件</button>
+          <button class="nav-item" data-view="logs"><span>05</span>操作記錄</button>
         </nav>
 
         <div class="sidebar-foot">
@@ -197,6 +198,69 @@
             </div>
           </div>
 
+          <section class="panel" id="deploy-config-panel" style="margin-top:20px;">
+            <h3>部署初始設定</h3>
+            <p style="margin:0 0 16px;color:var(--ink-3);font-size:13px;">填入後可下載 <code>deploy-init.env</code>，讓部署端自動套用憑證，無需互動式輸入。<strong>密碼不寫入 recipe.json。</strong></p>
+
+            <div id="deploy-db-fields">
+              <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:var(--ink-2)">資料庫連線（PostgreSQL）</p>
+              <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px;margin-bottom:16px;">
+                <div>
+                  <label class="lbl" for="deploy-db-host">Host</label>
+                  <input class="input" type="text" id="deploy-db-host" value="localhost" style="width:100%;margin-top:4px;" />
+                </div>
+                <div>
+                  <label class="lbl" for="deploy-db-port">Port</label>
+                  <input class="input" type="number" id="deploy-db-port" value="5432" min="1" max="65535" style="width:100%;margin-top:4px;" />
+                </div>
+                <div>
+                  <label class="lbl" for="deploy-db-name">DB Name</label>
+                  <input class="input" type="text" id="deploy-db-name" value="form_system" style="width:100%;margin-top:4px;" />
+                </div>
+                <div>
+                  <label class="lbl" for="deploy-db-username">Username</label>
+                  <input class="input" type="text" id="deploy-db-username" value="form_system" style="width:100%;margin-top:4px;" />
+                </div>
+                <div>
+                  <label class="lbl" for="deploy-db-password">Password</label>
+                  <input class="input" type="password" id="deploy-db-password" style="width:100%;margin-top:4px;" />
+                </div>
+                <div>
+                  <label class="lbl" for="deploy-db-password-confirm">確認密碼</label>
+                  <input class="input" type="password" id="deploy-db-password-confirm" style="width:100%;margin-top:4px;" />
+                </div>
+              </div>
+            </div>
+
+            <div id="deploy-sqlite-notice" hidden>
+              <p style="margin:0 0 16px;padding:10px 12px;background:#f0fdf4;border:1px solid #86efac;border-radius:6px;color:#166534;font-size:13px;">SQLite 無需連線設定，系統會自動建立 <code>app.db</code> 檔案。</p>
+            </div>
+
+            <p style="margin:0 0 8px;font-size:13px;font-weight:600;color:var(--ink-2)">初始管理帳號</p>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px 16px;margin-bottom:12px;">
+              <div>
+                <label class="lbl" for="deploy-mgr-username">帳號</label>
+                <input class="input" type="text" id="deploy-mgr-username" value="manager" style="width:100%;margin-top:4px;" />
+              </div>
+              <div></div>
+              <div>
+                <label class="lbl" for="deploy-mgr-password">密碼</label>
+                <input class="input" type="password" id="deploy-mgr-password" style="width:100%;margin-top:4px;" />
+              </div>
+              <div>
+                <label class="lbl" for="deploy-mgr-password-confirm">確認密碼</label>
+                <input class="input" type="password" id="deploy-mgr-password-confirm" style="width:100%;margin-top:4px;" />
+              </div>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink-2);margin-bottom:14px;cursor:pointer;">
+              <input type="checkbox" id="deploy-mgr-must-change" checked style="width:15px;height:15px;" />
+              首次登入須修改密碼
+            </label>
+
+            <div id="deploy-config-error" hidden style="margin-bottom:10px;padding:8px 12px;background:#fef2f2;border:1px solid #fca5a5;border-radius:6px;color:#991b1b;font-size:13px;"></div>
+            <button class="ghost-action" id="download-deploy-init-env" type="button">下載 deploy-init.env</button>
+          </section>
+
           <details class="recipe-details">
             <summary>進階：Recipe JSON 與 Assembly 指令</summary>
             <div class="layout-two" style="margin-top:14px">
@@ -219,6 +283,22 @@
               </section>
             </div>
           </details>
+        </section>
+
+        <!-- ── Step 5：操作記錄 ── -->
+        <section class="view" id="view-logs">
+          <header class="page-head">
+            <p class="eyebrow">Step 5</p>
+            <h2>操作記錄</h2>
+            <p>記錄每次 recipe / 部署套件下載的時間、Recipe 名稱與啟用 Kit。需透過伺服器模式啟動 GUI（<code>node tools/serve-gui.cjs</code>）才會寫入記錄。</p>
+          </header>
+          <section class="panel">
+            <div style="display:flex;gap:8px;margin-bottom:14px;">
+              <button class="ghost-action" id="refresh-logs" type="button">重新整理</button>
+              <button class="ghost-action" id="export-logs" type="button">匯出 .jsonl</button>
+            </div>
+            <div id="log-table-container" style="font-size:13px;">載入中…</div>
+          </section>
         </section>
 
       </main>
