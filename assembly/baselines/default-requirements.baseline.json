@@ -18,7 +18,8 @@
       { "name": "uvicorn[standard]", "spec": "==0.30.6",  "kits": ["platform-core-kit"] },
       { "name": "openpyxl",          "spec": "==3.1.5",   "kits": ["upload-validation-kit"] },
       { "name": "pandas",            "spec": "==2.2.3",   "kits": ["upload-validation-kit", "analytics-kit"] },
-      { "name": "python-multipart",  "spec": "==0.0.12",  "kits": ["upload-validation-kit"] }
+      { "name": "python-multipart",  "spec": "==0.0.12",  "kits": ["upload-validation-kit"] },
+      { "name": "cryptography",      "spec": ">=42.0.0",  "kits": ["platform-core-kit"],    "note": "RSA license verification" }
     ]
   },
   "node": {
