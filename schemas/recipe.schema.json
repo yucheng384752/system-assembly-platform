@@ -100,6 +100,35 @@
         "type": "object"
       },
       "default": {}
+    },
+    "licensee": {
+      "type": "object",
+      "properties": {
+        "name":             { "type": "string" },
+        "email":            { "type": "string", "format": "email" },
+        "expiresAfterDays": { "type": "integer", "minimum": 1, "default": 365 }
+      }
+    },
+    "deploymentConfig": {
+      "type": "object",
+      "properties": {
+        "database": {
+          "type": "object",
+          "properties": {
+            "host": { "type": "string", "default": "localhost" },
+            "port": { "type": "integer", "default": 5432 },
+            "name": { "type": "string", "default": "form_system" },
+            "username": { "type": "string", "default": "form_system" }
+          }
+        },
+        "bootstrapManager": {
+          "type": "object",
+          "properties": {
+            "username": { "type": "string", "default": "manager" },
+            "mustChangePassword": { "type": "boolean", "default": true }
+          }
+        }
+      }
     }
   },
   "$defs": {
