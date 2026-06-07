@@ -2,16 +2,19 @@
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
 #  Recipe : gui-selected-form-system
-#  Built  : 2026-05-24 02:30
-#  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit
+#  Built  : 2026-06-07 22:34
+#  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, mod-subscription-kit
 #  DB     : postgresql
 # ================================================================
 #
 #  Usage:
-#    bash deploy.sh
-#    bash deploy.sh --interactive
+#    bash deploy.sh --wizard                            # Guided install wizard (recommended)
+#    bash deploy.sh --interactive                       # Prompt mode
+#    bash deploy.sh                                     # Auto mode (requires deploy-init.env or .env)
+#    bash deploy.sh --get-machine-id                    # Print machine fingerprint for license binding
+#    bash deploy.sh --update-license=/path/license.lic  # Replace license.lic without reinstalling
 #    bash deploy.sh /opt/form-system --background
-#    bash deploy.sh /opt/form-system --interactive --background
+#    bash deploy.sh /opt/form-system --wizard --background
 
 set -euo pipefail
 
@@ -26,14 +29,20 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd)"
 SYS_ROOT=""
 BACKGROUND=0
 INTERACTIVE=0
+WIZARD=0
+CMD_FINGERPRINT=0
+CMD_UPDATE_LIC=""
 VENV=""
 
 for _arg in "$@"; do
     case "$_arg" in
-        --background) BACKGROUND=1 ;;
-        --interactive) INTERACTIVE=1 ;;
-        --*) die "Unknown option: $_arg" ;;
-        *) SYS_ROOT="$_arg" ;;
+        --background)        BACKGROUND=1 ;;
+        --interactive)       INTERACTIVE=1 ;;
+        --wizard)            WIZARD=1; INTERACTIVE=1 ;;
+        --get-machine-id)    CMD_FINGERPRINT=1 ;;
+        --update-license=*)  CMD_UPDATE_LIC="${_arg#--update-license=}" ;;
+        --*)                 die "Unknown option: $_arg" ;;
+        *)                   SYS_ROOT="$_arg" ;;
     esac
 done
 
@@ -119,6 +128,13 @@ prompt_secret() {
 
 configure_env() {
     echo "=== Checking configuration ==="
+    if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
+        info "Found deploy-init.env ??loading pre-configured credentials..."
+        set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
+        cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
+        ok "Credentials loaded from deploy-init.env"
+        return 0
+    fi
     if [ ! -f "${SYS_ROOT}/.env" ]; then
         if [ "${INTERACTIVE}" -eq 1 ]; then
             [ -f "${SYS_ROOT}/.env.example" ] || die ".env not found and .env.example is missing."
@@ -174,6 +190,191 @@ configure_env() {
     [ -n "${SECRET_KEY:-}" ] || die "SECRET_KEY not set in .env"
     [ -n "${CORS_ORIGINS:-}" ] || die "CORS_ORIGINS not set in .env"
     ok "Configuration OK"
+    echo ""
+}
+
+# ?? Wizard helpers ??????????????????????????????????????????????????????????
+
+wizard_welcome() {
+    clear 2>/dev/null || true
+    echo ""
+    echo "================================================================"
+    echo "  Form System 摰?蝎暸?"
+    echo "  Recipe : gui-selected-form-system"
+    echo "  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, mod-subscription-kit"
+    echo "================================================================"
+    echo ""
+    echo "  甇斤移??撘??典???"
+    echo "    甇仿? 1嚗?  鞈?摨恍??閮剖?"
+    echo "    甇仿? 2嚗?  蝞∠??董?身摰?
+    echo "    甇仿? 3嚗?  摰??Ⅱ隤?
+    echo ""
+    echo "  ?亙歇??deploy-init.env嚗身摰郊撽??芸??仿???
+    echo "  ??Ctrl+C ?舫??瘨?
+    echo ""
+    read -r -p "  ??Enter 蝜潛?..." _dummy
+    echo ""
+}
+
+_validate_nonempty() {
+    local val="$1" label="$2"
+    [ -n "$val" ] || { echo "  [!] ${label} 銝??箇征" >&2; return 1; }
+}
+
+_validate_port() {
+    local val="$1"
+    [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -ge 1 ] && [ "$val" -le 65535 ] || \
+        { echo "  [!] ??????1??5535 ??? >&2; return 1; }
+}
+
+_validate_password() {
+    local val="$1"
+    [ ${#val} -ge 8 ] || { echo "  [!] 撖Ⅳ?瑕漲?喳? 8 ???? >&2; return 1; }
+}
+
+wizard_step1_db() {
+    echo "??[ 甇仿? 1嚗?嚗??澈??? ]??????????????????????????????"
+    echo ""
+    echo "  ?舀 PostgreSQL嚗??Ｙ憓???
+    echo "  ?乩?閮剖? DATABASE_URL嚗頂蝯勗??芸??寧 SQLite嚗??璈葫閰佗???
+    echo ""
+    local _host _port _name _user _pass
+    while true; do
+        read -r -p "  鞈?摨思蜓璈?? [localhost]: " _host
+        _host="${_host:-localhost}"
+        _validate_nonempty "$_host" "銝餅?雿?" && break
+    done
+    while true; do
+        read -r -p "  鞈?摨恍???[5432]: " _port
+        _port="${_port:-5432}"
+        _validate_port "$_port" && break
+    done
+    while true; do
+        read -r -p "  鞈?摨怠?蝔?[form_system]: " _name
+        _name="${_name:-form_system}"
+        _validate_nonempty "$_name" "鞈?摨怠?蝔? && break
+    done
+    while true; do
+        read -r -p "  鞈?摨思蝙?刻?[form_system]: " _user
+        _user="${_user:-form_system}"
+        _validate_nonempty "$_user" "雿輻??蝔? && break
+    done
+    while true; do
+        read -rsp "  鞈?摨怠?蝣? " _pass; echo ""
+        _validate_nonempty "$_pass" "撖Ⅳ" && break
+    done
+    set_env_value DB_HOST     "$_host"
+    set_env_value DB_PORT     "$_port"
+    set_env_value DB_NAME     "$_name"
+    set_env_value DB_USERNAME "$_user"
+    set_env_value DB_PASSWORD "$_pass"
+    set_env_value DATABASE_URL "postgresql+asyncpg://${_user}:${_pass}@${_host}:${_port}/${_name}"
+    ok "鞈?摨怨身摰???
+    echo ""
+}
+
+wizard_step2_auth() {
+    echo "??[ 甇仿? 2嚗?嚗恣?董??]??????????????????????????????"
+    echo ""
+    echo "  閮剖?蝟餌絞?? Manager 撣唾?嚗蝵脣??臬敺?啣??耨?嫘?
+    echo "  擐活?餃敺頂蝯勗?閬?靽格撖Ⅳ??
+    echo ""
+    local _user _pass _pass2
+    while true; do
+        read -r -p "  Manager 撣唾??迂 [manager]: " _user
+        _user="${_user:-manager}"
+        _validate_nonempty "$_user" "撣唾??迂" && break
+    done
+    while true; do
+        read -rsp "  Manager 撖Ⅳ嚗撠?8 蝣潘?: " _pass; echo ""
+        _validate_password "$_pass" || continue
+        read -rsp "  蝣箄?撖Ⅳ: " _pass2; echo ""
+        [ "$_pass" = "$_pass2" ] && break
+        echo "  [!] ?拇活撖Ⅳ銝??湛?隢??啗撓?? >&2
+    done
+    set_env_value BOOTSTRAP_MANAGER_ENABLED              "true"
+    set_env_value BOOTSTRAP_MANAGER_TENANT_CODE          "default"
+    set_env_value BOOTSTRAP_MANAGER_USERNAME             "$_user"
+    set_env_value BOOTSTRAP_MANAGER_PASSWORD             "$_pass"
+    set_env_value BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD "true"
+    ok "Manager 撣唾?閮剖?摰?"
+    echo ""
+}
+
+wizard_step3_secrets() {
+    echo "??[ 甇仿? 3嚗?嚗??券??啗?蝣箄? ]?????????????????????????"
+    echo ""
+    echo "  SECRET_KEY ?冽 JWT / session ????
+    echo "  頛詨 'g' ?航??璈??堆??刻嚗?
+    echo ""
+    prompt_secret SECRET_KEY "SECRET_KEY" 1
+    set_env_value CORS_ORIGINS "http://localhost:5173,http://localhost:3000"
+    ok "摰?閮剖?摰?"
+    echo ""
+}
+
+wizard_summary_confirm() {
+    echo "??[ 摰?蝣箄? ]????????????????????????????????????????????"
+    echo ""
+    echo "  鞈?摨?   : $(get_env_value DB_HOST):$(get_env_value DB_PORT) / $(get_env_value DB_NAME)"
+    echo "  DB 雿輻??: $(get_env_value DB_USERNAME)"
+    echo "  Manager   : $(get_env_value BOOTSTRAP_MANAGER_USERNAME)"
+    echo "  CORS      : $(get_env_value CORS_ORIGINS)"
+    echo "  撖Ⅳ      : *** (撌脰身摰?銝＊蝷?"
+    echo ""
+    local _confirm
+    read -r -p "  蝣箄?閮剖?甇?Ⅱ嚗?憪?鋆?[y/N] " _confirm
+    echo ""
+    case "$_confirm" in
+        y|Y|yes|YES) ok "??摰?..." ;;
+        *) die "摰?撌脣?瘨???瑁? deploy.sh --wizard" ;;
+    esac
+}
+
+wizard_configure() {
+    if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
+        info "?菜葫??deploy-init.env嚗??仿?閮剛身摰?.."
+        set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
+        cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
+        ok "Credentials loaded from deploy-init.env"
+        echo ""
+        return 0
+    fi
+    [ -f "${SYS_ROOT}/.env.example" ] || die ".env.example not found. Cannot create initial .env."
+    cp "${SYS_ROOT}/.env.example" "${SYS_ROOT}/.env"
+    wizard_step1_db
+    wizard_step2_auth
+    wizard_step3_secrets
+    wizard_summary_confirm
+    set -a; . "${SYS_ROOT}/.env"; set +a
+    [ -n "${DATABASE_URL:-}" ] || die "DATABASE_URL not set"
+    [ -n "${SECRET_KEY:-}" ]   || die "SECRET_KEY not set"
+    ok "Configuration OK"
+    echo ""
+}
+
+show_license_notice() {
+    local _lic="${SYS_ROOT}/license.lic"
+    [ -f "${_lic}" ] || return
+    if python3 - "${_lic}" <<'PY'
+import json, sys
+try:
+    lic = json.load(open(sys.argv[1]))
+    payload = json.loads(lic.get("payload", "{}"))
+    if not payload.get("machineFingerprint"):
+        sys.exit(1)
+except Exception:
+    sys.exit(1)
+PY
+    then
+        return
+    fi
+    echo ""
+    echo "  NOTE: License is not bound to this machine."
+    echo "  To bind it (prevents license copy to another server):"
+    echo "    1. bash deploy.sh --get-machine-id"
+    echo "    2. Share the Fingerprint with your vendor."
+    echo "    3. bash deploy.sh --update-license=/path/to/new-license.lic"
     echo ""
 }
 
@@ -294,6 +495,49 @@ start_backend() {
     [ -d "${SYS_ROOT}/frontend/dist" ] && info "Frontend dist: ${SYS_ROOT}/frontend/dist/ (serve via nginx, see README)"
 }
 
+# -- early-exit: --get-machine-id -------------------------------------------
+if [ "${CMD_FINGERPRINT}" -eq 1 ]; then
+    if [ ! -f /etc/machine-id ]; then
+        die "/etc/machine-id not found. This command requires Linux."
+    fi
+    _MID="$(tr -d '[:space:]' </etc/machine-id | tr '[:upper:]' '[:lower:]')"
+    _FP="$(python3 -c "import hashlib; print(hashlib.sha256('${_MID}'.encode()).hexdigest())")"
+    echo ""
+    echo "  Machine ID  : ${_MID}"
+    echo "  Fingerprint : ${_FP}"
+    echo ""
+    echo "  Share the Fingerprint with your vendor to bind the license."
+    echo "  The vendor re-signs license.lic with your Fingerprint."
+    echo "  To apply the new license file:"
+    echo "    bash deploy.sh --update-license=/path/to/license.lic"
+    echo ""
+    exit 0
+fi
+
+# -- early-exit: --update-license --------------------------------------------
+if [ -n "${CMD_UPDATE_LIC}" ]; then
+    [ -f "${CMD_UPDATE_LIC}" ] || die "File not found: ${CMD_UPDATE_LIC}"
+    resolve_system_root
+    cp "${CMD_UPDATE_LIC}" "${SYS_ROOT}/license.lic"
+    ok "license.lic updated: ${SYS_ROOT}/license.lic"
+    echo ""
+    _PID_FILE="${SYS_ROOT}/logs/backend.pid"
+    if [ -f "${_PID_FILE}" ]; then
+        _PID="$(cat "${_PID_FILE}")"
+        if kill -0 "${_PID}" 2>/dev/null; then
+            info "Backend is running (PID=${_PID}). Restart to apply the new license:"
+            info "  kill ${_PID}"
+            info "  bash deploy.sh --background"
+        else
+            info "Backend is not running. Start with: bash deploy.sh --background"
+        fi
+    else
+        info "Backend is not running. Start with: bash deploy.sh --background"
+    fi
+    echo ""
+    exit 0
+fi
+
 resolve_system_root
 echo ""
 echo "Form System Kit Composer - Deploy"
@@ -301,7 +545,12 @@ echo "Recipe  : gui-selected-form-system"
 echo "SysRoot : ${SYS_ROOT}"
 echo ""
 
-configure_env
+if [ "${WIZARD}" -eq 1 ]; then
+    wizard_welcome
+    wizard_configure
+else
+    configure_env
+fi
 check_prerequisites
 setup_venv
 install_backend
@@ -309,6 +558,7 @@ run_kit_installs
 build_frontend
 setup_database
 start_backend
+show_license_notice
 
 echo ""
 echo "------------------------------------------------------"

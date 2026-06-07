@@ -83,9 +83,11 @@ $deployShContent = @'
 # __BAR__
 #
 #  Usage:
-#    bash deploy.sh --wizard                     # 互動式安裝精靈（推薦首次安裝）
-#    bash deploy.sh --interactive                # 逐項提問模式
-#    bash deploy.sh                              # 自動模式（需已有 deploy-init.env 或 .env）
+#    bash deploy.sh --wizard                            # Guided install wizard (recommended)
+#    bash deploy.sh --interactive                       # Prompt mode
+#    bash deploy.sh                                     # Auto mode (requires deploy-init.env or .env)
+#    bash deploy.sh --get-machine-id                    # Print machine fingerprint for license binding
+#    bash deploy.sh --update-license=/path/license.lic  # Replace license.lic without reinstalling
 #    bash deploy.sh /opt/form-system --background
 #    bash deploy.sh /opt/form-system --wizard --background
 
@@ -103,15 +105,19 @@ SYS_ROOT=""
 BACKGROUND=0
 INTERACTIVE=0
 WIZARD=0
+CMD_FINGERPRINT=0
+CMD_UPDATE_LIC=""
 VENV=""
 
 for _arg in "$@"; do
     case "$_arg" in
-        --background)   BACKGROUND=1 ;;
-        --interactive)  INTERACTIVE=1 ;;
-        --wizard)       WIZARD=1; INTERACTIVE=1 ;;
-        --*)            die "Unknown option: $_arg" ;;
-        *)              SYS_ROOT="$_arg" ;;
+        --background)        BACKGROUND=1 ;;
+        --interactive)       INTERACTIVE=1 ;;
+        --wizard)            WIZARD=1; INTERACTIVE=1 ;;
+        --get-machine-id)    CMD_FINGERPRINT=1 ;;
+        --update-license=*)  CMD_UPDATE_LIC="${_arg#--update-license=}" ;;
+        --*)                 die "Unknown option: $_arg" ;;
+        *)                   SYS_ROOT="$_arg" ;;
     esac
 done
 
@@ -422,6 +428,31 @@ wizard_configure() {
     echo ""
 }
 
+show_license_notice() {
+    local _lic="${SYS_ROOT}/license.lic"
+    [ -f "${_lic}" ] || return
+    if python3 - "${_lic}" <<'PY'
+import json, sys
+try:
+    lic = json.load(open(sys.argv[1]))
+    payload = json.loads(lic.get("payload", "{}"))
+    if not payload.get("machineFingerprint"):
+        sys.exit(1)
+except Exception:
+    sys.exit(1)
+PY
+    then
+        return
+    fi
+    echo ""
+    echo "  NOTE: License is not bound to this machine."
+    echo "  To bind it (prevents license copy to another server):"
+    echo "    1. bash deploy.sh --get-machine-id"
+    echo "    2. Share the Fingerprint with your vendor."
+    echo "    3. bash deploy.sh --update-license=/path/to/new-license.lic"
+    echo ""
+}
+
 _MISSING=0
 check_cmd() {
     if command -v "$1" >/dev/null 2>&1; then
@@ -539,6 +570,49 @@ start_backend() {
     [ -d "${SYS_ROOT}/frontend/dist" ] && info "Frontend dist: ${SYS_ROOT}/frontend/dist/ (serve via nginx, see README)"
 }
 
+# -- early-exit: --get-machine-id -------------------------------------------
+if [ "${CMD_FINGERPRINT}" -eq 1 ]; then
+    if [ ! -f /etc/machine-id ]; then
+        die "/etc/machine-id not found. This command requires Linux."
+    fi
+    _MID="$(tr -d '[:space:]' </etc/machine-id | tr '[:upper:]' '[:lower:]')"
+    _FP="$(python3 -c "import hashlib; print(hashlib.sha256('${_MID}'.encode()).hexdigest())")"
+    echo ""
+    echo "  Machine ID  : ${_MID}"
+    echo "  Fingerprint : ${_FP}"
+    echo ""
+    echo "  Share the Fingerprint with your vendor to bind the license."
+    echo "  The vendor re-signs license.lic with your Fingerprint."
+    echo "  To apply the new license file:"
+    echo "    bash deploy.sh --update-license=/path/to/license.lic"
+    echo ""
+    exit 0
+fi
+
+# -- early-exit: --update-license --------------------------------------------
+if [ -n "${CMD_UPDATE_LIC}" ]; then
+    [ -f "${CMD_UPDATE_LIC}" ] || die "File not found: ${CMD_UPDATE_LIC}"
+    resolve_system_root
+    cp "${CMD_UPDATE_LIC}" "${SYS_ROOT}/license.lic"
+    ok "license.lic updated: ${SYS_ROOT}/license.lic"
+    echo ""
+    _PID_FILE="${SYS_ROOT}/logs/backend.pid"
+    if [ -f "${_PID_FILE}" ]; then
+        _PID="$(cat "${_PID_FILE}")"
+        if kill -0 "${_PID}" 2>/dev/null; then
+            info "Backend is running (PID=${_PID}). Restart to apply the new license:"
+            info "  kill ${_PID}"
+            info "  bash deploy.sh --background"
+        else
+            info "Backend is not running. Start with: bash deploy.sh --background"
+        fi
+    else
+        info "Backend is not running. Start with: bash deploy.sh --background"
+    fi
+    echo ""
+    exit 0
+fi
+
 resolve_system_root
 echo ""
 echo "Form System Kit Composer - Deploy"
@@ -559,6 +633,7 @@ run_kit_installs
 build_frontend
 setup_database
 start_backend
+show_license_notice
 
 echo ""
 echo "------------------------------------------------------"
@@ -913,6 +988,26 @@ $R.Add('}')
 $R.Add($tick3)
 $R.Add('')
 $R.Add('> Dev only (not for production): ' + $tick1 + 'cd system/frontend && npm run dev' + $tick1)
+$R.Add('')
+$R.Add('## License management')
+$R.Add('')
+$R.Add('A signed ' + $tick1 + 'license.lic' + $tick1 + ' is included in this package.')
+$R.Add('')
+$R.Add('### Get machine fingerprint (for machine-bound license)')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('bash deploy.sh --get-machine-id')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('Share the printed Fingerprint with your vendor. They will re-sign the license for your machine.')
+$R.Add('')
+$R.Add('### Apply a new license (without reinstalling)')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('bash deploy.sh --update-license=/path/to/new-license.lic')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('The script copies the file to ' + $tick1 + 'system/license.lic' + $tick1 + ' and prints restart instructions if the backend is running.')
 $R.Add('')
 $R.Add('## Production security checklist')
 $R.Add('')

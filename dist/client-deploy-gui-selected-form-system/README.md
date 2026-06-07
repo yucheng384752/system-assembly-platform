@@ -3,9 +3,9 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-05-24 02:30 |
+| Built   | 2026-06-07 22:34 |
 | DB      | postgresql |
-| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit |
+| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, mod-subscription-kit |
 
 ## Package contents
 
@@ -32,31 +32,38 @@ unzip client-deploy-gui-selected-form-system.zip
 cd client-deploy-gui-selected-form-system
 ```
 
-### 2. Configure environment
+### 2. Install
 
-Interactive setup:
+#### Option A ??Guided Wizard (recommended for first-time install)
+
+Step-by-step prompts for database, manager account, and secret key. Validates input and shows a summary before proceeding.
 
 ```bash
-bash deploy.sh --interactive
+bash deploy.sh --wizard
 ```
 
-Non-interactive setup:
+To start the backend in the background after install:
+
+```bash
+bash deploy.sh --wizard --background
+```
+
+#### Option B ??Manual config (advanced)
 
 ```bash
 cp system/.env.example system/.env
 nano system/.env
-bash deploy.sh
 ```
 
-Required settings include:
+Required fields:
 
 ```
-DATABASE_URL=postgresql+asyncpg://user:strongpassword@localhost:5432/form_db
-SECRET_KEY=<random 64-character string>
+DATABASE_URL=postgresql+asyncpg://user:pass@localhost:5432/form_system
+SECRET_KEY=<random-64-char-string>
 CORS_ORIGINS=http://localhost:5173,http://localhost:3000
-AUTH_MODE=api_key
-ADMIN_API_KEYS=<comma-separated random keys>
-ENVIRONMENT=production
+BOOTSTRAP_MANAGER_ENABLED=true
+BOOTSTRAP_MANAGER_USERNAME=manager
+BOOTSTRAP_MANAGER_PASSWORD=<min-8-chars>
 ```
 
 Generate a strong SECRET_KEY:
@@ -64,8 +71,6 @@ Generate a strong SECRET_KEY:
 ```bash
 python3 -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
-
-### 3. Run deploy script
 
 ```bash
 bash deploy.sh
@@ -130,6 +135,26 @@ server {
 ```
 
 > Dev only (not for production): `cd system/frontend && npm run dev`
+
+## License management
+
+A signed `license.lic` is included in this package.
+
+### Get machine fingerprint (for machine-bound license)
+
+```bash
+bash deploy.sh --get-machine-id
+```
+
+Share the printed Fingerprint with your vendor. They will re-sign the license for your machine.
+
+### Apply a new license (without reinstalling)
+
+```bash
+bash deploy.sh --update-license=/path/to/new-license.lic
+```
+
+The script copies the file to `system/license.lic` and prints restart instructions if the backend is running.
 
 ## Production security checklist
 

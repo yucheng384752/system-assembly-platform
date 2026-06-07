@@ -1,0 +1,5 @@
+{
+  "payload": "{\"schemaVersion\":\"1.0\",\"issuedAt\":\"2026-06-07T14:34:36Z\",\"expiresAt\":\"2026-09-05T14:34:36Z\",\"licensee\":{\"name\":\"Demo\",\"email\":\"demo@example.com\"},\"recipe\":\"gui-selected-form-system\",\"enabledKits\":[\"platform-core-kit\",\"tenant-auth-kit\",\"station-data-link-kit\",\"upload-validation-kit\",\"import-pipeline-kit\",\"query-traceability-kit\",\"analytics-kit\",\"station-admin-kit\",\"audit-edit-kit\",\"logs-ops-kit\",\"mod-subscription-kit\"]}",
+  "signature": "LhuUIK+ZE8qbxpPoDgAdW2rb0ybo/ns5cnRvZMdtNA5Gpx3X6QcaFxBv2TBbbiZALZ7ZEeeC6pzVKSij4Z6r0DQNb+bwpDmd+NTmXQvtaK/72mIishX05alUXMwP2ODPv8u5a6Ki4Zsw223c8G7z3V5m3tJj32RGLfEsdK7UIDbnlnbP4eYFXyUvOirw8QlKtVNzzb3LBnYhej2PYSna36AV+DBwUzCq/K6htnCgn+4yb48FAnu3sHpAO9nk8LGKW0UMT8JST2djh2veEnNC8zqGMyuZDLN4Bk885X48SSkgrdfag+p/cW2CY5HxVygpXzf4viswcavg+DVJ5OAl1A==",
+  "algorithm": "RSA-PSS-SHA256"
+}
