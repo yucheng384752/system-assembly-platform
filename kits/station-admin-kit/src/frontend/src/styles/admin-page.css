@@ -1,0 +1,128 @@
+.admin-page {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.admin-header-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.admin-header-actions {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.admin-select {
+  min-width: 220px;
+}
+
+.admin-table-wrap {
+  margin-top: 0.75rem;
+  overflow: auto;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.9rem;
+}
+
+.admin-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+}
+
+.admin-table th,
+.admin-table td {
+  border-bottom: 1px solid #f1f5f9;
+  padding: 0.55rem 0.65rem;
+  text-align: left;
+  font-size: 0.92rem;
+}
+
+.admin-table th {
+  background: #fafafa;
+  font-size: 0.85rem;
+  color: #374151;
+  position: sticky;
+  top: 0;
+}
+
+.admin-empty {
+  color: #6b7280;
+  text-align: center;
+  padding: 1rem;
+}
+
+.admin-inline-input {
+  width: 100%;
+  border: 1px solid #d1d5db;
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.9rem;
+}
+
+.admin-form-grid {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  margin-top: 0.75rem;
+}
+
+.admin-kv-block {
+  margin-top: 0.8rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.admin-kv {
+  padding: 0.5rem 0.65rem;
+  border: 1px solid #e5e7eb;
+  border-radius: 0.75rem;
+  background: #fafafa;
+}
+
+.admin-k {
+  display: inline-block;
+  font-size: 0.8rem;
+  color: #6b7280;
+  margin-right: 0.4rem;
+}
+
+.admin-v {
+  font-size: 0.9rem;
+  color: #111827;
+}
+
+.admin-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 0.82rem;
+  color: #374151;
+}
+
+.pill {
+  display: inline-block;
+  padding: 0.2rem 0.45rem;
+  border-radius: 999px;
+  font-size: 0.8rem;
+  border: 1px solid #e5e7eb;
+}
+
+.pill-ok {
+  background: #ecfdf5;
+  border-color: #a7f3d0;
+  color: #065f46;
+}
+
+.pill-off {
+  background: #fef2f2;
+  border-color: #fecaca;
+  color: #991b1b;
+}
+
+tr.is-inactive {
+  opacity: 0.65;
+}
