@@ -3,6 +3,8 @@ const fs = require("fs");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
+const dataDir = path.join(root, "data");
+const opsLog = path.join(dataDir, "operations.jsonl");
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
 
@@ -13,11 +15,65 @@ const types = {
   ".json": "application/json; charset=utf-8",
 };
 
+// Ensure data/ exists
+if (!fs.existsSync(dataDir)) fs.mkdirSync(dataDir, { recursive: true });
+
+function json(res, status, body) {
+  res.writeHead(status, { "Content-Type": "application/json; charset=utf-8" });
+  res.end(JSON.stringify(body));
+}
+
+function handleApiLog(req, res) {
+  let raw = "";
+  req.on("data", (chunk) => { raw += chunk; });
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(raw || "{}");
+      const record = {
+        ts: new Date().toISOString(),
+        ip: req.socket.remoteAddress || "unknown",
+        action: String(body.action || ""),
+        recipeName: String(body.recipeName || ""),
+        kits: Array.isArray(body.kits) ? body.kits : [],
+        licensee: String(body.licensee || ""),
+      };
+      fs.appendFile(opsLog, JSON.stringify(record) + "\n", (err) => {
+        if (err) { json(res, 500, { error: "write failed" }); return; }
+        json(res, 200, { ok: true });
+      });
+    } catch {
+      json(res, 400, { error: "invalid JSON" });
+    }
+  });
+}
+
+function handleApiLogs(res) {
+  fs.readFile(opsLog, "utf8", (err, data) => {
+    const lines = err ? [] : data.trim().split("\n").filter(Boolean);
+    const records = [];
+    for (const line of lines) {
+      try { records.push(JSON.parse(line)); } catch { /* skip malformed */ }
+    }
+    json(res, 200, records);
+  });
+}
+
 const server = http.createServer((req, res) => {
   const url = new URL(req.url, `http://${host}:${port}`);
-  const pathname = url.pathname === "/" ? "/gui/index.html" : decodeURIComponent(url.pathname);
-  const filePath = path.normalize(path.join(root, pathname));
+  const { pathname } = url;
 
+  // API routes
+  if (pathname === "/api/log" && req.method === "POST") {
+    handleApiLog(req, res);
+    return;
+  }
+  if (pathname === "/api/logs" && req.method === "GET") {
+    handleApiLogs(res);
+    return;
+  }
+
+  // Static files
+  const filePath = path.normalize(path.join(root, pathname === "/" ? "/gui/index.html" : decodeURIComponent(pathname)));
   if (!filePath.startsWith(root)) {
     res.writeHead(403);
     res.end("Forbidden");
@@ -30,14 +86,13 @@ const server = http.createServer((req, res) => {
       res.end("Not found");
       return;
     }
-
-    res.writeHead(200, {
-      "Content-Type": types[path.extname(filePath)] || "application/octet-stream",
-    });
+    res.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream" });
     res.end(data);
   });
 });
 
 server.listen(port, host, () => {
   console.log(`Serving ${root} at http://${host}:${port}/`);
+  console.log(`API: POST /api/log  GET /api/logs`);
+  console.log(`Logs: ${opsLog}`);
 });

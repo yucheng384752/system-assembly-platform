@@ -191,6 +191,13 @@ prompt_secret() {
 
 configure_env() {
     echo "=== Checking configuration ==="
+    if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
+        info "Found deploy-init.env — loading pre-configured credentials..."
+        set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
+        cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
+        ok "Credentials loaded from deploy-init.env"
+        return 0
+    fi
     if [ ! -f "${SYS_ROOT}/.env" ]; then
         if [ "${INTERACTIVE}" -eq 1 ]; then
             [ -f "${SYS_ROOT}/.env.example" ] || die ".env not found and .env.example is missing."
@@ -958,11 +965,71 @@ $nginxStandaloneContent = $nginxStandaloneContent.Replace('__RNAME__', $rName) -
 # Copy recipe.json ----------------------------------------------------------
 Copy-Item $recipePath (Join-Path $stageDir 'recipe.json') -Force
 
+# Write .gitignore (protect sensitive files in deploy package) ---------------
+$gitignoreContent = @'
+# 由 deploy.sh 更新
+system/.env
+# 部署憑證（含密碼）
+deploy-init.env
+'@
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir '.gitignore'),
+    ($gitignoreContent -replace "`r`n", "`n"),
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+# Write systemd service template --------------------------------------------
+Write-Host 'Generating form-system.service...'
+$systemdContent = @'
+[Unit]
+Description=Form System Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=form-system
+WorkingDirectory=__SYS_ROOT__/backend
+ExecStart=__SYS_ROOT__/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+EnvironmentFile=__SYS_ROOT__/.env
+StandardOutput=append:__SYS_ROOT__/logs/backend.log
+StandardError=append:__SYS_ROOT__/logs/backend.log
+
+[Install]
+WantedBy=multi-user.target
+'@
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'form-system.service'),
+    ($systemdContent -replace "`r`n", "`n"),
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
 # Create ZIP ----------------------------------------------------------------
 if (-not $SkipZip) {
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath -Force
     Write-Host ('Client deploy zip: ' + $zipPath)
+
+    # Sign package (requires tools/keys/signing-private-key.pem) ---------------
+    $signScript = Join-Path $PSScriptRoot 'sign-package.ps1'
+    $privKey    = Join-Path $PSScriptRoot 'keys\signing-private-key.pem'
+    if ((Test-Path $signScript) -and (Test-Path $privKey)) {
+        Write-Host 'Signing package...'
+        & powershell -ExecutionPolicy Bypass -File $signScript `
+            -RecipePath $recipePath `
+            -PackageZipPath $zipPath `
+            -PrivateKeyPath $privKey `
+            -OutputDir $stageDir
+        # Copy license.lic into zip (re-compress with license)
+        $licFile = Join-Path $stageDir 'license.lic'
+        if (Test-Path $licFile) {
+            Compress-Archive -Path $licFile -DestinationPath $zipPath -Update
+            Write-Host 'license.lic added to zip'
+        }
+    } else {
+        Write-Host 'SKIP signing (no private key found). Run tools\generate-license-keys.ps1 to enable.'
+    }
 } else {
     Write-Host ('Client deploy folder: ' + $stageDir)
 }

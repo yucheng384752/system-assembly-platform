@@ -3318,3 +3318,26 @@ select:focus {
   font-size: 12px;
   line-height: 1.7;
 }
+
+.log-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.log-table th {
+  text-align: left;
+  padding: 6px 10px;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-weight: 600;
+  border-bottom: 1px solid var(--line);
+}
+.log-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--line);
+  color: var(--ink-1);
+  vertical-align: top;
+}
+.log-table tr:last-child td {
+  border-bottom: none;
+}
