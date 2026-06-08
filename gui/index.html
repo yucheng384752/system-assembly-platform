@@ -197,24 +197,6 @@
             </div>
           </div>
 
-          <section class="panel" style="margin-top:16px;">
-            <h3>機器碼綁定（選填）</h3>
-            <p style="margin:0 0 12px;color:var(--ink-3);font-size:13px;">
-              填入客戶機器碼可將授權綁定至特定伺服器，防止 License 被複製到其他機器。<br>
-              客戶在目標伺服器執行 <code>bash deploy.sh --get-machine-id</code> 即可取得「Fingerprint」欄位的值。
-            </p>
-            <div style="display:flex;gap:8px;align-items:center;">
-              <input class="input" id="machine-fingerprint" type="text"
-                placeholder="貼上 64 位 SHA-256 Fingerprint（或留空表示不綁定機器）"
-                style="flex:1;font-family:monospace;font-size:12px;" />
-              <label class="ghost-action" style="cursor:pointer;margin:0;white-space:nowrap;">
-                上傳 .txt
-                <input type="file" id="machine-fingerprint-file" accept=".txt" style="display:none;" />
-              </label>
-            </div>
-            <div id="machine-fingerprint-status" style="font-size:12px;margin-top:6px;display:none;"></div>
-          </section>
-
           <details class="recipe-details">
             <summary>進階：Recipe JSON 與 Assembly 指令</summary>
             <div class="layout-two" style="margin-top:14px">
@@ -241,6 +223,65 @@
 
 
       </main>
+
+      <!-- ── 機器碼綁定關卡（必須完成才能使用 Composer） ── -->
+      <div class="guide-overlay machine-gate-overlay" id="machine-gate-overlay" hidden
+           style="align-items:center;justify-content:center;">
+        <div class="guide-overlay-panel" style="max-width:520px;height:auto;margin:24px auto;">
+          <div class="guide-overlay-head">
+            <div class="guide-overlay-head-text">
+              <p class="eyebrow">前置步驟</p>
+              <h2>目標伺服器機器碼綁定</h2>
+              <p>在開始選配 Kit 之前，請先取得目標伺服器的機器碼，記錄後才能開放 Kit 選配與套件下載。</p>
+            </div>
+          </div>
+          <div class="guide-overlay-body" style="display:block;padding:24px 28px;overflow-y:auto;">
+            <div id="gate-register-steps">
+              <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
+                <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">1</span>
+                <div>
+                  <strong>下載機器碼腳本</strong>
+                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">將腳本傳至目標 Linux 伺服器執行。</p>
+                  <button class="ghost-action" id="gate-download-script" type="button">⬇ 下載 get-machine-id.sh</button>
+                </div>
+              </div>
+              <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
+                <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">2</span>
+                <div>
+                  <strong>在伺服器執行腳本</strong>
+                  <code style="display:block;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;color:var(--ink-1,#1e293b);">bash get-machine-id.sh</code>
+                  <p style="margin:0;font-size:13px;color:var(--ink-3,#6b7280);">執行後在同目錄產生 <code>machine-id.txt</code>。</p>
+                </div>
+              </div>
+              <div style="display:flex;gap:14px;margin-bottom:4px;align-items:flex-start;">
+                <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">3</span>
+                <div>
+                  <strong>上傳 machine-id.txt</strong>
+                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">上傳後 Kit Composer 記錄機器碼並開放後續操作。</p>
+                  <label class="ghost-action" style="cursor:pointer;display:inline-block;margin:0;">
+                    選擇 machine-id.txt
+                    <input type="file" id="gate-machine-id-file" accept=".txt" style="display:none;" />
+                  </label>
+                  <div id="gate-status" style="margin-top:8px;font-size:13px;min-height:16px;"></div>
+                </div>
+              </div>
+            </div>
+            <div id="gate-registered-area" hidden
+                 style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border,#e2e8f0);">
+              <p style="font-size:13px;margin:0 0 6px;"><strong>✓ 已記錄機器碼</strong></p>
+              <div id="gate-machine-list"
+                   style="font-family:monospace;font-size:11px;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;margin-bottom:16px;color:var(--ink-2,#374151);line-height:1.7;"></div>
+              <button class="primary-action" id="gate-proceed-btn" type="button">開始選配 Kit →</button>
+            </div>
+            <div id="gate-offline-notice" hidden
+                 style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border,#e2e8f0);font-size:12px;color:var(--ink-3,#9ca3af);">
+              <span>未連接 Kit Composer 伺服器（需執行 <code>node tools/serve-gui.cjs</code>）</span>
+              <button class="ghost-action" id="gate-bypass-btn" type="button"
+                      style="font-size:11px;padding:2px 8px;margin-left:8px;">跳過（離線模式）</button>
+            </div>
+          </div>
+        </div>
+      </div>
 
       <!-- ── 欄位關係編輯覆蓋層 ── -->
       <div class="guide-overlay node-editor-overlay" id="node-editor-overlay" hidden>

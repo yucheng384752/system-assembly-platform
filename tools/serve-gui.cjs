@@ -5,6 +5,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const dataDir = path.join(root, "data");
 const opsLog = path.join(dataDir, "operations.jsonl");
+const machinesFile = path.join(dataDir, "machines.json");
 const port = Number(process.env.PORT || 4174);
 const host = process.env.HOST || "127.0.0.1";
 
@@ -47,6 +48,42 @@ function handleApiLog(req, res) {
   });
 }
 
+function handleApiMachines(res) {
+  fs.readFile(machinesFile, "utf8", (err, data) => {
+    let machines = [];
+    if (!err) { try { machines = JSON.parse(data); } catch { /* skip */ } }
+    json(res, 200, machines);
+  });
+}
+
+function handleRegisterMachine(req, res) {
+  let raw = "";
+  req.on("data", (c) => { raw += c; });
+  req.on("end", () => {
+    try {
+      const body = JSON.parse(raw || "{}");
+      const fp = String(body.fingerprint || "").trim().toLowerCase();
+      if (!/^[0-9a-f]{64}$/.test(fp)) {
+        json(res, 400, { error: "invalid fingerprint (must be 64-char hex)" });
+        return;
+      }
+      fs.readFile(machinesFile, "utf8", (err, data) => {
+        let machines = [];
+        if (!err) { try { machines = JSON.parse(data); } catch { /* skip */ } }
+        if (!machines.some((m) => m.fingerprint === fp)) {
+          machines.push({ fingerprint: fp, registeredAt: new Date().toISOString() });
+        }
+        fs.writeFile(machinesFile, JSON.stringify(machines, null, 2), (e) => {
+          if (e) { json(res, 500, { error: "write failed" }); return; }
+          json(res, 200, { ok: true, fingerprint: fp });
+        });
+      });
+    } catch {
+      json(res, 400, { error: "invalid JSON" });
+    }
+  });
+}
+
 function handleApiLogs(res) {
   fs.readFile(opsLog, "utf8", (err, data) => {
     const lines = err ? [] : data.trim().split("\n").filter(Boolean);
@@ -69,6 +106,23 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/api/logs" && req.method === "GET") {
     handleApiLogs(res);
+    return;
+  }
+  if (pathname === "/api/get-machine-id-script" && req.method === "GET") {
+    const p = path.join(__dirname, "get-machine-id.sh");
+    fs.readFile(p, (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": 'attachment; filename="get-machine-id.sh"' });
+      res.end(data);
+    });
+    return;
+  }
+  if (pathname === "/api/machines" && req.method === "GET") {
+    handleApiMachines(res);
+    return;
+  }
+  if (pathname === "/api/register-machine" && req.method === "POST") {
+    handleRegisterMachine(req, res);
     return;
   }
   if (pathname === "/api/wizard-py" && req.method === "GET") {

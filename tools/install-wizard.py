@@ -295,6 +295,26 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             except Exception as exc:
                 self._send_json({"valid": False, "reason": str(exc)})
 
+        elif path == "/api/check-machine-id":
+            import hashlib as _hl
+            mid_file = Path(__file__).parent / "machine-id.txt"
+            if not mid_file.exists():
+                self._send_json({"status": "no_file"})
+                return
+            expected = mid_file.read_text("utf-8").strip().lower()
+            mid_path = Path("/etc/machine-id")
+            if not mid_path.exists():
+                self._send_json({"status": "no_machine_id"})
+                return
+            raw = mid_path.read_text("utf-8").strip().lower()
+            current = _hl.sha256(raw.encode()).hexdigest()
+            if current == expected:
+                self._send_json({"status": "match", "fingerprint": current[:16] + "…"})
+            else:
+                self._send_json({"status": "mismatch",
+                                 "expected": expected[:16] + "…",
+                                 "current": current[:16] + "…"})
+
         elif path == "/api/ls":
             from urllib.parse import unquote_plus
             qs = self.path.partition("?")[2]
@@ -870,58 +890,50 @@ function copyMachineId() {
   if (v) navigator.clipboard?.writeText(v).catch(() => {});
 }
 
-async function checkLicenseBeforeInstall() {
+async function checkMachineId() {
   const resultEl = document.getElementById('license-check-result');
   const btnInstall = document.getElementById('btn-start-install');
   if (!resultEl) return;
   resultEl.style.display = 'block';
+  resultEl.style.color = '';
   resultEl.style.background = '#f0f9ff';
   resultEl.style.border = '1px solid #bae6fd';
-  resultEl.textContent = '授權驗證中…';
+  resultEl.textContent = '機器碼驗證中…';
   try {
-    const data = await fetch('/api/check-license').then(r => r.json());
-    if (data.valid) {
-      const bound = data.machine_bound ? '（機器綁定）' : '（未綁定機器）';
+    const data = await fetch('/api/check-machine-id').then(r => r.json());
+    if (data.status === 'match') {
       resultEl.style.background = '#f0fdf4';
       resultEl.style.border = '1px solid #86efac';
       resultEl.style.color = '#166534';
-      resultEl.textContent = `✓ 授權有效 ${bound}`;
+      resultEl.textContent = '✓ 機器碼驗證通過，此機器已授權安裝。';
       if (btnInstall) btnInstall.disabled = false;
-    } else if (data.reason === 'fingerprint_mismatch') {
+    } else if (data.status === 'mismatch') {
       resultEl.style.background = '#fef2f2';
       resultEl.style.border = '1px solid #fca5a5';
       resultEl.style.color = '#991b1b';
       resultEl.innerHTML =
-        '<strong>❌ 授權驗證失敗：機器碼不符</strong><br>' +
-        '此授權套件綁定至特定機器，本機器碼不符合。<br>' +
-        '請在授權機器上執行安裝，或將下列機器碼提供給授權方重新簽發：<br>' +
-        '<code style="background:#fff;padding:2px 6px;border-radius:3px;user-select:all">' +
-        (data.current_fp || '無法讀取') + '</code>';
+        '<strong>❌ 機器碼不符</strong><br>' +
+        '授權機器：<code>' + data.expected + '</code>&nbsp;&nbsp;本機：<code>' + data.current + '</code><br>' +
+        '此套件只能在授權機器上安裝。';
       if (btnInstall) btnInstall.disabled = true;
-    } else if (data.reason === 'no_license_file') {
+    } else if (data.status === 'no_file') {
       resultEl.style.background = '#fffbeb';
       resultEl.style.border = '1px solid #fcd34d';
       resultEl.style.color = '#92400e';
-      resultEl.textContent = '⚠ 找不到 license.lic，將以未授權模式繼續安裝。';
+      resultEl.textContent = '⚠ 此套件未綁定機器，可繼續安裝。';
       if (btnInstall) btnInstall.disabled = false;
-    } else if (data.reason === 'expired') {
-      resultEl.style.background = '#fef2f2';
-      resultEl.style.border = '1px solid #fca5a5';
-      resultEl.style.color = '#991b1b';
-      resultEl.textContent = `❌ 授權已過期（${data.expires_at}），請聯絡授權方更新授權。`;
-      if (btnInstall) btnInstall.disabled = true;
     } else {
       resultEl.style.background = '#fffbeb';
       resultEl.style.border = '1px solid #fcd34d';
       resultEl.style.color = '#92400e';
-      resultEl.textContent = `⚠ 授權狀態：${data.reason}`;
+      resultEl.textContent = '⚠ 無法取得本機機器碼（非 Linux 環境），可繼續安裝。';
       if (btnInstall) btnInstall.disabled = false;
     }
   } catch (_) {
     resultEl.style.background = '#fffbeb';
     resultEl.style.border = '1px solid #fcd34d';
     resultEl.style.color = '#92400e';
-    resultEl.textContent = '⚠ 無法讀取授權（可忽略，繼續安裝）。';
+    resultEl.textContent = '⚠ 機器碼驗證失敗，可繼續安裝。';
     if (btnInstall) btnInstall.disabled = false;
   }
 }
@@ -1054,7 +1066,7 @@ function goStep(n) {
   updateStepBar();
   window.scrollTo(0, 0);
   if (n === 1) runPrereqs();
-  if (n === 5) { buildReview(); checkLicenseBeforeInstall(); }
+  if (n === 5) { buildReview(); checkMachineId(); }
 }
 
 function goNext() { goStep(S.currentStep + 1); }

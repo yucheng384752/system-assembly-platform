@@ -1,3 +1,26 @@
+// ── 機器碼腳本（內嵌，無伺服器時也能下載） ───────────────────────────────────────
+const MACHINE_ID_SCRIPT = `#!/usr/bin/env bash
+# get-machine-id.sh — Form System Kit Composer
+set -euo pipefail
+if [ ! -f /etc/machine-id ]; then
+  echo "Error: /etc/machine-id not found. This script requires Linux." >&2
+  exit 1
+fi
+MID=$(cat /etc/machine-id | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
+FP=$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" "$MID" 2>/dev/null)
+if [ -z "$FP" ]; then
+  echo "Error: python3 not found. Please install Python 3." >&2
+  exit 1
+fi
+echo "$FP" > machine-id.txt
+echo ""
+echo "  Fingerprint : $FP"
+echo "  Saved to    : $(pwd)/machine-id.txt"
+echo ""
+echo "  請將 machine-id.txt 上傳至 Form System Kit Composer 平台。"
+echo ""
+`;
+
 // ── Kit 資料 ──────────────────────────────────────────────────────────────
 const fallbackKits = [
   kit("platform-core-kit", "平台核心", "foundation", true, "提供應用程式 shell、設定、資料庫連線、健康檢查、語系與 API 呼叫基礎。", []),
@@ -122,6 +145,7 @@ async function start() {
   bindNodeEditor();
   bindGuide();
   renderAll();
+  await initMachineGate();
 }
 
 function cacheElements() {
@@ -351,41 +375,93 @@ function bindToolbarActions() {
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
 
-  const fpInput = document.querySelector("#machine-fingerprint");
-  const fpStatus = document.querySelector("#machine-fingerprint-status");
-  function setFpStatus(msg, ok) {
-    if (!fpStatus) return;
-    fpStatus.style.display = msg ? "block" : "none";
-    fpStatus.style.color = ok ? "var(--success, green)" : "var(--error, red)";
-    fpStatus.textContent = msg;
+}
+
+// ── 機器碼綁定關卡 ───────────────────────────────────────────────────────────
+async function initMachineGate() {
+  const overlay = document.getElementById("machine-gate-overlay");
+  if (!overlay) return;
+
+  let serverRunning = false;
+  let machines = [];
+  try {
+    const resp = await fetch("/api/machines");
+    if (resp.ok) { machines = await resp.json(); serverRunning = true; }
+  } catch (_) { /* server not running */ }
+
+  if (serverRunning && Array.isArray(machines) && machines.length > 0) {
+    state.machineFingerprint = machines[0].fingerprint;
+    return; // 已有記錄，直接解鎖，overlay 保持 hidden
   }
-  if (fpInput) {
-    fpInput.addEventListener("input", () => {
-      const v = fpInput.value.trim();
-      state.machineFingerprint = v;
-      if (!v) { setFpStatus("", true); return; }
-      setFpStatus(/^[0-9a-f]{64}$/i.test(v) ? "有效 SHA-256 Fingerprint" : "格式有誤（需 64 位 hex）", /^[0-9a-f]{64}$/i.test(v));
-      renderRecipeOutput();
-    });
+
+  overlay.removeAttribute("hidden");
+  if (!serverRunning) {
+    document.getElementById("gate-offline-notice")?.removeAttribute("hidden");
   }
-  const fpFile = document.querySelector("#machine-fingerprint-file");
-  if (fpFile) {
-    fpFile.addEventListener("change", async () => {
-      const f = fpFile.files[0];
-      if (!f) return;
-      const text = (await f.text()).trim();
-      const match = text.match(/[0-9a-f]{64}/i);
-      if (match) {
-        state.machineFingerprint = match[0].toLowerCase();
-        if (fpInput) fpInput.value = state.machineFingerprint;
-        setFpStatus("已從檔案讀取 Fingerprint", true);
-        renderRecipeOutput();
+
+  document.getElementById("gate-download-script")?.addEventListener("click", () => {
+    const blob = new Blob([MACHINE_ID_SCRIPT], { type: "text/plain" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = "get-machine-id.sh";
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  });
+
+  document.getElementById("gate-machine-id-file")?.addEventListener("change", async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const text = (await file.text()).trim();
+    const match = text.match(/[0-9a-f]{64}/i);
+    const statusEl = document.getElementById("gate-status");
+    if (!match) {
+      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "找不到有效 Fingerprint（需 64 位 hex）"; }
+      return;
+    }
+    const fp = match[0].toLowerCase();
+    if (statusEl) { statusEl.style.color = "var(--ink-3,#6b7280)"; statusEl.textContent = "上傳中…"; }
+
+    if (!serverRunning) {
+      state.machineFingerprint = fp;
+      _showGateRegistered([{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
+      return;
+    }
+    try {
+      const resp = await fetch("/api/register-machine", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ fingerprint: fp }),
+      });
+      const data = await resp.json();
+      if (data.ok) {
+        state.machineFingerprint = fp;
+        const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
+        _showGateRegistered(refreshed);
       } else {
-        setFpStatus("找不到有效 Fingerprint（需 64 位 hex）", false);
+        if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = `登錄失敗：${data.error}`; }
       }
-      fpFile.value = "";
-    });
+    } catch (_) {
+      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "伺服器連線失敗，無法登錄機器碼"; }
+    }
+  });
+
+  document.getElementById("gate-bypass-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+  document.getElementById("gate-proceed-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+}
+
+function _showGateRegistered(machines) {
+  const registeredArea = document.getElementById("gate-registered-area");
+  const listEl = document.getElementById("gate-machine-list");
+  const stepsEl = document.getElementById("gate-register-steps");
+  if (stepsEl) stepsEl.style.opacity = "0.45";
+  if (registeredArea) registeredArea.removeAttribute("hidden");
+  if (listEl) {
+    listEl.innerHTML = machines.map((m) =>
+      `<div>${m.fingerprint.slice(0, 16)}…${m.fingerprint.slice(-8)}&nbsp;&nbsp;<span style="color:var(--ink-3,#9ca3af);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`
+    ).join("");
   }
+  const statusEl = document.getElementById("gate-status");
+  if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ 機器碼已記錄"; }
 }
 
 function bindSearch() {
@@ -2125,6 +2201,9 @@ async function downloadPackage() {
     zip.file("phases/04-package.ps1", bom + buildDeployPhase4Ps1());
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
+    if (state.machineFingerprint) {
+      zip.file("machine-id.txt", state.machineFingerprint + "\n");
+    }
     // Include install-wizard files when served via serve-gui.cjs
     try {
       const pyResp = await fetch("/api/wizard-py");
