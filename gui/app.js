@@ -100,18 +100,6 @@ const state = {
   pkFkSuggestions: null,
   pkFkApplied: null,
   guideAnswers: {},
-  deployConfig: {
-    dbHost: 'localhost',
-    dbPort: '5432',
-    dbName: 'form_system',
-    dbUsername: 'form_system',
-    dbPassword: '',
-    dbPasswordConfirm: '',
-    mgrUsername: 'manager',
-    mgrPassword: '',
-    mgrPasswordConfirm: '',
-    mgrMustChange: true,
-  },
 };
 
 const elements = {};
@@ -127,7 +115,6 @@ async function start() {
   bindNavigation();
   bindDatabaseInputs();
   bindToolbarActions();
-  bindDeployConfigInputs();
   bindSearch();
   bindFlows();
   bindCsvUpload();
@@ -362,27 +349,6 @@ function bindToolbarActions() {
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
-  document.querySelector("#download-deploy-init-env")?.addEventListener("click", downloadDeployInitEnv);
-}
-
-function bindDeployConfigInputs() {
-  const textFields = [
-    ["deploy-db-host",             "dbHost"],
-    ["deploy-db-port",             "dbPort"],
-    ["deploy-db-name",             "dbName"],
-    ["deploy-db-username",         "dbUsername"],
-    ["deploy-db-password",         "dbPassword"],
-    ["deploy-db-password-confirm", "dbPasswordConfirm"],
-    ["deploy-mgr-username",        "mgrUsername"],
-    ["deploy-mgr-password",        "mgrPassword"],
-    ["deploy-mgr-password-confirm","mgrPasswordConfirm"],
-  ];
-  textFields.forEach(([id, key]) => {
-    const el = document.querySelector(`#${id}`);
-    if (el) el.addEventListener("input", () => { state.deployConfig[key] = el.value; });
-  });
-  const mustChange = document.querySelector("#deploy-mgr-must-change");
-  if (mustChange) mustChange.addEventListener("change", () => { state.deployConfig.mgrMustChange = mustChange.checked; });
 }
 
 function bindSearch() {
@@ -1255,11 +1221,6 @@ function renderDatabaseRecommendation() {
     ? "建議使用 PostgreSQL 作為正式資料庫。這套系統會保存匯入紀錄、批號追溯、使用者權限與背景處理結果，需要可長期保存、備份、多人同時使用的資料庫。"
     : "如果只是本機展示、單人測試或可重建資料，可先使用 SQLite 快速啟動；正式使用前再切換到 PostgreSQL。";
   document.querySelector("#db-meter-fill").style.width = `${Math.min(100, 40 + score * 8)}%`;
-  const isPostgres = engine === "postgresql";
-  const dbFields = document.querySelector("#deploy-db-fields");
-  const sqliteNotice = document.querySelector("#deploy-sqlite-notice");
-  if (dbFields) dbFields.hidden = !isPostgres;
-  if (sqliteNotice) sqliteNotice.hidden = isPostgres;
 }
 
 function scoreByValue(id, weights) {
@@ -1551,18 +1512,6 @@ function buildRecipe() {
       engine: computeDbEngine().engine,
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
-    },
-    deploymentConfig: {
-      database: {
-        host: state.deployConfig.dbHost,
-        port: parseInt(state.deployConfig.dbPort, 10) || 5432,
-        name: state.deployConfig.dbName,
-        username: state.deployConfig.dbUsername,
-      },
-      bootstrapManager: {
-        username: state.deployConfig.mgrUsername,
-        mustChangePassword: state.deployConfig.mgrMustChange,
-      },
     },
   };
 }
@@ -2166,82 +2115,17 @@ async function downloadPackage() {
   }
 }
 
-function buildDeployInitEnv() {
-  const cfg = state.deployConfig;
-  const engine = computeDbEngine().engine;
-  const secretKey = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-    .map((b) => b.toString(16).padStart(2, "0")).join("");
-  const lines = [
-    "# 由 Form System Kit Composer GUI 產生",
-    "# 本檔案含敏感資訊，請勿提交版控",
-    "",
-  ];
-  if (engine === "postgresql") {
-    const encoded = encodeURIComponent(cfg.dbPassword);
-    lines.push(`DB_HOST=${cfg.dbHost}`);
-    lines.push(`DB_PORT=${cfg.dbPort}`);
-    lines.push(`DB_NAME=${cfg.dbName}`);
-    lines.push(`DB_USERNAME=${cfg.dbUsername}`);
-    lines.push(`DB_PASSWORD=${cfg.dbPassword}`);
-    lines.push(`DATABASE_URL=postgresql+asyncpg://${cfg.dbUsername}:${encoded}@${cfg.dbHost}:${cfg.dbPort}/${cfg.dbName}`);
-  } else {
-    lines.push("DATABASE_URL=sqlite+aiosqlite:///./app.db");
-  }
-  lines.push(`SECRET_KEY=${secretKey}`);
-  lines.push("CORS_ORIGINS=http://localhost:5173");
-  lines.push("BOOTSTRAP_MANAGER_ENABLED=true");
-  lines.push("BOOTSTRAP_MANAGER_TENANT_CODE=default");
-  lines.push(`BOOTSTRAP_MANAGER_USERNAME=${cfg.mgrUsername}`);
-  lines.push(`BOOTSTRAP_MANAGER_PASSWORD=${cfg.mgrPassword}`);
-  lines.push(`BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD=${cfg.mgrMustChange}`);
-  return lines.join("\n");
-}
-
-function downloadDeployInitEnv() {
-  const cfg = state.deployConfig;
-  const engine = computeDbEngine().engine;
-  if (engine === "postgresql") {
-    if (!cfg.dbPassword) { showDeployConfigError("請輸入資料庫密碼"); return; }
-    if (cfg.dbPassword !== cfg.dbPasswordConfirm) { showDeployConfigError("資料庫密碼兩次輸入不一致"); return; }
-  }
-  if (!cfg.mgrPassword) { showDeployConfigError("請輸入管理帳號密碼"); return; }
-  if (cfg.mgrPassword !== cfg.mgrPasswordConfirm) { showDeployConfigError("管理帳號密碼兩次輸入不一致"); return; }
-  clearDeployConfigError();
-  const content = buildDeployInitEnv();
-  const blob = new Blob([content], { type: "text/plain" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = "deploy-init.env";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-  recordOperation("download-deploy-env");
-  flashButton("#download-deploy-init-env", "已下載", "下載 deploy-init.env");
-}
-
 function recordOperation(action, extra = {}) {
   const recipe = buildRecipe();
   const body = JSON.stringify({
     action,
     recipeName: recipe.name,
     kits: recipe.enabledKits,
-    licensee: state.deployConfig?.mgrUsername ?? "",
+    licensee: "",
     ...extra,
   });
   fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body })
     .catch(() => {});
-}
-
-function showDeployConfigError(msg) {
-  const el = document.querySelector("#deploy-config-error");
-  if (el) { el.textContent = msg; el.hidden = false; }
-}
-
-function clearDeployConfigError() {
-  const el = document.querySelector("#deploy-config-error");
-  if (el) { el.textContent = ""; el.hidden = true; }
 }
 
 // ── 工具函式 ──────────────────────────────────────────────────────────────────

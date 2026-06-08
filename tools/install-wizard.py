@@ -246,6 +246,24 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
+        elif path == "/api/ls":
+            from urllib.parse import unquote_plus
+            qs = self.path.partition("?")[2]
+            raw_path: str | None = None
+            for part in qs.split("&"):
+                if part.startswith("path="):
+                    raw_path = unquote_plus(part.split("=", 1)[1])
+            target = Path(raw_path) if raw_path else Path.home()
+            try:
+                dirs = sorted(
+                    p.name for p in target.iterdir()
+                    if p.is_dir() and not p.name.startswith(".")
+                )
+                parent = str(target.parent) if target.parent != target else None
+                self._send_json({"path": str(target.resolve()), "dirs": dirs, "parent": parent})
+            except Exception as e:
+                self._send_json({"path": str(target), "dirs": [], "parent": None, "error": str(e)})
+
         elif path == "/api/log":
             qs = self.path.partition("?")[2]
             offset = 0
@@ -574,6 +592,7 @@ a { color: var(--primary); }
       <label>系統目錄</label>
       <div class="input-btn-row">
         <input id="info-sysroot" type="text" style="font-family:monospace;font-size:12px" placeholder="自動偵測中…">
+        <button class="btn btn-outline btn-sm" onclick="openDirBrowser()" title="瀏覽資料夾">…</button>
         <button class="btn btn-outline btn-sm" onclick="verifySysRoot()">驗證</button>
       </div>
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
@@ -581,6 +600,19 @@ a { color: var(--primary); }
     <div class="nav-row">
       <span></span>
       <button class="btn btn-primary" id="btn-welcome-next" onclick="goNext()">開始安裝 &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ── Dir browser modal ──────────────────────────────── -->
+  <div id="dir-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:10px;padding:24px;width:520px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-weight:600;font-size:15px">選擇系統目錄</div>
+      <div style="font-family:monospace;font-size:12px;background:#f5f5f5;padding:6px 10px;border-radius:4px;word-break:break-all" id="dir-cur-path">—</div>
+      <div style="overflow-y:auto;flex:1;border:1px solid #e5e7eb;border-radius:6px;max-height:320px" id="dir-list"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeDirBrowser()">取消</button>
+        <button class="btn btn-primary btn-sm" id="dir-select-btn" onclick="selectCurrentDir()">選擇此資料夾</button>
+      </div>
     </div>
   </div>
 
@@ -820,6 +852,47 @@ async function verifySysRoot() {
   } catch (e) {
     setSysRootStatus(false, '驗證失敗：' + e);
   }
+}
+
+// ── Dir browser ───────────────────────────────────────────────────────────────
+let _dirBrowserPath = null;
+
+async function openDirBrowser() {
+  const modal = document.getElementById('dir-modal');
+  modal.style.display = 'flex';
+  const startPath = document.getElementById('info-sysroot').value.trim() || null;
+  await _loadDir(startPath);
+}
+
+function closeDirBrowser() {
+  document.getElementById('dir-modal').style.display = 'none';
+}
+
+async function _loadDir(path) {
+  const url = '/api/ls' + (path ? '?path=' + encodeURIComponent(path) : '');
+  const data = await fetch(url).then(r => r.json());
+  _dirBrowserPath = data.path;
+  document.getElementById('dir-cur-path').textContent = data.path;
+  const list = document.getElementById('dir-list');
+  let html = '';
+  if (data.parent) {
+    html += `<div onclick="_loadDir('${data.parent.replace(/'/g,"\\'")}');event.stopPropagation()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;color:var(--muted);font-size:13px">&#8593; 上層目錄</div>`;
+  }
+  if (data.dirs.length === 0) {
+    html += '<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center">（無子目錄）</div>';
+  }
+  for (const d of data.dirs) {
+    const full = (data.path.endsWith('/') || data.path.endsWith('\\') ? data.path : data.path + '/') + d;
+    html += `<div onclick="_loadDir('${full.replace(/'/g,"\\'")}');event.stopPropagation()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;align-items:center;gap:8px"><span style="color:#6b7280">&#128193;</span>${d}</div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function selectCurrentDir() {
+  if (!_dirBrowserPath) return;
+  document.getElementById('info-sysroot').value = _dirBrowserPath;
+  closeDirBrowser();
+  await verifySysRoot();
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
