@@ -39,6 +39,7 @@ _install_state: dict = {
     "success": None,
 }
 _sys_root_hint: Path | None = None
+_last_heartbeat: float = 0.0  # epoch seconds; 0 = no heartbeat yet (watchdog inactive)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -314,6 +315,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 return
             env = body.get("env", {})
             threading.Thread(target=_install_worker, args=(env, sys_root), daemon=True).start()
+            self._send_json({"ok": True})
+
+        elif path == "/api/heartbeat":
+            global _last_heartbeat
+            _last_heartbeat = time.time()
             self._send_json({"ok": True})
 
         elif path == "/api/shutdown":
@@ -769,6 +775,9 @@ a { color: var(--primary); }
       </div>
       <button class="btn btn-secondary" onclick="goStep(6)" style="margin-top:16px">&#9664; 查看安裝記錄</button>
     </div>
+    <div style="margin-top:24px;text-align:right">
+      <button class="btn btn-secondary" onclick="shutdownWizard()">&#10005; 關閉精靈</button>
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -821,6 +830,11 @@ async function init() {
     console.error('init error:', e);
   }
 }
+
+// ── Heartbeat — keeps watchdog alive while browser is open ───────────────────
+setInterval(() => {
+  fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+}, 5000);
 
 // ── Sys-root editing ─────────────────────────────────────────────────────────
 function setSysRootStatus(ok, msg) {
@@ -893,6 +907,11 @@ async function selectCurrentDir() {
   document.getElementById('info-sysroot').value = _dirBrowserPath;
   closeDirBrowser();
   await verifySysRoot();
+}
+
+async function shutdownWizard() {
+  try { await fetch('/api/shutdown', { method: 'POST' }); } catch (_) {}
+  window.close();
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
@@ -1178,6 +1197,25 @@ def main() -> None:
         sys.exit(1)
 
     _server_ref[0] = server
+
+    def _watchdog() -> None:
+        """Shut down the server if the browser has been closed for >15 s and no install is running."""
+        TIMEOUT = 15.0
+        while True:
+            time.sleep(5)
+            hb = _last_heartbeat
+            if hb == 0.0:
+                continue  # heartbeat never received yet; wizard not opened
+            with _lock:
+                running = _install_state["running"]
+            if not running and (time.time() - hb) > TIMEOUT:
+                srv = _server_ref[0]
+                if srv:
+                    threading.Thread(target=srv.shutdown, daemon=True).start()
+                break
+
+    threading.Thread(target=_watchdog, daemon=True, name="heartbeat-watchdog").start()
+
     url = f"http://localhost:{port}/"
 
     print()
