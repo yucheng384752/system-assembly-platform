@@ -109,6 +109,16 @@ const server = http.createServer((req, res) => {
   });
 });
 
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`\n錯誤：連接埠 ${port} 已被佔用。`);
+    console.error(`請先關閉佔用該連接埠的程式，或指定其他連接埠：`);
+    console.error(`  PORT=4174 node tools/serve-gui.cjs\n`);
+    process.exit(1);
+  }
+  throw err;
+});
+
 server.listen(port, host, () => {
   console.log(`Serving ${root} at http://${host}:${port}/`);
   console.log(`API: POST /api/log  GET /api/logs`);
