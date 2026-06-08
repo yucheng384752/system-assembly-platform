@@ -197,6 +197,24 @@
             </div>
           </div>
 
+          <section class="panel" style="margin-top:16px;">
+            <h3>機器碼綁定（選填）</h3>
+            <p style="margin:0 0 12px;color:var(--ink-3);font-size:13px;">
+              填入客戶機器碼可將授權綁定至特定伺服器，防止 License 被複製到其他機器。<br>
+              客戶在目標伺服器執行 <code>bash deploy.sh --get-machine-id</code> 即可取得「Fingerprint」欄位的值。
+            </p>
+            <div style="display:flex;gap:8px;align-items:center;">
+              <input class="input" id="machine-fingerprint" type="text"
+                placeholder="貼上 64 位 SHA-256 Fingerprint（或留空表示不綁定機器）"
+                style="flex:1;font-family:monospace;font-size:12px;" />
+              <label class="ghost-action" style="cursor:pointer;margin:0;white-space:nowrap;">
+                上傳 .txt
+                <input type="file" id="machine-fingerprint-file" accept=".txt" style="display:none;" />
+              </label>
+            </div>
+            <div id="machine-fingerprint-status" style="font-size:12px;margin-top:6px;display:none;"></div>
+          </section>
+
           <details class="recipe-details">
             <summary>進階：Recipe JSON 與 Assembly 指令</summary>
             <div class="layout-two" style="margin-top:14px">

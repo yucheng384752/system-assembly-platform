@@ -1321,6 +1321,7 @@ if (-not $SkipZip) {
     $privKey    = Join-Path $PSScriptRoot 'keys\signing-private-key.pem'
     if ((Test-Path $signScript) -and (Test-Path $privKey)) {
         Write-Host 'Signing package...'
+        $recipeMachineId = if ($recipe.machineFingerprint) { [string]$recipe.machineFingerprint } else { '' }
         & powershell -ExecutionPolicy Bypass -File $signScript `
             -RecipePath $recipePath `
             -PackageZipPath $zipPath `
@@ -1328,7 +1329,8 @@ if (-not $SkipZip) {
             -OutputDir $stageDir `
             -LicenseeName $LicenseeName `
             -LicenseeEmail $LicenseeEmail `
-            -ExpiresAfterDays $ExpiresAfterDays
+            -ExpiresAfterDays $ExpiresAfterDays `
+            -MachineId $recipeMachineId
         # Copy license.lic into zip (re-compress with license)
         $licFile = Join-Path $stageDir 'license.lic'
         if (Test-Path $licFile) {

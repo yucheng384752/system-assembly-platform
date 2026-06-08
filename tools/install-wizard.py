@@ -247,6 +247,54 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
+        elif path == "/api/machine-id":
+            import hashlib as _hl
+            mid_path = Path("/etc/machine-id")
+            if mid_path.exists():
+                raw = mid_path.read_text("utf-8").strip().lower()
+                fp = _hl.sha256(raw.encode()).hexdigest()
+                self._send_json({"found": True, "fingerprint": fp})
+            else:
+                self._send_json({"found": False, "fingerprint": None})
+
+        elif path == "/api/check-license":
+            import hashlib as _hl, json as _json
+            sr = _find_sys_root()
+            if not sr:
+                self._send_json({"valid": False, "reason": "sys_root_not_found"})
+                return
+            lic_path = sr / "license.lic"
+            if not lic_path.exists():
+                self._send_json({"valid": False, "reason": "no_license_file"})
+                return
+            try:
+                lic_data = _json.loads(lic_path.read_text("utf-8"))
+                payload = _json.loads(lic_data["payload"])
+                # Expiry check
+                expires_at = payload.get("expiresAt", "")
+                if expires_at:
+                    from datetime import datetime, timezone
+                    if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at.replace("Z", "+00:00")):
+                        self._send_json({"valid": False, "reason": "expired", "expires_at": expires_at})
+                        return
+                # Machine fingerprint check
+                expected_fp = payload.get("machineFingerprint")
+                if expected_fp:
+                    mid_path = Path("/etc/machine-id")
+                    if not mid_path.exists():
+                        self._send_json({"valid": False, "reason": "no_machine_id"})
+                        return
+                    raw = mid_path.read_text("utf-8").strip().lower()
+                    current_fp = _hl.sha256(raw.encode()).hexdigest()
+                    if current_fp != expected_fp:
+                        self._send_json({"valid": False, "reason": "fingerprint_mismatch", "current_fp": current_fp})
+                        return
+                licensee = payload.get("licensee", {})
+                self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
+                                 "machine_bound": bool(expected_fp)})
+            except Exception as exc:
+                self._send_json({"valid": False, "reason": str(exc)})
+
         elif path == "/api/ls":
             from urllib.parse import unquote_plus
             qs = self.path.partition("?")[2]
@@ -603,6 +651,14 @@ a { color: var(--primary); }
       </div>
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
+    <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
+      <label>本機機器碼（Fingerprint）</label>
+      <div class="input-btn-row">
+        <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
+        <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
+      </div>
+      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。</div>
+    </div>
     <div class="nav-row">
       <span></span>
       <button class="btn btn-primary" id="btn-welcome-next" onclick="goNext()">開始安裝 &rarr;</button>
@@ -734,9 +790,10 @@ a { color: var(--primary); }
     <div class="card-title">確認設定</div>
     <div class="card-sub">請確認以下設定正確，點擊「開始安裝」後將寫入 .env 並執行安裝。</div>
     <table class="review-table" id="review-table"></table>
+    <div id="license-check-result" style="display:none;margin:16px 0;padding:12px 14px;border-radius:6px;font-size:13px;"></div>
     <div class="nav-row">
       <button class="btn btn-secondary" onclick="goStep(4)">&larr; 上一步</button>
-      <button class="btn btn-primary" onclick="startInstall()">&#9658; 開始安裝</button>
+      <button class="btn btn-primary" id="btn-start-install" onclick="startInstall()">&#9658; 開始安裝</button>
     </div>
   </div>
 
@@ -795,6 +852,80 @@ const S = {
   pollTimer: null,
 };
 
+// ── Machine-id display & license pre-check ───────────────────────────────────
+async function loadMachineId() {
+  try {
+    const data = await fetch('/api/machine-id').then(r => r.json());
+    const panel = document.getElementById('machine-id-panel');
+    const disp  = document.getElementById('machine-id-display');
+    if (data.found && data.fingerprint) {
+      disp.value = data.fingerprint;
+      panel.style.display = 'block';
+    }
+  } catch (_) {}
+}
+
+function copyMachineId() {
+  const v = document.getElementById('machine-id-display')?.value;
+  if (v) navigator.clipboard?.writeText(v).catch(() => {});
+}
+
+async function checkLicenseBeforeInstall() {
+  const resultEl = document.getElementById('license-check-result');
+  const btnInstall = document.getElementById('btn-start-install');
+  if (!resultEl) return;
+  resultEl.style.display = 'block';
+  resultEl.style.background = '#f0f9ff';
+  resultEl.style.border = '1px solid #bae6fd';
+  resultEl.textContent = '授權驗證中…';
+  try {
+    const data = await fetch('/api/check-license').then(r => r.json());
+    if (data.valid) {
+      const bound = data.machine_bound ? '（機器綁定）' : '（未綁定機器）';
+      resultEl.style.background = '#f0fdf4';
+      resultEl.style.border = '1px solid #86efac';
+      resultEl.style.color = '#166534';
+      resultEl.textContent = `✓ 授權有效 ${bound}`;
+      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'fingerprint_mismatch') {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.innerHTML =
+        '<strong>❌ 授權驗證失敗：機器碼不符</strong><br>' +
+        '此授權套件綁定至特定機器，本機器碼不符合。<br>' +
+        '請在授權機器上執行安裝，或將下列機器碼提供給授權方重新簽發：<br>' +
+        '<code style="background:#fff;padding:2px 6px;border-radius:3px;user-select:all">' +
+        (data.current_fp || '無法讀取') + '</code>';
+      if (btnInstall) btnInstall.disabled = true;
+    } else if (data.reason === 'no_license_file') {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = '⚠ 找不到 license.lic，將以未授權模式繼續安裝。';
+      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'expired') {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.textContent = `❌ 授權已過期（${data.expires_at}），請聯絡授權方更新授權。`;
+      if (btnInstall) btnInstall.disabled = true;
+    } else {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = `⚠ 授權狀態：${data.reason}`;
+      if (btnInstall) btnInstall.disabled = false;
+    }
+  } catch (_) {
+    resultEl.style.background = '#fffbeb';
+    resultEl.style.border = '1px solid #fcd34d';
+    resultEl.style.color = '#92400e';
+    resultEl.textContent = '⚠ 無法讀取授權（可忽略，繼續安裝）。';
+    if (btnInstall) btnInstall.disabled = false;
+  }
+}
+
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
   try {
@@ -826,6 +957,7 @@ async function init() {
       b.textContent = k;
       kitList.appendChild(b);
     });
+    loadMachineId();
   } catch (e) {
     console.error('init error:', e);
   }
@@ -922,7 +1054,7 @@ function goStep(n) {
   updateStepBar();
   window.scrollTo(0, 0);
   if (n === 1) runPrereqs();
-  if (n === 5) buildReview();
+  if (n === 5) { buildReview(); checkLicenseBeforeInstall(); }
 }
 
 function goNext() { goStep(S.currentStep + 1); }

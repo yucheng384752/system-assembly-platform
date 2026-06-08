@@ -100,6 +100,7 @@ const state = {
   pkFkSuggestions: null,
   pkFkApplied: null,
   guideAnswers: {},
+  machineFingerprint: '',
 };
 
 const elements = {};
@@ -349,6 +350,42 @@ function bindToolbarActions() {
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
+
+  const fpInput = document.querySelector("#machine-fingerprint");
+  const fpStatus = document.querySelector("#machine-fingerprint-status");
+  function setFpStatus(msg, ok) {
+    if (!fpStatus) return;
+    fpStatus.style.display = msg ? "block" : "none";
+    fpStatus.style.color = ok ? "var(--success, green)" : "var(--error, red)";
+    fpStatus.textContent = msg;
+  }
+  if (fpInput) {
+    fpInput.addEventListener("input", () => {
+      const v = fpInput.value.trim();
+      state.machineFingerprint = v;
+      if (!v) { setFpStatus("", true); return; }
+      setFpStatus(/^[0-9a-f]{64}$/i.test(v) ? "有效 SHA-256 Fingerprint" : "格式有誤（需 64 位 hex）", /^[0-9a-f]{64}$/i.test(v));
+      renderRecipeOutput();
+    });
+  }
+  const fpFile = document.querySelector("#machine-fingerprint-file");
+  if (fpFile) {
+    fpFile.addEventListener("change", async () => {
+      const f = fpFile.files[0];
+      if (!f) return;
+      const text = (await f.text()).trim();
+      const match = text.match(/[0-9a-f]{64}/i);
+      if (match) {
+        state.machineFingerprint = match[0].toLowerCase();
+        if (fpInput) fpInput.value = state.machineFingerprint;
+        setFpStatus("已從檔案讀取 Fingerprint", true);
+        renderRecipeOutput();
+      } else {
+        setFpStatus("找不到有效 Fingerprint（需 64 位 hex）", false);
+      }
+      fpFile.value = "";
+    });
+  }
 }
 
 function bindSearch() {
@@ -1513,6 +1550,7 @@ function buildRecipe() {
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
     },
+    ...(state.machineFingerprint ? { machineFingerprint: state.machineFingerprint } : {}),
   };
 }
 
