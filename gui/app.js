@@ -2052,7 +2052,23 @@ powershell -ExecutionPolicy Bypass -File deploy.ps1 -StartFrom 3
 
 ## 部署到目標機器（Client Deploy ZIP）
 
-將 \`dist/client-deploy-*.zip\` 解壓後，在目標機器執行：
+解壓後選擇安裝方式：
+
+### Option A：Web 安裝精靈（推薦）
+
+**Windows**（無需安裝 Python）：
+\`\`\`
+雙擊 install-wizard.exe
+\`\`\`
+
+**Linux / macOS**：
+\`\`\`bash
+python3 install-wizard.py
+\`\`\`
+
+瀏覽器自動開啟 \`http://localhost:9981/\`，依 7 步驟引導完成安裝設定。
+
+### Option B：命令列安裝
 
 \`\`\`powershell
 # Windows
@@ -2061,7 +2077,8 @@ powershell -ExecutionPolicy Bypass -File deploy.ps1
 
 \`\`\`bash
 # Linux / macOS
-bash deploy.sh
+bash deploy.sh --wizard   # 互動式引導（推薦首次安裝）
+bash deploy.sh            # 直接安裝（需已設定 .env）
 \`\`\`
 
 ## 前置需求
@@ -2121,6 +2138,15 @@ async function downloadPackage() {
     zip.file("phases/04-package.ps1", bom + buildDeployPhase4Ps1());
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
+    // Include install-wizard files when served via serve-gui.cjs
+    try {
+      const pyResp = await fetch("/api/wizard-py");
+      if (pyResp.ok) zip.file("install-wizard.py", await pyResp.text());
+    } catch (_) { /* server not running, skip */ }
+    try {
+      const exeResp = await fetch("/api/wizard-exe");
+      if (exeResp.ok) zip.file("install-wizard.exe", await exeResp.arrayBuffer());
+    } catch (_) { /* exe not built yet or server not running, skip */ }
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

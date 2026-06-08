@@ -71,6 +71,24 @@ const server = http.createServer((req, res) => {
     handleApiLogs(res);
     return;
   }
+  if (pathname === "/api/wizard-py" && req.method === "GET") {
+    const p = path.join(__dirname, "install-wizard.py");
+    fs.readFile(p, (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Content-Length": data.length });
+      res.end(data);
+    });
+    return;
+  }
+  if (pathname === "/api/wizard-exe" && req.method === "GET") {
+    const p = path.join(__dirname, "install-wizard.exe");
+    fs.readFile(p, (err, data) => {
+      if (err) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, { "Content-Type": "application/octet-stream", "Content-Length": data.length });
+      res.end(data);
+    });
+    return;
+  }
 
   // Static files
   const filePath = path.normalize(path.join(root, pathname === "/" ? "/gui/index.html" : decodeURIComponent(pathname)));
