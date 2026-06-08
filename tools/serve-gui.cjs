@@ -5,7 +5,7 @@ const path = require("path");
 const root = path.resolve(__dirname, "..");
 const dataDir = path.join(root, "data");
 const opsLog = path.join(dataDir, "operations.jsonl");
-const port = Number(process.env.PORT || 4173);
+const port = Number(process.env.PORT || 4174);
 const host = process.env.HOST || "127.0.0.1";
 
 const types = {
@@ -90,9 +90,11 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  // Static files
-  const filePath = path.normalize(path.join(root, pathname === "/" ? "/gui/index.html" : decodeURIComponent(pathname)));
-  if (!filePath.startsWith(root)) {
+  // Static files — serve from gui/ as root so ./styles.css and ./app.js resolve correctly
+  const guiRoot = path.join(root, "gui");
+  const relPath = pathname === "/" ? "index.html" : decodeURIComponent(pathname).replace(/^\//, "");
+  const filePath = path.normalize(path.join(guiRoot, relPath));
+  if (!filePath.startsWith(guiRoot)) {
     res.writeHead(403);
     res.end("Forbidden");
     return;
