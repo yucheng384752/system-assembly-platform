@@ -5,14 +5,19 @@
 
 .DESCRIPTION
   Bundles tools/install-wizard.py into a standalone Windows .exe.
-  Output: dist/install-wizard.exe
+  Default output: tools/install-wizard.exe  (auto-included in every zip by package-client-deploy.ps1)
+
+  Workflow:
+    1. Run this script once to build the .exe
+    2. Run package-client-deploy.ps1 — it detects tools/install-wizard.exe and bundles it in the zip
+    3. Re-run this script whenever install-wizard.py changes
 
 .EXAMPLE
   .\tools\build-wizard-exe.ps1
-  .\tools\build-wizard-exe.ps1 -OutputDir C:\release
+  .\tools\build-wizard-exe.ps1 -OutputDir C:\custom\path
 #>
 param(
-    [string]$OutputDir = (Join-Path $PSScriptRoot '..\dist'),
+    [string]$OutputDir = $PSScriptRoot,   # default: tools/ so package-client-deploy.ps1 finds it
     [string]$PythonExe = 'python'
 )
 

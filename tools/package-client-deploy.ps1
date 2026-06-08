@@ -1261,6 +1261,15 @@ if (Test-Path $wizardSrc) {
     Write-Host 'SKIP install-wizard.py (not found at tools\install-wizard.py)'
 }
 
+# Copy install-wizard.exe if pre-built (run tools\build-wizard-exe.ps1 once to generate) ------
+$wizardExe = Join-Path $PSScriptRoot 'install-wizard.exe'
+if (Test-Path $wizardExe) {
+    Write-Host 'Copying install-wizard.exe...'
+    Copy-Item $wizardExe (Join-Path $stageDir 'install-wizard.exe') -Force
+} else {
+    Write-Host 'SKIP install-wizard.exe (run tools\build-wizard-exe.ps1 to pre-build)'
+}
+
 # Write .gitignore (protect sensitive files in deploy package) ---------------
 $gitignoreContent = @'
 # 由 deploy.sh 更新
