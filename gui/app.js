@@ -1,7 +1,7 @@
 // ── 機器碼腳本（內嵌，無伺服器時也能下載） ───────────────────────────────────────
-const MACHINE_ID_SCRIPT = `#!/usr/bin/env bash
+const MACHINE_ID_SCRIPT = `#!/bin/sh
 # get-machine-id.sh — Form System Kit Composer
-set -euo pipefail
+set -eu
 if [ ! -f /etc/machine-id ]; then
   echo "Error: /etc/machine-id not found. This script requires Linux." >&2
   exit 1

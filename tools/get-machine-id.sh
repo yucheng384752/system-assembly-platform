@@ -1,7 +1,7 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # get-machine-id.sh — Form System Kit Composer
 # Generates a machine fingerprint from /etc/machine-id and writes it to machine-id.txt
-set -euo pipefail
+set -eu
 
 if [ ! -f /etc/machine-id ]; then
   echo "Error: /etc/machine-id not found. This script requires Linux." >&2
