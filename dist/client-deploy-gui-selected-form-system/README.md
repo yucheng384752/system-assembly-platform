@@ -3,7 +3,7 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-06-07 22:34 |
+| Built   | 2026-06-08 15:12 |
 | DB      | postgresql |
 | Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, mod-subscription-kit |
 
@@ -34,9 +34,25 @@ cd client-deploy-gui-selected-form-system
 
 ### 2. Install
 
-#### Option A ??Guided Wizard (recommended for first-time install)
+#### Option A ??Web Install Wizard (recommended)
 
-Step-by-step prompts for database, manager account, and secret key. Validates input and shows a summary before proceeding.
+Interactive browser-based wizard. No extra dependencies ??only Python 3 required.
+
+```bash
+python3 install-wizard.py
+```
+
+Opens `http://localhost:9981/` automatically. Guides you through database, manager account, security keys, and runs the install pipeline with live progress.
+
+Windows:
+
+```powershell
+python install-wizard.py
+```
+
+#### Option B ??CLI Wizard (SSH / headless servers)
+
+Step-by-step text prompts for database, manager account, and secret key.
 
 ```bash
 bash deploy.sh --wizard
@@ -48,7 +64,7 @@ To start the backend in the background after install:
 bash deploy.sh --wizard --background
 ```
 
-#### Option B ??Manual config (advanced)
+#### Option C ??Manual config (advanced)
 
 ```bash
 cp system/.env.example system/.env

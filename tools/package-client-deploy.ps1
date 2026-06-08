@@ -887,9 +887,25 @@ $R.Add($tick3)
 $R.Add('')
 $R.Add('### 2. Install')
 $R.Add('')
-$R.Add('#### Option A — Guided Wizard (recommended for first-time install)')
+$R.Add('#### Option A — Web Install Wizard (recommended)')
 $R.Add('')
-$R.Add('Step-by-step prompts for database, manager account, and secret key. Validates input and shows a summary before proceeding.')
+$R.Add('Interactive browser-based wizard. No extra dependencies — only Python 3 required.')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('python3 install-wizard.py')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('Opens ' + $tick1 + 'http://localhost:9981/' + $tick1 + ' automatically. Guides you through database, manager account, security keys, and runs the install pipeline with live progress.')
+$R.Add('')
+$R.Add('Windows:')
+$R.Add('')
+$R.Add($tick3 + 'powershell')
+$R.Add('python install-wizard.py')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('#### Option B — CLI Wizard (SSH / headless servers)')
+$R.Add('')
+$R.Add('Step-by-step text prompts for database, manager account, and secret key.')
 $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('bash deploy.sh --wizard')
@@ -901,7 +917,7 @@ $R.Add($tick3 + 'bash')
 $R.Add('bash deploy.sh --wizard --background')
 $R.Add($tick3)
 $R.Add('')
-$R.Add('#### Option B — Manual config (advanced)')
+$R.Add('#### Option C — Manual config (advanced)')
 $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('cp system/.env.example system/.env')
@@ -1235,6 +1251,15 @@ $nginxStandaloneContent = $nginxStandaloneContent.Replace('__RNAME__', $rName) -
 
 # Copy recipe.json ----------------------------------------------------------
 Copy-Item $recipePath (Join-Path $stageDir 'recipe.json') -Force
+
+# Copy install-wizard.py (local web installer) ------------------------------
+$wizardSrc = Join-Path $PSScriptRoot 'install-wizard.py'
+if (Test-Path $wizardSrc) {
+    Write-Host 'Copying install-wizard.py...'
+    Copy-Item $wizardSrc (Join-Path $stageDir 'install-wizard.py') -Force
+} else {
+    Write-Host 'SKIP install-wizard.py (not found at tools\install-wizard.py)'
+}
 
 # Write .gitignore (protect sensitive files in deploy package) ---------------
 $gitignoreContent = @'
