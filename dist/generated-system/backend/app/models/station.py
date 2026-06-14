@@ -13,10 +13,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.db_types import JsonBColumn
 
 
 class Station(Base):
@@ -75,21 +76,13 @@ class StationSchema(Base):
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
-    record_fields: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
-    item_fields: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JSONB, nullable=True
-    )
-    unique_key_fields: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    record_fields: Mapped[list[dict[str, Any]]] = mapped_column(JsonBColumn(), nullable=False)
+    item_fields: Mapped[list[dict[str, Any]] | None] = mapped_column(JsonBColumn(), nullable=True)
+    unique_key_fields: Mapped[list[str]] = mapped_column(JsonBColumn(), nullable=False)
 
-    csv_signature_columns: Mapped[list[str] | None] = mapped_column(
-        JSONB, nullable=True
-    )
-    csv_filename_pattern: Mapped[str | None] = mapped_column(
-        String(100), nullable=True
-    )
-    csv_field_mapping: Mapped[dict[str, Any] | None] = mapped_column(
-        JSONB, nullable=True
-    )
+    csv_signature_columns: Mapped[list[str] | None] = mapped_column(JsonBColumn(), nullable=True)
+    csv_filename_pattern: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    csv_field_mapping: Mapped[dict[str, Any] | None] = mapped_column(JsonBColumn(), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -128,6 +121,6 @@ class StationLink(Base):
     )
     link_type: Mapped[str] = mapped_column(String(20), nullable=False)
     link_config: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, server_default="{}"
+        JsonBColumn(), nullable=False, server_default="{}"
     )
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

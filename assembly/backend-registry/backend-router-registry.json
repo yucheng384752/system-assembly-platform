@@ -77,6 +77,17 @@
         "featureFlag":  null
     },
     {
+        "kit":  "generic-forms-kit",
+        "module":  "app.api.routes_generic_forms",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "通用表單"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
         "kit":  "query-traceability-kit",
         "module":  "app.api.routes_query_v2",
         "symbol":  "router",

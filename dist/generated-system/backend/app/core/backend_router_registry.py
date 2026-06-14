@@ -81,6 +81,15 @@ ROUTER_REGISTRY = [
         tenant_scoped=True,
         feature_flag=None,
     ),
+    BackendRouterRegistration(
+        kit='generic-forms-kit',
+        module='app.api.routes_generic_forms',
+        symbol='router',
+        prefix='/api',
+        tags=['通用表單'],
+        tenant_scoped=True,
+        feature_flag=None,
+    ),
 ]
 
 

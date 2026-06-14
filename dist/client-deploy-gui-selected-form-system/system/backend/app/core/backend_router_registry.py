@@ -86,7 +86,7 @@ ROUTER_REGISTRY = [
         module='app.api.routes_generic_forms',
         symbol='router',
         prefix='/api',
-        tags=['Generic Forms'],
+        tags=['通用表單'],
         tenant_scoped=True,
         feature_flag=None,
     ),
