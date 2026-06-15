@@ -22,18 +22,21 @@ echo ""
 `;
 
 // ── Kit 資料 ──────────────────────────────────────────────────────────────
+const PLATFORM_FRONTEND_HIDDEN_KIT_IDS = new Set(["mod-subscription-kit"]);
+const PLATFORM_FRONTEND_HIDDEN_FLOW_IDS = new Set(["subscription"]);
+
 const fallbackKits = [
   kit("platform-core-kit", "平台核心", "foundation", true, "提供應用程式 shell、設定、資料庫連線、健康檢查、語系與 API 呼叫基礎。", []),
-  kit("tenant-auth-kit", "租戶與登入權限", "security", true, "管理租戶、登入、API key、使用者角色與資料隔離邊界。", ["platform-core-kit"]),
+  kit("tenant-auth-kit", "租戶與登入權限", "security", true, "管理租戶、登入、API key、使用者角色與資料隔離邊界。含 RegisterPage（登入/登出/密碼修改）與 ManagerPage（管理者用戶 CRUD，role=manager 限定）。", ["platform-core-kit"]),
   kit("station-data-link-kit", "站點資料串聯", "data-model", true, "保存並標準化站點資料，將 lot、winder、product_id 串成可追溯資料鏈。", ["platform-core-kit", "tenant-auth-kit"]),
   kit("upload-validation-kit", "檔案上傳與驗證", "workflow", false, "上傳 CSV、Excel 或 PDF，建立工作、驗證內容、顯示錯誤並允許修正。", ["platform-core-kit", "tenant-auth-kit"], [], ["import-pipeline-kit"]),
   kit("import-pipeline-kit", "資料匯入流程", "workflow", false, "將已驗證檔案轉成匯入工作，提交到正式資料表。", ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit"]),
   kit("query-traceability-kit", "查詢與追溯", "business", false, "依 lot、product_id 與動態欄位查詢跨站點追溯資料。", ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit"]),
   kit("analytics-kit", "分析與報表", "analytics", false, "提供分析儀表板、artifact 瀏覽、即時分析與圖表摘要。", ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit", "query-traceability-kit"]),
   kit("station-admin-kit", "站點與規則管理", "admin", false, "管理泛用站點、欄位 schema、驗證規則、分析欄位對應與站點連結。", ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit"]),
+  kit("generic-forms-kit", "通用表格管理", "admin", false, "動態定義表格欄位 schema、上傳 CSV 資料、瀏覽與刪除記錄；無需修改程式碼即可新增自訂表格。含 FormsPage 三 subtab UI（Schema 編輯／CSV 上傳／記錄瀏覽）。", ["platform-core-kit", "tenant-auth-kit"]),
   kit("audit-edit-kit", "稽核與資料修正", "governance", false, "資料修正時保留原因、前後差異與操作稽核紀錄。", ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit"]),
   kit("logs-ops-kit", "日誌與維運", "operations", false, "查看、搜尋、統計、清理與下載系統日誌。", ["platform-core-kit", "tenant-auth-kit"]),
-  kit("mod-subscription-kit", "MOD 訂閱串接", "integration", false, "串接訂閱狀態、方案與權益，供系統依方案啟用功能。", ["platform-core-kit", "tenant-auth-kit"]),
 ];
 
 const categoryMeta = {
@@ -79,6 +82,14 @@ const flows = [
     pages: ["分析儀表板", "客製報表頁"],
   },
   {
+    id: "generic-forms",
+    name: "通用表格管理",
+    description: "動態定義表格 schema、上傳 CSV、瀏覽記錄；管理者可在不修改程式碼的情況下新增自訂表格",
+    kits: ["generic-forms-kit"],
+    subflows: [],
+    pages: ["通用表格頁（Schema 編輯 / CSV 上傳 / 記錄瀏覽）"],
+  },
+  {
     id: "governance",
     name: "管理治理",
     description: "站點與規則管理、稽核紀錄與系統維運日誌",
@@ -88,14 +99,6 @@ const flows = [
       { id: "ops-logs", name: "日誌與維運", description: "查看、搜尋、統計與下載系統日誌" },
     ],
     pages: ["站點管理頁", "稽核頁", "日誌頁"],
-  },
-  {
-    id: "subscription",
-    name: "訂閱串接",
-    description: "MOD 訂閱狀態、方案管理與功能 gating",
-    kits: ["mod-subscription-kit"],
-    subflows: [],
-    pages: ["訂閱方案頁"],
   },
 ];
 
@@ -297,10 +300,10 @@ async function loadKitCatalog() {
     if (!response.ok) throw new Error(`Manifest load failed: ${response.status}`);
     const manifest = await response.json();
     state.manifestSource = "manifest";
-    return normalizeManifestKits(manifest.kits || []);
+    return normalizeManifestKits(manifest.kits || []).filter(isPlatformFrontendKit);
   } catch {
     state.manifestSource = "fallback";
-    return fallbackKits;
+    return fallbackKits.filter(isPlatformFrontendKit);
   }
 }
 
@@ -317,6 +320,10 @@ function normalizeManifestKits(manifestKits) {
       item.optionalDependencies || [],
     ),
   );
+}
+
+function isPlatformFrontendKit(item) {
+  return item && !PLATFORM_FRONTEND_HIDDEN_KIT_IDS.has(item.id);
 }
 
 function normalizeManifestSubfeatures(parentId, subfeatures) {
@@ -498,11 +505,11 @@ function applyFlowSelection() {
   resetToRequiredKits();
   const allFlows = new Set(state.selectedFlows);
   allFlows.forEach((flowId) => {
-    const flow = flows.find((f) => f.id === flowId);
+    const flow = visibleFlows().find((f) => f.id === flowId);
     flow?.requiresFlows?.forEach((reqId) => allFlows.add(reqId));
   });
   allFlows.forEach((flowId) => {
-    const flow = flows.find((f) => f.id === flowId);
+    const flow = visibleFlows().find((f) => f.id === flowId);
     if (!flow) return;
     flow.kits.forEach(addKitWithDependencies);
   });
@@ -515,7 +522,14 @@ function isAutoRequiredFlow(flowId) {
 
 function renderFlows() {
   if (!elements.flowGrid) return;
-  elements.flowGrid.innerHTML = flows.map(flowCardTemplate).join("");
+  elements.flowGrid.innerHTML = visibleFlows().map(flowCardTemplate).join("");
+}
+
+function visibleFlows() {
+  return flows.filter((flow) =>
+    !PLATFORM_FRONTEND_HIDDEN_FLOW_IDS.has(flow.id) &&
+    flow.kits.every((kitId) => !PLATFORM_FRONTEND_HIDDEN_KIT_IDS.has(kitId))
+  );
 }
 
 function flowCardTemplate(flow) {
@@ -1248,6 +1262,7 @@ function onSubfeatureOption(event) {
 }
 
 function addKitWithDependencies(id) {
+  if (PLATFORM_FRONTEND_HIDDEN_KIT_IDS.has(id)) return;
   const item = findKit(id);
   if (!item) return;
   item.dependencies.forEach(addKitWithDependencies);
@@ -1545,25 +1560,6 @@ const kitMockups = {
       <div><span class="log-warn">WARN</span>  09:03:07 | 3 rows skipped in JOB-043</div>
       <div><span class="log-err">ERROR</span> 09:15:33 | PDF conversion timeout: pdf_089</div>
     </div>`),
-
-  "mod-subscription-kit": () =>
-    pvHeader("MOD 訂閱串接", "外部串接", "訂閱狀態同步、方案權益與 Webhook 接收。") +
-    pvSection("訂閱狀態", `<div class="mock-subscription-cards">
-      <div class="mock-sub-card">
-        <div class="sub-plan">Pro 方案</div>
-        <div class="sub-status">使用中</div>
-        <div style="font-size:11px;color:var(--ink-3)">到期：2024-12-31<br>功能：PDF 轉換、即時分析</div>
-      </div>
-      <div class="mock-sub-card">
-        <div class="sub-plan">Enterprise 方案</div>
-        <div class="sub-status" style="background:#fee2e2;color:#991b1b">未啟用</div>
-        <div style="font-size:11px;color:var(--ink-3)">功能：客訴分析、自訂驗證規則</div>
-      </div>
-    </div>`) +
-    pvSection("Webhook 事件", `
-      <div class="mock-audit-item"><span class="audit-time">2024-03-01</span><span class="audit-action">方案升級</span><span>Standard → Pro</span></div>
-      <div class="mock-audit-item"><span class="audit-time">2024-01-15</span><span class="audit-action">Webhook 同步</span><span>訂閱狀態更新</span></div>
-    `),
 };
 
 function renderGeneration() {
@@ -1592,7 +1588,6 @@ function recipeName() {
     "query-trace": "query",
     "analytics":   "analytics",
     "governance":  "admin",
-    "subscription":"sub",
   };
   const parts = Array.from(state.selectedFlows).map(f => short[f] || f);
   return parts.length ? "form-system-" + parts.join("-") : "form-system";

@@ -56,6 +56,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
+    # Security check: reject built-in default SECRET_KEY in production
+    _DEFAULT_SK = "qI5s1RT9GCr8wlqnfh1XxOZBO_47lSqedali3vHGOVk"
+    if getattr(settings, "secret_key", None) == _DEFAULT_SK:
+        _env = (getattr(settings, "environment", "") or "").strip().lower()
+        if _env not in ("development", "dev", "test", "local"):
+            raise RuntimeError(
+                "SECRET_KEY is set to the built-in default value in production. "
+                "Generate a unique key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+            )
+
     # License verification (non-blocking; failure logs warning but does not prevent startup)
     try:
         from app.core.license import verify_license as _verify_license

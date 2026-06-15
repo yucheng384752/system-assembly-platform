@@ -13,8 +13,7 @@
     "analytics-kit",
     "station-admin-kit",
     "audit-edit-kit",
-    "logs-ops-kit",
-    "mod-subscription-kit"
+    "logs-ops-kit"
   ],
   "selectedSubfeatures": {
     "platform-core-kit": [],
@@ -26,12 +25,12 @@
     "analytics-kit": [],
     "station-admin-kit": [],
     "audit-edit-kit": [],
-    "logs-ops-kit": [],
-    "mod-subscription-kit": []
+    "logs-ops-kit": []
   },
   "selectedSubfeatureOptions": {},
   "tableSchemas": [],
   "featureFlags": {},
+  "frontendNavigation": [],
   "database": {
     "engine": "postgresql",
     "connectionOwner": "platform-core-kit",
