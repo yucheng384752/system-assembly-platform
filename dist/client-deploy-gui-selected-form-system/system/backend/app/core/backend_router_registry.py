@@ -126,6 +126,15 @@ ROUTER_REGISTRY = [
         tenant_scoped=True,
         feature_flag='use_generic_schema',
     ),
+    BackendRouterRegistration(
+        kit='query-traceability-kit',
+        module='app.api.routes_query_v2',
+        symbol='router',
+        prefix='/api/v2/query',
+        tags=['Query V2'],
+        tenant_scoped=True,
+        feature_flag=None,
+    ),
 ]
 
 

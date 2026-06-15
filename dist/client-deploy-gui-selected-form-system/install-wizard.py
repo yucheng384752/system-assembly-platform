@@ -112,6 +112,7 @@ def _install_worker(env: dict, sys_root: Path) -> None:
     try:
         # Step 0: Write .env
         step(0, "寫入設定檔 (.env)")
+        env.setdefault("USE_GENERIC_SCHEMA", "true")   # 啟用通用表單架構
         _write_env(sys_root, env)
         log(f"  OK  {sys_root / '.env'}")
 
@@ -232,8 +233,19 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._send_json({"key": _generate_secret()})
 
         elif path == "/api/sys-root":
-            sr = _find_sys_root()
-            self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
+            qs = self.path.partition("?")[2]
+            custom_path: str | None = None
+            for part in qs.split("&"):
+                if part.startswith("path="):
+                    from urllib.parse import unquote_plus
+                    custom_path = unquote_plus(part.split("=", 1)[1])
+            if custom_path:
+                p = Path(custom_path)
+                found = (p / "backend" / "requirements.txt").exists()
+                self._send_json({"found": found, "path": str(p.resolve()) if found else str(p)})
+            else:
+                sr = _find_sys_root()
+                self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
         elif path == "/api/log":
             qs = self.path.partition("?")[2]
@@ -272,7 +284,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 if _install_state["running"]:
                     self._send_json({"ok": False, "msg": "安裝已在執行中"})
                     return
-            sys_root = _find_sys_root()
+            custom_root = body.get("sysRoot")
+            if custom_root:
+                sys_root = Path(custom_root)
+                if not (sys_root / "backend" / "requirements.txt").exists():
+                    self._send_json({"ok": False, "msg": f"無效的系統目錄：{custom_root}"})
+                    return
+            else:
+                sys_root = _find_sys_root()
             if sys_root is None:
                 self._send_json({"ok": False, "msg": "找不到 system 目錄"})
                 return
@@ -446,12 +465,21 @@ a { color: var(--primary); }
 .badge-green { background: #dcfce7; color: #15803d; }
 .badge-gray  { background: #f1f5f9; color: var(--muted); }
 
-/* ── Prereq table ────────────────────────────────────── */
-.check-table { width: 100%; border-collapse: collapse; margin-top: 4px; }
-.check-table th, .check-table td { padding: 10px 12px; text-align: left; border-bottom: 1px solid var(--border); font-size: 14px; }
-.check-table th { font-weight: 600; color: var(--muted); font-size: 12px; text-transform: uppercase; }
-.ok-icon  { color: var(--success); font-size: 16px; }
-.err-icon { color: var(--error);   font-size: 16px; }
+/* ── Prereq checklist ────────────────────────────────── */
+.check-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 24px; }
+.check-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 16px; border: 1px solid var(--border);
+  border-radius: 8px; transition: border-color .2s, background .2s;
+}
+.check-item.loading { background: var(--bg); }
+.check-item.ok  { border-color: #86efac; background: #f0fdf4; }
+.check-item.err { border-color: #fca5a5; background: #fef2f2; }
+.check-icon { font-size: 22px; flex-shrink: 0; width: 28px; text-align: center; }
+.check-item.ok  .check-icon { color: var(--success); }
+.check-item.err .check-icon { color: var(--error); }
+.check-name { font-size: 14px; font-weight: 600; }
+.check-ver  { font-size: 12px; color: var(--muted); margin-top: 2px; }
 
 /* ── DB test status ──────────────────────────────────── */
 .db-status { font-size: 13px; margin-top: 8px; padding: 8px 12px; border-radius: 6px; display: none; }
@@ -522,7 +550,7 @@ a { color: var(--primary); }
   <!-- Step indicator -->
   <div class="steps" id="steps-bar">
     <div class="step-item" data-step="0"><div class="step-circle"><span>1</span></div><div class="step-label">歡迎</div></div>
-    <div class="step-item" data-step="1"><div class="step-circle"><span>2</span></div><div class="step-label">先決條件</div></div>
+    <div class="step-item" data-step="1"><div class="step-circle"><span>2</span></div><div class="step-label">所需應用</div></div>
     <div class="step-item" data-step="2"><div class="step-circle"><span>3</span></div><div class="step-label">資料庫</div></div>
     <div class="step-item" data-step="3"><div class="step-circle"><span>4</span></div><div class="step-label">管理者</div></div>
     <div class="step-item" data-step="4"><div class="step-circle"><span>5</span></div><div class="step-label">安全設定</div></div>
@@ -538,15 +566,18 @@ a { color: var(--primary); }
       <div class="info-cell"><div class="ic-label">Recipe</div><div class="ic-val" id="info-recipe">—</div></div>
       <div class="info-cell"><div class="ic-label">資料庫</div><div class="ic-val" id="info-db">—</div></div>
       <div class="info-cell"><div class="ic-label">Kit 數量</div><div class="ic-val" id="info-kits">—</div></div>
-      <div class="info-cell"><div class="ic-label">系統目錄</div><div class="ic-val" id="info-sysroot" style="font-size:12px;word-break:break-all">—</div></div>
     </div>
-    <div id="kits-panel" style="margin-bottom:24px">
+    <div id="kits-panel" style="margin-bottom:20px">
       <div style="font-size:13px;color:var(--muted);margin-bottom:8px;font-weight:600">已選 Kits</div>
       <div class="kit-list" id="kit-list"></div>
     </div>
-    <div id="sysroot-warn" style="display:none;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:12px 16px;margin-bottom:20px;font-size:13px;color:#92400e">
-      ⚠ 找不到 system 目錄。請確認此 wizard 放在部署包根目錄，或以引數指定路徑：<br>
-      <code>python3 install-wizard.py /path/to/system</code>
+    <div class="field" style="margin-bottom:20px">
+      <label>系統目錄</label>
+      <div class="input-btn-row">
+        <input id="info-sysroot" type="text" style="font-family:monospace;font-size:12px" placeholder="自動偵測中…">
+        <button class="btn btn-outline btn-sm" onclick="verifySysRoot()">驗證</button>
+      </div>
+      <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
     <div class="nav-row">
       <span></span>
@@ -556,14 +587,16 @@ a { color: var(--primary); }
 
   <!-- ── STEP 1: Prerequisites ─────────────────────────── -->
   <div class="card" id="step-1" style="display:none">
-    <div class="card-title">先決條件檢查</div>
-    <div class="card-sub">檢查所需工具是否已安裝。</div>
-    <table class="check-table">
-      <thead><tr><th>工具</th><th>狀態</th><th>版本</th></tr></thead>
-      <tbody id="prereq-tbody"><tr><td colspan="3">檢查中…</td></tr></tbody>
-    </table>
-    <div id="prereq-warn" style="display:none;margin-top:12px;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:12px 16px;font-size:13px;color:#991b1b">
-      以下工具缺失，請先安裝後再繼續：python3、pip3
+    <div class="card-title">所需應用程式</div>
+    <div class="card-sub">安裝前請確認以下工具已安裝於目標主機。</div>
+    <div class="check-list" id="prereq-list">
+      <div class="check-item loading">
+        <div class="check-icon">&#9711;</div>
+        <div><div class="check-name">檢查中…</div></div>
+      </div>
+    </div>
+    <div id="prereq-warn" style="display:none;background:#fee2e2;border:1px solid #fca5a5;border-radius:8px;padding:12px 16px;font-size:13px;color:#991b1b">
+      ⚠ 有工具尚未安裝，請安裝後點擊「重新檢查」再繼續。
     </div>
     <div class="nav-row">
       <button class="btn btn-secondary" onclick="goStep(0)">&larr; 上一步</button>
@@ -737,7 +770,14 @@ async function init() {
     document.getElementById('info-db').textContent = recipe.database?.engine || '—';
     const kits = recipe.enabledKits || [];
     document.getElementById('info-kits').textContent = kits.length + ' 個';
-    document.getElementById('info-sysroot').textContent = sr.path || '未找到';
+    document.getElementById('info-sysroot').value = sr.path || '';
+    S.sysRoot = sr.found ? sr.path : null;
+    if (sr.found) {
+      setSysRootStatus(true, '已自動找到系統目錄');
+    } else {
+      setSysRootStatus(false, '找不到系統目錄，請手動輸入路徑後點擊「驗證」');
+      document.getElementById('btn-welcome-next').disabled = true;
+    }
 
     const kitList = document.getElementById('kit-list');
     kits.forEach(k => {
@@ -746,13 +786,40 @@ async function init() {
       b.textContent = k;
       kitList.appendChild(b);
     });
+  } catch (e) {
+    console.error('init error:', e);
+  }
+}
 
-    if (!sr.found) {
-      document.getElementById('sysroot-warn').style.display = 'block';
+// ── Sys-root editing ─────────────────────────────────────────────────────────
+function setSysRootStatus(ok, msg) {
+  const el = document.getElementById('sysroot-status');
+  el.style.display = 'block';
+  el.style.color = ok ? 'var(--success)' : 'var(--error)';
+  el.textContent = (ok ? '✓ ' : '✗ ') + msg;
+}
+
+async function verifySysRoot() {
+  const path = document.getElementById('info-sysroot').value.trim();
+  if (!path) { setSysRootStatus(false, '請輸入路徑'); return; }
+  const statusEl = document.getElementById('sysroot-status');
+  statusEl.style.display = 'block';
+  statusEl.style.color = 'var(--muted)';
+  statusEl.textContent = '驗證中…';
+  try {
+    const data = await fetch('/api/sys-root?path=' + encodeURIComponent(path)).then(r => r.json());
+    if (data.found) {
+      S.sysRoot = data.path;
+      document.getElementById('info-sysroot').value = data.path;
+      setSysRootStatus(true, '路徑有效');
+      document.getElementById('btn-welcome-next').disabled = false;
+    } else {
+      S.sysRoot = null;
+      setSysRootStatus(false, '路徑無效：找不到 backend/requirements.txt');
       document.getElementById('btn-welcome-next').disabled = true;
     }
   } catch (e) {
-    console.error('init error:', e);
+    setSysRootStatus(false, '驗證失敗：' + e);
   }
 }
 
@@ -779,26 +846,30 @@ function updateStepBar() {
 
 // ── Step 1: Prerequisites ─────────────────────────────────────────────────────
 async function runPrereqs() {
-  document.getElementById('prereq-tbody').innerHTML = '<tr><td colspan="3">檢查中…</td></tr>';
+  const list = document.getElementById('prereq-list');
+  list.innerHTML = '<div class="check-item loading"><div class="check-icon">&#9711;</div><div><div class="check-name">檢查中…</div></div></div>';
   document.getElementById('btn-prereq-next').disabled = true;
   try {
     const data = await fetch('/api/prereqs').then(r => r.json());
-    const tbody = document.getElementById('prereq-tbody');
-    tbody.innerHTML = '';
+    list.innerHTML = '';
     let allOk = true;
     data.checks.forEach(c => {
       if (!c.ok) allOk = false;
-      const tr = document.createElement('tr');
-      tr.innerHTML = `<td><code>${c.tool}</code></td>` +
-        `<td>${c.ok ? '<span class="ok-icon">&#10003;</span>' : '<span class="err-icon">&#10007;</span>'}</td>` +
-        `<td style="font-size:12px;color:var(--muted)">${c.version}</td>`;
-      tbody.appendChild(tr);
+      const item = document.createElement('div');
+      item.className = 'check-item ' + (c.ok ? 'ok' : 'err');
+      item.innerHTML =
+        `<div class="check-icon">${c.ok ? '&#10003;' : '&#10007;'}</div>` +
+        `<div>` +
+          `<div class="check-name"><code>${c.tool}</code></div>` +
+          `<div class="check-ver">${c.version}</div>` +
+        `</div>`;
+      list.appendChild(item);
     });
     document.getElementById('prereq-warn').style.display = allOk ? 'none' : 'block';
     document.getElementById('btn-prereq-next').disabled = !allOk;
     S.prereqOk = allOk;
   } catch (e) {
-    document.getElementById('prereq-tbody').innerHTML = '<tr><td colspan="3">檢查失敗：' + e + '</td></tr>';
+    list.innerHTML = '<div class="check-item err"><div class="check-icon">&#10007;</div><div><div class="check-name">檢查失敗：' + e + '</div></div></div>';
   }
 }
 
@@ -875,6 +946,7 @@ function buildReview() {
   const dbPass = document.getElementById('db-pass').value;
   const useSqlite = !document.getElementById('db-pass').value && !document.getElementById('db-host').value.trim();
   const rows = [
+    ['系統目錄', S.sysRoot || '(未設定)'],
     ['資料庫主機', document.getElementById('db-host').value || '(SQLite)'],
     ['資料庫名稱', document.getElementById('db-name').value || '(SQLite)'],
     ['Manager 帳號', document.getElementById('mgr-user').value],
@@ -929,7 +1001,7 @@ async function startInstall() {
   const resp = await fetch('/api/install', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ env }),
+    body: JSON.stringify({ env, sysRoot: S.sysRoot }),
   }).then(r => r.json());
 
   if (!resp.ok) {
