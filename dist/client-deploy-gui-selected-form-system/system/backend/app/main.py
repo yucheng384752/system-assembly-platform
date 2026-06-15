@@ -53,6 +53,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
+    # Startup - security checks
+    _DEFAULT_SK = "qI5s1RT9GCr8wlqnfh1XxOZBO_47lSqedali3vHGOVk"
+    if getattr(settings, "secret_key", None) == _DEFAULT_SK:
+        raise RuntimeError(
+            "SECRET_KEY is set to the built-in default value. "
+            "Generate a unique key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
+        )
+
     # Startup - 驗證PostgreSQL或SQLite配置
     if not settings.database_url.startswith(
         "postgresql"

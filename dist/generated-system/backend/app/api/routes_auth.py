@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import secrets
 import time
@@ -27,7 +27,7 @@ _ALLOWED_TENANT_ROLES = {"manager", "user"}
 class LoginRequest(BaseModel):
     tenant_code: str | None = Field(
         default=None,
-        description="Tenant code (場域代碼). If omitted, auto-resolves when exactly one tenant exists.",
+        description="Tenant code (?游?隞?Ⅳ). If omitted, auto-resolves when exactly one tenant exists.",
     )
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(min_length=1, max_length=200)
@@ -44,7 +44,7 @@ class LoginResponse(BaseModel):
 
 
 class CreateUserRequest(BaseModel):
-    tenant_code: str | None = Field(default=None, description="Tenant code (場域代碼).")
+    tenant_code: str | None = Field(default=None, description="Tenant code (?游?隞?Ⅳ).")
     username: str = Field(min_length=1, max_length=100)
     password: str = Field(
         min_length=8, max_length=200, description="Minimum 8 characters"
@@ -244,6 +244,36 @@ def _record_password_change_failure(*, user_id: str) -> None:
     _pw_change_failures_by_user[user_id] = recent
 
 
+
+_LOGIN_FAIL_WINDOW_SECONDS = 300.0
+_LOGIN_FAIL_MAX = 5
+_login_failures: dict[str, list[float]] = {}
+
+
+def _check_login_throttle(*, tenant_id: str, username: str) -> None:
+    key = f"{tenant_id}:{username.lower().strip()}"
+    now = time.monotonic()
+    window_start = now - _LOGIN_FAIL_WINDOW_SECONDS
+    recent = [t for t in _login_failures.get(key, []) if t >= window_start]
+    if len(recent) >= _LOGIN_FAIL_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Please try again later.",
+        )
+    _login_failures[key] = recent
+
+
+def _record_login_failure(*, tenant_id: str, username: str) -> None:
+    key = f"{tenant_id}:{username.lower().strip()}"
+    now = time.monotonic()
+    window_start = now - _LOGIN_FAIL_WINDOW_SECONDS
+    recent = [t for t in _login_failures.get(key, []) if t >= window_start]
+    recent.append(now)
+    _login_failures[key] = recent
+
+
+def _clear_login_failures(*, tenant_id: str, username: str) -> None:
+    _login_failures.pop(f"{tenant_id}:{username.lower().strip()}", None)
 class BootstrapStatusResponse(BaseModel):
     auth_mode: str
     auth_api_key_header: str
@@ -1154,6 +1184,7 @@ async def login(
             tenant = tenants[0]
 
     username = payload.username.strip()
+    _check_login_throttle(tenant_id=str(tenant.id), username=username)
     user = (
         await db.execute(
             select(TenantUser).where(
@@ -1165,11 +1196,13 @@ async def login(
     ).scalar_one_or_none()
 
     if not user or not verify_password(payload.password, user.password_hash):
+        _record_login_failure(tenant_id=str(tenant.id), username=username)
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid username or password",
         )
 
+    _clear_login_failures(tenant_id=str(tenant.id), username=username)
     settings = get_settings()
 
     # Rotate per-user API key (one active key per username per tenant).
@@ -1413,3 +1446,4 @@ async def reset_user_password(
         must_change_password=True,
         temporary_password=new_password if generated else None,
     )
+

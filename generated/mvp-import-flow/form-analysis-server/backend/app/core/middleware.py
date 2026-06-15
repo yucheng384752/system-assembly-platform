@@ -1,4 +1,4 @@
-"""
+﻿"""
 Custom middleware for request processing.
 
 Provides request ID generation, logging, timing, and error handling.
@@ -14,6 +14,23 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+import re as _re
+
+_SENSITIVE_QP = _re.compile(
+    r"^(token|key|secret|password|api_?key|auth|signature|access_token|refresh_token)$",
+    _re.IGNORECASE,
+)
+
+
+def _redact_query_params(params) -> str:
+    if not params:
+        return ""
+    parts = [
+        f"{k}=[REDACTED]" if _SENSITIVE_QP.match(k) else f"{k}={v}"
+        for k, v in params.multi_items()
+    ]
+    return "&".join(parts)
+
 
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
@@ -62,7 +79,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             request_id=request_id,
             method=request.method,
             path=request.url.path,
-            query_params=str(request.query_params),
+            query_params=_redact_query_params(request.query_params),
             client_host=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             tenant_id=str(tenant_id) if tenant_id else None,
@@ -160,3 +177,4 @@ async def add_process_time_header(request: Request, call_next: Callable) -> Resp
     process_time = time.time() - start_time
     response.headers.setdefault("X-Process-Time", str(process_time))
     return response
+
