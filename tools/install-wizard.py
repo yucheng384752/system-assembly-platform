@@ -39,6 +39,7 @@ _install_state: dict = {
     "success": None,
 }
 _sys_root_hint: Path | None = None
+_last_heartbeat: float = 0.0  # epoch seconds; 0 = no heartbeat yet (watchdog inactive)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -246,6 +247,92 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
+        elif path == "/api/machine-id":
+            import hashlib as _hl
+            mid_path = Path("/etc/machine-id")
+            if mid_path.exists():
+                raw = mid_path.read_text("utf-8").strip().lower()
+                fp = _hl.sha256(raw.encode()).hexdigest()
+                self._send_json({"found": True, "fingerprint": fp})
+            else:
+                self._send_json({"found": False, "fingerprint": None})
+
+        elif path == "/api/check-license":
+            import hashlib as _hl, json as _json
+            sr = _find_sys_root()
+            if not sr:
+                self._send_json({"valid": False, "reason": "sys_root_not_found"})
+                return
+            lic_path = sr / "license.lic"
+            if not lic_path.exists():
+                self._send_json({"valid": False, "reason": "no_license_file"})
+                return
+            try:
+                lic_data = _json.loads(lic_path.read_text("utf-8"))
+                payload = _json.loads(lic_data["payload"])
+                # Expiry check
+                expires_at = payload.get("expiresAt", "")
+                if expires_at:
+                    from datetime import datetime, timezone
+                    if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at.replace("Z", "+00:00")):
+                        self._send_json({"valid": False, "reason": "expired", "expires_at": expires_at})
+                        return
+                # Machine fingerprint check
+                expected_fp = payload.get("machineFingerprint")
+                if expected_fp:
+                    mid_path = Path("/etc/machine-id")
+                    if not mid_path.exists():
+                        self._send_json({"valid": False, "reason": "no_machine_id"})
+                        return
+                    raw = mid_path.read_text("utf-8").strip().lower()
+                    current_fp = _hl.sha256(raw.encode()).hexdigest()
+                    if current_fp != expected_fp:
+                        self._send_json({"valid": False, "reason": "fingerprint_mismatch", "current_fp": current_fp})
+                        return
+                licensee = payload.get("licensee", {})
+                self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
+                                 "machine_bound": bool(expected_fp)})
+            except Exception as exc:
+                self._send_json({"valid": False, "reason": str(exc)})
+
+        elif path == "/api/check-machine-id":
+            import hashlib as _hl
+            mid_file = Path(__file__).parent / "machine-id.txt"
+            if not mid_file.exists():
+                self._send_json({"status": "no_file"})
+                return
+            expected = mid_file.read_text("utf-8").strip().lower()
+            mid_path = Path("/etc/machine-id")
+            if not mid_path.exists():
+                self._send_json({"status": "no_machine_id"})
+                return
+            raw = mid_path.read_text("utf-8").strip().lower()
+            current = _hl.sha256(raw.encode()).hexdigest()
+            if current == expected:
+                self._send_json({"status": "match", "fingerprint": current[:16] + "…"})
+            else:
+                self._send_json({"status": "mismatch",
+                                 "expected": expected[:16] + "…",
+                                 "current": current[:16] + "…"})
+
+        elif path == "/api/ls":
+            from urllib.parse import unquote_plus
+            qs = self.path.partition("?")[2]
+            raw_path: str | None = None
+            for part in qs.split("&"):
+                if part.startswith("path="):
+                    raw_path = unquote_plus(part.split("=", 1)[1])
+            target = Path(raw_path) if raw_path else Path.home()
+            try:
+                dirs = sorted(
+                    p.name for p in target.iterdir()
+                    if p.is_dir() and not p.name.startswith(".")
+                )
+                parent = str(target.parent) if target.parent != target else None
+                self._send_json({"path": str(target.resolve()), "dirs": dirs, "parent": parent})
+            except Exception as e:
+                self._send_json({"path": str(target), "dirs": [], "parent": None, "error": str(e)})
+
         elif path == "/api/log":
             qs = self.path.partition("?")[2]
             offset = 0
@@ -296,6 +383,11 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 return
             env = body.get("env", {})
             threading.Thread(target=_install_worker, args=(env, sys_root), daemon=True).start()
+            self._send_json({"ok": True})
+
+        elif path == "/api/heartbeat":
+            global _last_heartbeat
+            _last_heartbeat = time.time()
             self._send_json({"ok": True})
 
         elif path == "/api/shutdown":
@@ -574,13 +666,35 @@ a { color: var(--primary); }
       <label>系統目錄</label>
       <div class="input-btn-row">
         <input id="info-sysroot" type="text" style="font-family:monospace;font-size:12px" placeholder="自動偵測中…">
+        <button class="btn btn-outline btn-sm" onclick="openDirBrowser()" title="瀏覽資料夾">…</button>
         <button class="btn btn-outline btn-sm" onclick="verifySysRoot()">驗證</button>
       </div>
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
+    <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
+      <label>本機機器碼（Fingerprint）</label>
+      <div class="input-btn-row">
+        <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
+        <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
+      </div>
+      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。</div>
+    </div>
     <div class="nav-row">
       <span></span>
       <button class="btn btn-primary" id="btn-welcome-next" onclick="goNext()">開始安裝 &rarr;</button>
+    </div>
+  </div>
+
+  <!-- ── Dir browser modal ──────────────────────────────── -->
+  <div id="dir-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center">
+    <div style="background:#fff;border-radius:10px;padding:24px;width:520px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 8px 32px rgba(0,0,0,.2)">
+      <div style="font-weight:600;font-size:15px">選擇系統目錄</div>
+      <div style="font-family:monospace;font-size:12px;background:#f5f5f5;padding:6px 10px;border-radius:4px;word-break:break-all" id="dir-cur-path">—</div>
+      <div style="overflow-y:auto;flex:1;border:1px solid #e5e7eb;border-radius:6px;max-height:320px" id="dir-list"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button class="btn btn-secondary btn-sm" onclick="closeDirBrowser()">取消</button>
+        <button class="btn btn-primary btn-sm" id="dir-select-btn" onclick="selectCurrentDir()">選擇此資料夾</button>
+      </div>
     </div>
   </div>
 
@@ -696,9 +810,10 @@ a { color: var(--primary); }
     <div class="card-title">確認設定</div>
     <div class="card-sub">請確認以下設定正確，點擊「開始安裝」後將寫入 .env 並執行安裝。</div>
     <table class="review-table" id="review-table"></table>
+    <div id="license-check-result" style="display:none;margin:16px 0;padding:12px 14px;border-radius:6px;font-size:13px;"></div>
     <div class="nav-row">
       <button class="btn btn-secondary" onclick="goStep(4)">&larr; 上一步</button>
-      <button class="btn btn-primary" onclick="startInstall()">&#9658; 開始安裝</button>
+      <button class="btn btn-primary" id="btn-start-install" onclick="startInstall()">&#9658; 開始安裝</button>
     </div>
   </div>
 
@@ -737,6 +852,9 @@ a { color: var(--primary); }
       </div>
       <button class="btn btn-secondary" onclick="goStep(6)" style="margin-top:16px">&#9664; 查看安裝記錄</button>
     </div>
+    <div style="margin-top:24px;text-align:right">
+      <button class="btn btn-secondary" onclick="shutdownWizard()">&#10005; 關閉精靈</button>
+    </div>
   </div>
 
 </div><!-- /wrap -->
@@ -753,6 +871,72 @@ const S = {
   logOffset: 0,
   pollTimer: null,
 };
+
+// ── Machine-id display & license pre-check ───────────────────────────────────
+async function loadMachineId() {
+  try {
+    const data = await fetch('/api/machine-id').then(r => r.json());
+    const panel = document.getElementById('machine-id-panel');
+    const disp  = document.getElementById('machine-id-display');
+    if (data.found && data.fingerprint) {
+      disp.value = data.fingerprint;
+      panel.style.display = 'block';
+    }
+  } catch (_) {}
+}
+
+function copyMachineId() {
+  const v = document.getElementById('machine-id-display')?.value;
+  if (v) navigator.clipboard?.writeText(v).catch(() => {});
+}
+
+async function checkMachineId() {
+  const resultEl = document.getElementById('license-check-result');
+  const btnInstall = document.getElementById('btn-start-install');
+  if (!resultEl) return;
+  resultEl.style.display = 'block';
+  resultEl.style.color = '';
+  resultEl.style.background = '#f0f9ff';
+  resultEl.style.border = '1px solid #bae6fd';
+  resultEl.textContent = '機器碼驗證中…';
+  try {
+    const data = await fetch('/api/check-machine-id').then(r => r.json());
+    if (data.status === 'match') {
+      resultEl.style.background = '#f0fdf4';
+      resultEl.style.border = '1px solid #86efac';
+      resultEl.style.color = '#166534';
+      resultEl.textContent = '✓ 機器碼驗證通過，此機器已授權安裝。';
+      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.status === 'mismatch') {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.innerHTML =
+        '<strong>❌ 機器碼不符</strong><br>' +
+        '授權機器：<code>' + data.expected + '</code>&nbsp;&nbsp;本機：<code>' + data.current + '</code><br>' +
+        '此套件只能在授權機器上安裝。';
+      if (btnInstall) btnInstall.disabled = true;
+    } else if (data.status === 'no_file') {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = '⚠ 此套件未綁定機器，可繼續安裝。';
+      if (btnInstall) btnInstall.disabled = false;
+    } else {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = '⚠ 無法取得本機機器碼（非 Linux 環境），可繼續安裝。';
+      if (btnInstall) btnInstall.disabled = false;
+    }
+  } catch (_) {
+    resultEl.style.background = '#fffbeb';
+    resultEl.style.border = '1px solid #fcd34d';
+    resultEl.style.color = '#92400e';
+    resultEl.textContent = '⚠ 機器碼驗證失敗，可繼續安裝。';
+    if (btnInstall) btnInstall.disabled = false;
+  }
+}
 
 // ── Init ─────────────────────────────────────────────────────────────────────
 async function init() {
@@ -785,10 +969,16 @@ async function init() {
       b.textContent = k;
       kitList.appendChild(b);
     });
+    loadMachineId();
   } catch (e) {
     console.error('init error:', e);
   }
 }
+
+// ── Heartbeat — keeps watchdog alive while browser is open ───────────────────
+setInterval(() => {
+  fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+}, 5000);
 
 // ── Sys-root editing ─────────────────────────────────────────────────────────
 function setSysRootStatus(ok, msg) {
@@ -822,6 +1012,52 @@ async function verifySysRoot() {
   }
 }
 
+// ── Dir browser ───────────────────────────────────────────────────────────────
+let _dirBrowserPath = null;
+
+async function openDirBrowser() {
+  const modal = document.getElementById('dir-modal');
+  modal.style.display = 'flex';
+  const startPath = document.getElementById('info-sysroot').value.trim() || null;
+  await _loadDir(startPath);
+}
+
+function closeDirBrowser() {
+  document.getElementById('dir-modal').style.display = 'none';
+}
+
+async function _loadDir(path) {
+  const url = '/api/ls' + (path ? '?path=' + encodeURIComponent(path) : '');
+  const data = await fetch(url).then(r => r.json());
+  _dirBrowserPath = data.path;
+  document.getElementById('dir-cur-path').textContent = data.path;
+  const list = document.getElementById('dir-list');
+  let html = '';
+  if (data.parent) {
+    html += `<div onclick="_loadDir('${data.parent.replace(/'/g,"\\'")}');event.stopPropagation()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;color:var(--muted);font-size:13px">&#8593; 上層目錄</div>`;
+  }
+  if (data.dirs.length === 0) {
+    html += '<div style="padding:12px;color:var(--muted);font-size:13px;text-align:center">（無子目錄）</div>';
+  }
+  for (const d of data.dirs) {
+    const full = (data.path.endsWith('/') || data.path.endsWith('\\') ? data.path : data.path + '/') + d;
+    html += `<div onclick="_loadDir('${full.replace(/'/g,"\\'")}');event.stopPropagation()" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid #f0f0f0;font-size:13px;display:flex;align-items:center;gap:8px"><span style="color:#6b7280">&#128193;</span>${d}</div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function selectCurrentDir() {
+  if (!_dirBrowserPath) return;
+  document.getElementById('info-sysroot').value = _dirBrowserPath;
+  closeDirBrowser();
+  await verifySysRoot();
+}
+
+async function shutdownWizard() {
+  try { await fetch('/api/shutdown', { method: 'POST' }); } catch (_) {}
+  window.close();
+}
+
 // ── Navigation ────────────────────────────────────────────────────────────────
 function goStep(n) {
   document.getElementById('step-' + S.currentStep).style.display = 'none';
@@ -830,7 +1066,7 @@ function goStep(n) {
   updateStepBar();
   window.scrollTo(0, 0);
   if (n === 1) runPrereqs();
-  if (n === 5) buildReview();
+  if (n === 5) { buildReview(); checkMachineId(); }
 }
 
 function goNext() { goStep(S.currentStep + 1); }
@@ -1105,6 +1341,25 @@ def main() -> None:
         sys.exit(1)
 
     _server_ref[0] = server
+
+    def _watchdog() -> None:
+        """Shut down the server if the browser has been closed for >15 s and no install is running."""
+        TIMEOUT = 15.0
+        while True:
+            time.sleep(5)
+            hb = _last_heartbeat
+            if hb == 0.0:
+                continue  # heartbeat never received yet; wizard not opened
+            with _lock:
+                running = _install_state["running"]
+            if not running and (time.time() - hb) > TIMEOUT:
+                srv = _server_ref[0]
+                if srv:
+                    threading.Thread(target=srv.shutdown, daemon=True).start()
+                break
+
+    threading.Thread(target=_watchdog, daemon=True, name="heartbeat-watchdog").start()
+
     url = f"http://localhost:{port}/"
 
     print()

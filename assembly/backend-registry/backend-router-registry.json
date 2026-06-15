@@ -77,6 +77,61 @@
         "featureFlag":  null
     },
     {
+        "kit":  "generic-forms-kit",
+        "module":  "app.api.routes_generic_forms",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "通用表單"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "station-admin-kit",
+        "module":  "app.api.routes_stations",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "Station 管理"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  "USE_GENERIC_SCHEMA"
+    },
+    {
+        "kit":  "generic-forms-kit",
+        "module":  "app.api.routes_validation_rules",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "驗證規則"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "analytics-kit",
+        "module":  "app.api.routes_analytics_mappings",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "Analytics 映射"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "station-admin-kit",
+        "module":  "app.api.routes_station_links",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "Station 鏈結"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  "USE_GENERIC_SCHEMA"
+    },
+    {
         "kit":  "query-traceability-kit",
         "module":  "app.api.routes_query_v2",
         "symbol":  "router",

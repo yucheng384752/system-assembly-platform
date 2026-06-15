@@ -49,12 +49,17 @@ const daysRaw = (licDaysOverride && licDaysOverride !== "__none__") ? licDaysOve
 const days = (daysRaw && Number(daysRaw) > 0) ? Number(daysRaw) : 365;
 const expiresAt = new Date(now.getTime() + days * 86400000).toISOString().replace(/\.\d+Z$/, "Z");
 
-// Machine fingerprint: SHA-256 of /etc/machine-id (trimmed)
+// Machine fingerprint: accept either a pre-computed SHA-256 hash (64 hex chars)
+// or the raw /etc/machine-id string (will be hashed here).
 let machineFingerprint = null;
 if (machineId && machineId !== "__none__") {
-    machineFingerprint = crypto.createHash("sha256")
-        .update(machineId.trim().toLowerCase())
-        .digest("hex");
+    const trimmed = machineId.trim().toLowerCase();
+    if (/^[0-9a-f]{64}$/.test(trimmed)) {
+        // Already a SHA-256 fingerprint — use as-is
+        machineFingerprint = trimmed;
+    } else {
+        machineFingerprint = crypto.createHash("sha256").update(trimmed).digest("hex");
+    }
 }
 
 function sign(payload) {

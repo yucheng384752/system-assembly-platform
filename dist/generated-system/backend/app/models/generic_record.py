@@ -14,10 +14,11 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
+from app.core.db_types import JsonBColumn
 
 
 class GenericRecord(Base):
@@ -48,7 +49,7 @@ class GenericRecord(Base):
     lot_no_raw: Mapped[str] = mapped_column(String(50), nullable=False)
     lot_no_norm: Mapped[int] = mapped_column(BigInteger, nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, server_default="{}"
+        JsonBColumn(), nullable=False, server_default="{}"
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
@@ -90,9 +91,9 @@ class GenericRecordItem(Base):
     )
     row_no: Mapped[int] = mapped_column(Integer, nullable=False)
     data: Mapped[dict[str, Any]] = mapped_column(
-        JSONB, nullable=False, server_default="{}"
+        JsonBColumn(), nullable=False, server_default="{}"
     )
-    row_data: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    row_data: Mapped[dict[str, Any] | None] = mapped_column(JsonBColumn(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

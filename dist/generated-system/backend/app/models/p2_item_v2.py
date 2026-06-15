@@ -1,7 +1,7 @@
 """P2 Items V2 Model - Stores expanded P2 row data (one record per winder)"""
 
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import (
     Column,
@@ -12,10 +12,11 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
+from app.core.db_types import JsonBColumn
 
 
 class P2ItemV2(Base):
@@ -50,11 +51,11 @@ class P2ItemV2(Base):
     slitting_result = Column(Integer)
 
     # Original row data from CSV
-    row_data = Column(JSONB)
+    row_data = Column(JsonBColumn())
 
     @staticmethod
     def _utcnow():
-        return datetime.now(UTC)
+        return datetime.now(timezone.utc)
 
     created_at = Column(TIMESTAMP(timezone=True), nullable=False, default=_utcnow)
     updated_at = Column(

@@ -1,5 +1,6 @@
 ﻿// src/pages/UploadPage.tsx
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { getApiKeyHeaderName, getApiKeyValue } from "../services/auth";
 import { useTranslation } from "react-i18next";
 import { useToast } from "../components/common/ToastContext";
 import { Modal } from "../components/common/Modal";
@@ -15,8 +16,7 @@ import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForVali
 import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";
 import { runPdfConvertWorkflow } from "./upload/uploadPdfConversionOrchestrator";
 import { showMissingPdfConvertProcessToast } from "./upload/uploadPdfConvertToastUtils";
-import { commitCsvValidationResult, runCsvValidationJob, runPdfValidation } from "./upload/uploadValidationOrchestrator";
-import { showValidationResultToast } from "./upload/uploadValidationToastUtils";
+import { runValidateWorkflow } from "./upload/uploadValidationOrchestrator";
 import { showBatchImportUnavailableToast, showMissingImportTargetToast } from "./upload/uploadImportToastUtils";
 import { scheduleBatchPostImportCleanup } from "./upload/uploadImportCleanupUtils";
 import { toImportProgress, toPdfConvertProgress, toValidateProgress } from "./upload/uploadProgress";
@@ -42,8 +42,32 @@ export function UploadPage() {
 
   const uploadApi = useUploadApi(t);
 
+  // ── 通用表單上傳 ──────────────────────────────────────────────────────────
+  const [gStations, setGStations] = useState<{code:string;name:string}[]>([])
+  const [gStation, setGStation] = useState('')
+  const [gUploading, setGUploading] = useState(false)
+  const [gResult, setGResult] = useState<{total:number;imported:number;skipped:number;errors:{row:number;errors:string[]}[]}|null>(null)
 
+  useEffect(() => {
+    fetch('/api/forms', { headers: { [getApiKeyHeaderName()]: getApiKeyValue() } })
+      .then(r => r.ok ? r.json() : [])
+      .then((d: {code:string;name:string}[]) => setGStations(d))
+      .catch(() => {})
+  }, [])
 
+  const handleGenericUpload = async (file: File) => {
+    if (!file || !gStation) return
+    setGUploading(true); setGResult(null)
+    try {
+      const fd = new FormData(); fd.append('file', file); fd.append('allow_duplicate', 'false')
+      const r = await fetch(`/api/forms/${gStation}/upload`, {
+        method: 'POST',
+        headers: { [getApiKeyHeaderName()]: getApiKeyValue() },
+        body: fd,
+      })
+      setGResult(await r.json())
+    } catch { /* ignore */ } finally { setGUploading(false) }
+  }
 
 
   const handleFiles = (fileList: FileList | null) => {
@@ -67,83 +91,40 @@ export function UploadPage() {
   };
 
 
-  const handleValidate = async (fileId: string, options?: { silentToast?: boolean }): Promise<ValidateOutcome> => {
-    const target = filesRef.current.find((f) => f.id === fileId);
-    if (!target) return { outcome: 'failed', message: t('upload.errors.fileNotFound') };
-
-    if (target.type === 'PDF') {
-      const result = await runPdfValidation({
-        file: target,
-        uploadPdf: uploadApi.uploadPdf,
-        beginPdfValidation,
-        completePdfUpload,
-        failPdfValidation,
-        fallbackErrorText: t('upload.errors.pdfUploadFailed'),
-      });
-      showValidationResultToast({
-        kind: "pdf",
-        silent: options?.silentToast,
-        result,
-        showToast,
-        t,
-      });
-      return result;
-    }
-
-    if (!EDIT_ENABLED && target.hasUnsavedChanges) {
-      showValidationResultToast({ kind: "edit-disabled", silent: options?.silentToast, showToast, t });
-      return { outcome: 'failed', message: t('upload.editDisabledNotice') };
-    }
-    
-    // 允許重複驗證，特別是有錯誤的檔案
-    // 不再阻止重複驗證，讓用戶可以修改後重新驗證
-
-    try {
-      const { jobId, lastJob } = await runCsvValidationJob({
-        file: target,
-        createImportJob: uploadApi.createImportJob,
-        parseCsv,
-        confirmDuplicate: (duplicateOf) =>
-          window.confirm(
-            t('upload.confirm.duplicateFile')
-              .replace('{{filename}}', target.name)
-              .replace('{{duplicateOf}}', duplicateOf)
-          ),
-        sleep: delay,
-        beginCsvValidation,
-        setValidationUploadSource,
-        setValidationProgress,
-        prepareCsvValidationJob,
-        updateValidationPoll,
-        fetchImportJob: uploadApi.fetchImportJob,
-        toValidateProgress,
-        validationTimeoutText: t('upload.errors.validationTimeout'),
-      });
-
-      return await commitCsvValidationResult({
-        fileId,
-        target,
-        lastJob,
-        fetchImportErrors: uploadApi.fetchImportErrors,
-        completeValidationFailure,
-        completeValidationWithErrors,
-        completeValidationPassed,
-        showValidationResultToast,
-        showToast,
-        t,
-        silent: options?.silentToast,
-      });
-      
-    } catch (err) {
-      console.error('Validation error:', err);
-      const errorMessage = err instanceof Error ? err.message : t('upload.errors.validationProcessError');
-      showValidationResultToast({ kind: "csv-exception", silent: options?.silentToast, message: errorMessage, showToast, t });
-      
-      failCsvValidation(fileId);
-
-      return { outcome: 'failed', message: errorMessage };
-    }
-  };
+  const handleValidate = (fileId: string, options?: { silentToast?: boolean }): Promise<ValidateOutcome> =>
+    runValidateWorkflow({
+      fileId,
+      filesRef,
+      silentToast: options?.silentToast,
+      editEnabled: EDIT_ENABLED,
+      uploadPdf: uploadApi.uploadPdf,
+      createImportJob: uploadApi.createImportJob,
+      fetchImportJob: uploadApi.fetchImportJob,
+      fetchImportErrors: uploadApi.fetchImportErrors,
+      parseCsv,
+      toValidateProgress,
+      sleep: delay,
+      confirmDuplicate: (filename, duplicateOf) =>
+        window.confirm(
+          t('upload.confirm.duplicateFile')
+            .replace('{{filename}}', filename)
+            .replace('{{duplicateOf}}', duplicateOf)
+        ),
+      beginPdfValidation,
+      completePdfUpload,
+      failPdfValidation,
+      beginCsvValidation,
+      setValidationUploadSource,
+      setValidationProgress,
+      prepareCsvValidationJob,
+      updateValidationPoll,
+      completeValidationFailure,
+      completeValidationWithErrors,
+      completeValidationPassed,
+      failCsvValidation,
+      showToast,
+      t,
+    });
 
   const handleValidateAll = () =>
     runBatchValidation({
@@ -299,6 +280,31 @@ export function UploadPage() {
 
   return (
     <div className="upload-page">
+      {/* 通用表單上傳 */}
+      {gStations.length > 0 && (
+        <div style={{margin:'0 0 16px 0',padding:'12px 16px',background:'#f0f4ff',borderRadius:8,border:'1px solid #c5d3f0',display:'flex',alignItems:'center',gap:12,flexWrap:'wrap'}}>
+          <label style={{fontSize:13,fontWeight:500,whiteSpace:'nowrap'}}>通用表單上傳：</label>
+          <select value={gStation} onChange={e=>{setGStation(e.target.value);setGResult(null)}}
+            style={{fontSize:13,padding:'4px 8px',border:'1px solid #ccc',borderRadius:4}}>
+            <option value="">— 使用舊流程 —</option>
+            {gStations.map(s=><option key={s.code} value={s.code}>{s.code} — {s.name}</option>)}
+          </select>
+          {gStation && (
+            <>
+              <input type="file" accept=".csv" style={{fontSize:13}}
+                onChange={e=>{ const f=e.target.files?.[0]; if(f) void handleGenericUpload(f); e.target.value='' }} />
+              {gUploading && <span style={{fontSize:12,color:'#555'}}>上傳中…</span>}
+              {gResult && (
+                <span style={{fontSize:12}}>
+                  ✓ 匯入 {gResult.imported}/{gResult.total}，略過 {gResult.skipped}
+                  {gResult.errors.length>0 && <span style={{color:'#c00'}}> 錯誤 {gResult.errors.length} 筆</span>}
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      )}
+
       {/* 拖曳/選擇檔案區 */}
       <section className="upload-drop-section">
         <FileDropArea onFiles={handleFiles} />
@@ -380,9 +386,6 @@ export function UploadPage() {
     </div>
   );
 }
-
-
-
 
 
 
