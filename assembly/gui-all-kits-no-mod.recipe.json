@@ -47,10 +47,7 @@
                                                    ],
                                 "logs-ops-kit":  [
 
-                                                 ],
-                                "mod-subscription-kit":  [
-
-                                                         ]
+                                                 ]
                             },
     "selectedSubfeatureOptions":  {
 
@@ -61,6 +58,9 @@
     "featureFlags":  {
 
                      },
+    "frontendNavigation":  [
+
+                           ],
     "database":  {
                      "engine":  "postgresql",
                      "connectionOwner":  "platform-core-kit",
