@@ -21,6 +21,7 @@ import secrets as _secrets_mod
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -64,6 +65,104 @@ def _read_recipe() -> dict:
 
 def _generate_secret() -> str:
     return _secrets_mod.token_urlsafe(48)
+
+
+def _probe_tpm_fingerprint() -> dict:
+    """
+    Returns {'source': 'tpm2-ek'|'machine-id'|'none', 'fingerprint': str|None, 'available': bool}
+    'available' = True means TPM hardware was used (hardware-bound, non-exportable).
+    """
+    import hashlib as _hl
+
+    if platform.system() == "Linux":
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ctx_path = Path(tmpdir) / "ek.ctx"
+                pub_path = Path(tmpdir) / "ek.pub"
+                result = subprocess.run(
+                    ["tpm2_createek", "-c", str(ctx_path), "-G", "rsa", "-u", str(pub_path)],
+                    capture_output=True, timeout=10,
+                )
+                if result.returncode == 0 and pub_path.exists():
+                    fp = _hl.sha256(pub_path.read_bytes()).hexdigest()
+                    return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            pass
+        # Fallback: /etc/machine-id
+        mid_path = Path("/etc/machine-id")
+        if mid_path.exists():
+            raw = mid_path.read_text("utf-8").strip().lower()
+            fp = _hl.sha256(raw.encode()).hexdigest()
+            return {"source": "machine-id", "fingerprint": fp, "available": False}
+
+    elif platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    "$ek = Get-TpmEndorsementKeyInfo -HashAlgorithm Sha256; "
+                    "if ($ek -and $ek.PublicKeyHash) "
+                    "{ $ek.PublicKeyHash.Replace('-','').ToLower() } else { exit 1 }",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                import hashlib as _hl2
+                fp = _hl2.sha256(result.stdout.strip().encode()).hexdigest()
+                return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
+        except Exception:
+            pass
+
+    return {"source": "none", "fingerprint": None, "available": False}
+
+
+def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
+    """Install tpm2-tools, add service user to tss group, probe and save fingerprint. Best-effort."""
+    import shutil
+
+    # Install tpm2-tools if missing
+    if not shutil.which("tpm2_createek"):
+        log_fn("  INFO  tpm2-tools 未安裝，嘗試自動安裝 (apt-get)...")
+        rc = _run_cmd(["apt-get", "install", "-y", "tpm2-tools"], sys_root)
+        if rc != 0:
+            log_fn("  WARN  tpm2-tools 安裝失敗（非致命）— 退回 /etc/machine-id fingerprint")
+            return
+        log_fn("  OK  tpm2-tools 安裝完成")
+    else:
+        log_fn("  OK  tpm2-tools 已存在")
+
+    # Check TPM device
+    if not Path("/dev/tpmrm0").exists():
+        log_fn("  WARN  /dev/tpmrm0 不存在 — 此機器可能沒有 TPM 2.0 晶片，跳過 TPM 設定")
+        return
+
+    # Add SUDO_USER or a detected service user to tss group
+    if os.getuid() == 0:
+        service_user = os.environ.get("SUDO_USER", "")
+        if not service_user:
+            env_path = sys_root / ".env"
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if line.startswith("SERVICE_USER="):
+                        service_user = line.split("=", 1)[1].strip("'\"")
+                        break
+        if service_user:
+            rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
+            log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
+
+    # Probe fingerprint and save
+    probe = _probe_tpm_fingerprint()
+    if probe["fingerprint"]:
+        fp_file = sys_root / "machine-fingerprint.txt"
+        fp_file.write_text(
+            f"source: {probe['source']}\nfingerprint: {probe['fingerprint']}\n",
+            encoding="utf-8",
+        )
+        log_fn(f"  OK  機器指紋已儲存 → {fp_file.name}")
+        log_fn(f"  INFO  來源: {probe['source']}")
+        log_fn(f"  INFO  指紋: {probe['fingerprint'][:16]}…（請提供給授權方）")
+    else:
+        log_fn("  WARN  無法取得機器指紋（TPM 不可用且無 /etc/machine-id）")
 
 
 def _venv_bin(sys_root: Path, name: str) -> Path:
@@ -115,6 +214,11 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         step(0, "寫入設定檔 (.env)")
         _write_env(sys_root, env)
         log(f"  OK  {sys_root / '.env'}")
+
+        # Step 0.5: TPM setup (Linux only, best-effort — does not abort on failure)
+        if platform.system() == "Linux":
+            log(f"\n{'='*60}\n  TPM 2.0 機器指紋設定\n{'='*60}")
+            _setup_tpm_linux(log, sys_root)
 
         # Step 1: Create venv
         step(1, "建立 Python 虛擬環境")
@@ -248,14 +352,13 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
         elif path == "/api/machine-id":
-            import hashlib as _hl
-            mid_path = Path("/etc/machine-id")
-            if mid_path.exists():
-                raw = mid_path.read_text("utf-8").strip().lower()
-                fp = _hl.sha256(raw.encode()).hexdigest()
-                self._send_json({"found": True, "fingerprint": fp})
-            else:
-                self._send_json({"found": False, "fingerprint": None})
+            probe = _probe_tpm_fingerprint()
+            self._send_json({
+                "found": probe["fingerprint"] is not None,
+                "fingerprint": probe["fingerprint"],
+                "source": probe["source"],
+                "available": probe["available"],
+            })
 
         elif path == "/api/check-license":
             import hashlib as _hl, json as _json
@@ -277,21 +380,21 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                     if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at.replace("Z", "+00:00")):
                         self._send_json({"valid": False, "reason": "expired", "expires_at": expires_at})
                         return
-                # Machine fingerprint check
+                # Machine fingerprint check (TPM EK preferred, /etc/machine-id as fallback)
                 expected_fp = payload.get("machineFingerprint")
                 if expected_fp:
-                    mid_path = Path("/etc/machine-id")
-                    if not mid_path.exists():
-                        self._send_json({"valid": False, "reason": "no_machine_id"})
+                    probe = _probe_tpm_fingerprint()
+                    if not probe["fingerprint"]:
+                        self._send_json({"valid": False, "reason": "no_machine_fingerprint"})
                         return
-                    raw = mid_path.read_text("utf-8").strip().lower()
-                    current_fp = _hl.sha256(raw.encode()).hexdigest()
-                    if current_fp != expected_fp:
-                        self._send_json({"valid": False, "reason": "fingerprint_mismatch", "current_fp": current_fp})
+                    if probe["fingerprint"] != expected_fp:
+                        self._send_json({"valid": False, "reason": "fingerprint_mismatch",
+                                         "current_fp": probe["fingerprint"], "source": probe["source"]})
                         return
                 licensee = payload.get("licensee", {})
+                fp_source = _probe_tpm_fingerprint()["source"] if expected_fp else "none"
                 self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
-                                 "machine_bound": bool(expected_fp)})
+                                 "machine_bound": bool(expected_fp), "fingerprint_source": fp_source})
             except Exception as exc:
                 self._send_json({"valid": False, "reason": str(exc)})
 
@@ -672,12 +775,12 @@ a { color: var(--primary); }
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
     <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
-      <label>本機機器碼（Fingerprint）</label>
+      <label>本機機器碼（Fingerprint）<span id="fp-source-badge" class="badge badge-gray" style="margin-left:8px;font-size:11px;vertical-align:middle"></span></label>
       <div class="input-btn-row">
         <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
         <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
       </div>
-      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。</div>
+      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。<br><span id="fp-source-hint" style="color:var(--warn)"></span></div>
     </div>
     <div class="nav-row">
       <span></span>
@@ -872,15 +975,28 @@ const S = {
   pollTimer: null,
 };
 
-// ── Machine-id display & license pre-check ───────────────────────────────────
+// ── Machine fingerprint display & license pre-check ──────────────────────────
 async function loadMachineId() {
   try {
     const data = await fetch('/api/machine-id').then(r => r.json());
-    const panel = document.getElementById('machine-id-panel');
-    const disp  = document.getElementById('machine-id-display');
+    const panel     = document.getElementById('machine-id-panel');
+    const disp      = document.getElementById('machine-id-display');
+    const badge     = document.getElementById('fp-source-badge');
+    const hint      = document.getElementById('fp-source-hint');
     if (data.found && data.fingerprint) {
       disp.value = data.fingerprint;
       panel.style.display = 'block';
+      const isHw = data.source === 'tpm2-ek';
+      if (badge) {
+        badge.textContent = isHw ? '硬體綁定 (TPM 2.0)' : '軟體綁定 (/etc/machine-id)';
+        badge.className   = 'badge ' + (isHw ? 'badge-green' : 'badge-gray');
+        badge.title       = isHw
+          ? 'TPM Endorsement Key — 物理上無法複製到其他機器'
+          : '/etc/machine-id — 可被複製偽造，建議安裝 tpm2-tools';
+      }
+      if (hint && !isHw) {
+        hint.textContent = '⚠ 未偵測到 TPM 2.0，指紋安全性較低。請確認已安裝 tpm2-tools 且 /dev/tpmrm0 存在。';
+      }
     }
   } catch (_) {}
 }

@@ -21,6 +21,7 @@ import secrets as _secrets_mod
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -63,6 +64,104 @@ def _read_recipe() -> dict:
 
 def _generate_secret() -> str:
     return _secrets_mod.token_urlsafe(48)
+
+
+def _probe_tpm_fingerprint() -> dict:
+    """
+    Returns {'source': 'tpm2-ek'|'machine-id'|'none', 'fingerprint': str|None, 'available': bool}
+    'available' = True means TPM hardware was used (hardware-bound, non-exportable).
+    """
+    import hashlib as _hl
+
+    if platform.system() == "Linux":
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                ctx_path = Path(tmpdir) / "ek.ctx"
+                pub_path = Path(tmpdir) / "ek.pub"
+                result = subprocess.run(
+                    ["tpm2_createek", "-c", str(ctx_path), "-G", "rsa", "-u", str(pub_path)],
+                    capture_output=True, timeout=10,
+                )
+                if result.returncode == 0 and pub_path.exists():
+                    fp = _hl.sha256(pub_path.read_bytes()).hexdigest()
+                    return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
+        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+            pass
+        # Fallback: /etc/machine-id
+        mid_path = Path("/etc/machine-id")
+        if mid_path.exists():
+            raw = mid_path.read_text("utf-8").strip().lower()
+            fp = _hl.sha256(raw.encode()).hexdigest()
+            return {"source": "machine-id", "fingerprint": fp, "available": False}
+
+    elif platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    "$ek = Get-TpmEndorsementKeyInfo -HashAlgorithm Sha256; "
+                    "if ($ek -and $ek.PublicKeyHash) "
+                    "{ $ek.PublicKeyHash.Replace('-','').ToLower() } else { exit 1 }",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                import hashlib as _hl2
+                fp = _hl2.sha256(result.stdout.strip().encode()).hexdigest()
+                return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
+        except Exception:
+            pass
+
+    return {"source": "none", "fingerprint": None, "available": False}
+
+
+def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
+    """Install tpm2-tools, add service user to tss group, probe and save fingerprint. Best-effort."""
+    import shutil
+
+    # Install tpm2-tools if missing
+    if not shutil.which("tpm2_createek"):
+        log_fn("  INFO  tpm2-tools 未安裝，嘗試自動安裝 (apt-get)...")
+        rc = _run_cmd(["apt-get", "install", "-y", "tpm2-tools"], sys_root)
+        if rc != 0:
+            log_fn("  WARN  tpm2-tools 安裝失敗（非致命）— 退回 /etc/machine-id fingerprint")
+            return
+        log_fn("  OK  tpm2-tools 安裝完成")
+    else:
+        log_fn("  OK  tpm2-tools 已存在")
+
+    # Check TPM device
+    if not Path("/dev/tpmrm0").exists():
+        log_fn("  WARN  /dev/tpmrm0 不存在 — 此機器可能沒有 TPM 2.0 晶片，跳過 TPM 設定")
+        return
+
+    # Add SUDO_USER or a detected service user to tss group
+    if os.getuid() == 0:
+        service_user = os.environ.get("SUDO_USER", "")
+        if not service_user:
+            env_path = sys_root / ".env"
+            if env_path.exists():
+                for line in env_path.read_text().splitlines():
+                    if line.startswith("SERVICE_USER="):
+                        service_user = line.split("=", 1)[1].strip("'\"")
+                        break
+        if service_user:
+            rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
+            log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
+
+    # Probe fingerprint and save
+    probe = _probe_tpm_fingerprint()
+    if probe["fingerprint"]:
+        fp_file = sys_root / "machine-fingerprint.txt"
+        fp_file.write_text(
+            f"source: {probe['source']}\nfingerprint: {probe['fingerprint']}\n",
+            encoding="utf-8",
+        )
+        log_fn(f"  OK  機器指紋已儲存 → {fp_file.name}")
+        log_fn(f"  INFO  來源: {probe['source']}")
+        log_fn(f"  INFO  指紋: {probe['fingerprint'][:16]}…（請提供給授權方）")
+    else:
+        log_fn("  WARN  無法取得機器指紋（TPM 不可用且無 /etc/machine-id）")
 
 
 def _venv_bin(sys_root: Path, name: str) -> Path:
@@ -115,6 +214,11 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         env.setdefault("USE_GENERIC_SCHEMA", "true")   # 啟用通用表單架構
         _write_env(sys_root, env)
         log(f"  OK  {sys_root / '.env'}")
+
+        # Step 0.5: TPM setup (Linux only, best-effort — does not abort on failure)
+        if platform.system() == "Linux":
+            log(f"\n{'='*60}\n  TPM 2.0 機器指紋設定\n{'='*60}")
+            _setup_tpm_linux(log, sys_root)
 
         # Step 1: Create venv
         step(1, "建立 Python 虛擬環境")
@@ -246,6 +350,15 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             else:
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
+
+        elif path == "/api/machine-id":
+            probe = _probe_tpm_fingerprint()
+            self._send_json({
+                "found": probe["fingerprint"] is not None,
+                "fingerprint": probe["fingerprint"],
+                "source": probe["source"],
+                "available": probe["available"],
+            })
 
         elif path == "/api/log":
             qs = self.path.partition("?")[2]

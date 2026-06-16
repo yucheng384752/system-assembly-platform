@@ -35,6 +35,12 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
     ports:
       - "8000:8000"
+    # TPM 2.0 machine binding — pass through the kernel TPM resource manager device.
+    # Remove this block if the host has no TPM chip; license.py will fall back to /etc/machine-id.
+    devices:
+      - /dev/tpmrm0:/dev/tpmrm0
+    group_add:
+      - tss
     depends_on:
       db:
         condition: service_healthy
