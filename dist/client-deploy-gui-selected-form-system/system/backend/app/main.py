@@ -35,6 +35,10 @@ from app.core.middleware import RequestLoggingMiddleware, add_process_time_heade
 # Import all models to ensure they're registered with Base
 from app.models.core.tenant_api_key import TenantApiKey
 from app.models.core.tenant_user import TenantUser
+# Legacy record models — must be imported before configure_mappers() runs
+from app.models.p2_item import P2Item  # noqa: F401
+from app.models.p3_item import P3Item  # noqa: F401
+from app.models.record import Record  # noqa: F401
 
 # Initialize application settings
 settings = get_settings()
@@ -60,6 +64,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             "SECRET_KEY is set to the built-in default value. "
             "Generate a unique key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
         )
+
+    # License verification is warning-only, but it must run so operators see invalid state.
+    try:
+        from app.core.license import verify_license as _verify_license
+        _lic = _verify_license()
+        app.state.license = _lic
+        if _lic.valid:
+            print(f"License OK: {_lic.licensee} (expires {_lic.expires_at})")
+        else:
+            print(f"License WARNING: {_lic.reason}")
+            if "fingerprint mismatch" in _lic.reason:
+                print("This package is not licensed for this machine.")
+                print("Run: bash deploy.sh --get-machine-id and provide the Fingerprint to your vendor.")
+    except Exception as _e:
+        app.state.license = None
+        print(f"License check skipped: {_e}")
 
     # Startup - 驗證PostgreSQL或SQLite配置
     if not settings.database_url.startswith(

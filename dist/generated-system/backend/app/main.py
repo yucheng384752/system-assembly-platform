@@ -1,4 +1,4 @@
-﻿"""
+"""
 Form Analysis Backend API
 
 A FastAPI-based service for file upload, validation, and data import operations.
@@ -33,17 +33,14 @@ from app.core.logging import setup_logging
 from app.core.middleware import RequestLoggingMiddleware, add_process_time_header
 
 # Import all models to ensure they're registered with Base
-from app.models import (
-    AuditEvent,
-)
 from app.models.core.tenant_api_key import TenantApiKey
 from app.models.core.tenant_user import TenantUser
 
 # Initialize application settings
 settings = get_settings()
 
-# Setup structured logging
-setup_logging(settings.log_level, settings.log_format)
+# Setup structured logging (pass monitor level so the remote processor is configured)
+setup_logging(settings.log_level, settings.log_format, settings.monitor_log_min_level)
 
 
 @asynccontextmanager
@@ -56,27 +53,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
-    # Startup - production safety checks
-    _env = (getattr(settings, "environment", "") or "").strip().lower()
-    _is_dev = _env in ("development", "dev", "test", "local")
-    if not _is_dev:
-        if not settings.database_url or "app_secure_password" in settings.database_url:
-            raise RuntimeError(
-                "DATABASE_URL must be set to a non-default value in production. "
-                "Set DATABASE_URL in your .env file."
-            )
-        if not settings.secret_key or len(settings.secret_key) < 32:
-            raise RuntimeError(
-                "SECRET_KEY must be at least 32 characters in production. "
-                "Set SECRET_KEY in your .env file."
-            )
-        if (getattr(settings, "auth_mode", "off") or "").strip().lower() == "off":
-            raise RuntimeError(
-                "AUTH_MODE=off is not allowed in production. Set AUTH_MODE=api_key in .env."
-            )
+    # Settings validation runs at import time; keep startup safety checks explicit.
+    _ = settings.validate_security_defaults()
+
+    # License verification is warning-only, but it must run so operators see invalid state.
+    try:
+        from app.core.license import verify_license as _verify_license
+
+        _lic = _verify_license()
+        app.state.license = _lic
+        if _lic.valid:
+            print(f"License OK: {_lic.licensee} (expires {_lic.expires_at})")
+        else:
+            print(f"License WARNING: {_lic.reason}")
+            if "fingerprint mismatch" in _lic.reason:
+                print("This package is not licensed for this machine.")
+                print("Run: bash deploy.sh --get-machine-id and provide the Fingerprint to your vendor.")
+    except Exception as _e:
+        app.state.license = None
+        print(f"License check skipped: {_e}")
 
     # Startup - 驗證PostgreSQL或SQLite配置
-    if settings.database_url and not settings.database_url.startswith(
+    if not settings.database_url.startswith(
         "postgresql"
     ) and not settings.database_url.startswith("sqlite"):
         raise ValueError(
@@ -197,6 +195,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         print(f" Warning: failed to run startup seed: {e}")
 
+    # Start remote monitoring (heartbeat + log forwarding) if configured
+    if settings.monitor_server_url:
+        from app.core.monitoring import init_monitoring, start_heartbeat
+
+        init_monitoring(
+            server_url=settings.monitor_server_url,
+            source=settings.monitor_source,
+        )
+        start_heartbeat(settings.monitor_heartbeat_interval)
+
     print(f" Form Analysis API starting on {settings.api_host}:{settings.api_port}")
     print(
         f" Database: PostgreSQL - {settings.database_url.split('@')[-1]}"
@@ -208,6 +216,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # Shutdown
+    if settings.monitor_server_url:
+        from app.core.monitoring import stop_heartbeat
+
+        stop_heartbeat()
+
     print(" Form Analysis API shutting down...")
 
 
@@ -239,9 +252,9 @@ app = FastAPI(
     - **production_date**: YYYY-MM-DD format
     """,
     version="1.0.0",
-    docs_url="/docs" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
-    redoc_url="/redoc" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
-    openapi_url="/openapi.json" if (getattr(settings, "environment", "") or "").lower() in ("development", "dev", "test", "local") else None,
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
     lifespan=lifespan,
 )
 
@@ -274,6 +287,9 @@ async def api_key_auth_middleware(request: Request, call_next):
     - Requires header settings.auth_api_key_header (default: X-API-Key)
     - Resolves key -> tenant_id and binds it to request.state.auth_tenant_id
     """
+    if request.method.upper() == "OPTIONS":
+        return await call_next(request)
+
     mode = (getattr(settings, "auth_mode", "off") or "off").strip().lower()
     if mode != "api_key":
         return await call_next(request)
@@ -549,5 +565,4 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower(),
         access_log=True,
     )
-
 
