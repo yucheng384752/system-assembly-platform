@@ -692,6 +692,14 @@ a { color: var(--primary); }
       </div>
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
+    <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
+      <label>本機機器碼（Fingerprint）<span id="fp-source-badge" class="badge badge-gray" style="margin-left:8px;font-size:11px;vertical-align:middle"></span></label>
+      <div class="input-btn-row">
+        <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
+        <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
+      </div>
+      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。<br><span id="fp-source-hint" style="color:var(--warn)"></span></div>
+    </div>
     <div class="nav-row">
       <span></span>
       <button class="btn btn-primary" id="btn-welcome-next" onclick="goNext()">開始安裝 &rarr;</button>
