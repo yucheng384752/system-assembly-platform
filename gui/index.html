@@ -224,15 +224,15 @@
 
       </main>
 
-      <!-- ── 機器碼綁定關卡（必須完成才能使用 Composer） ── -->
+      <!-- ── TPM 公鑰登錄關卡（必須完成才能使用 Composer） ── -->
       <div class="guide-overlay machine-gate-overlay" id="machine-gate-overlay" hidden
            style="align-items:center;justify-content:center;">
         <div class="guide-overlay-panel" style="max-width:520px;height:auto;margin:24px auto;">
           <div class="guide-overlay-head">
             <div class="guide-overlay-head-text">
               <p class="eyebrow">前置步驟</p>
-              <h2>目標伺服器機器碼綁定</h2>
-              <p>在開始選配 Kit 之前，請先取得目標伺服器的機器碼，記錄後才能開放 Kit 選配與套件下載。</p>
+              <h2>目標伺服器 TPM 公鑰登錄</h2>
+              <p>在開始選配 Kit 之前，請先取得目標伺服器的 TPM 公鑰，登錄後才能開放 Kit 選配與套件下載。</p>
             </div>
           </div>
           <div class="guide-overlay-body" style="display:block;padding:24px 28px;overflow-y:auto;">
@@ -240,27 +240,27 @@
               <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
                 <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">1</span>
                 <div>
-                  <strong>下載機器碼腳本</strong>
-                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">將腳本傳至目標 Linux 伺服器執行。</p>
-                  <button class="ghost-action" id="gate-download-script" type="button">⬇ 下載 get-machine-id.sh</button>
+                  <strong>下載 TPM 公鑰腳本</strong>
+                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">將腳本傳至目標 Linux 伺服器執行（需先完成 TPM 初始化）。</p>
+                  <button class="ghost-action" id="gate-download-script" type="button">⬇ 下載 get-machine-pubkey.sh</button>
                 </div>
               </div>
               <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
                 <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">2</span>
                 <div>
                   <strong>在伺服器執行腳本</strong>
-                  <code style="display:block;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;color:var(--ink-1,#1e293b);">bash get-machine-id.sh</code>
-                  <p style="margin:0;font-size:13px;color:var(--ink-3,#6b7280);">執行後在同目錄產生 <code>machine-id.txt</code>。</p>
+                  <code style="display:block;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;color:var(--ink-1,#1e293b);">bash get-machine-pubkey.sh</code>
+                  <p style="margin:0;font-size:13px;color:var(--ink-3,#6b7280);">執行後在同目錄產生 <code>machine-pubkey.pem</code>。若尚未初始化 TPM，請先執行 <code>sudo bash 01_tpm_full_setup.sh</code>。</p>
                 </div>
               </div>
               <div style="display:flex;gap:14px;margin-bottom:4px;align-items:flex-start;">
                 <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">3</span>
                 <div>
-                  <strong>上傳 machine-id.txt</strong>
-                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">上傳後 Kit Composer 記錄機器碼並開放後續操作。</p>
+                  <strong>上傳 machine-pubkey.pem</strong>
+                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">上傳後 Kit Composer 登錄 TPM 公鑰並開放後續操作。</p>
                   <label class="ghost-action" style="cursor:pointer;display:inline-block;margin:0;">
-                    選擇 machine-id.txt
-                    <input type="file" id="gate-machine-id-file" accept=".txt" style="display:none;" />
+                    選擇 machine-pubkey.pem
+                    <input type="file" id="gate-machine-pubkey-file" accept=".pem,.txt" style="display:none;" />
                   </label>
                   <div id="gate-status" style="margin-top:8px;font-size:13px;min-height:16px;"></div>
                 </div>
@@ -268,7 +268,7 @@
             </div>
             <div id="gate-registered-area" hidden
                  style="margin-top:20px;padding-top:20px;border-top:1px solid var(--border,#e2e8f0);">
-              <p style="font-size:13px;margin:0 0 6px;"><strong>✓ 已記錄機器碼</strong></p>
+              <p style="font-size:13px;margin:0 0 6px;"><strong>✓ 已登錄 TPM 公鑰</strong></p>
               <div id="gate-machine-list"
                    style="font-family:monospace;font-size:11px;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;margin-bottom:16px;color:var(--ink-2,#374151);line-height:1.7;"></div>
               <button class="primary-action" id="gate-proceed-btn" type="button">開始選配 Kit →</button>

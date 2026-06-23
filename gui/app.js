@@ -1,24 +1,45 @@
-// ── 機器碼腳本（內嵌，無伺服器時也能下載） ───────────────────────────────────────
-const MACHINE_ID_SCRIPT = `#!/bin/sh
-# get-machine-id.sh — Form System Kit Composer
+// ── TPM 公鑰腳本（內嵌，無伺服器時也能下載） ──────────────────────────────────
+const GET_MACHINE_PUBKEY_SCRIPT = `#!/bin/sh
+# get-machine-pubkey.sh — Form System Kit Composer
+# 匯出 TPM RSA-2048 簽名公鑰（handle 0x81000001）至 machine-pubkey.pem
+# 前置條件：請先執行 sudo bash 01_tpm_full_setup.sh
 set -eu
-if [ ! -f /etc/machine-id ]; then
-  echo "Error: /etc/machine-id not found. This script requires Linux." >&2
-  exit 1
+
+HANDLE="0x81000001"
+FIXED_PATH="/opt/hiba/tpm/signing_public.pem"
+
+# 優先讀取 01_tpm_full_setup.sh 預建的公鑰
+if [ -f "$FIXED_PATH" ]; then
+  cp "$FIXED_PATH" machine-pubkey.pem
+  echo ""
+  echo "  Source   : $FIXED_PATH"
+  echo "  Saved to : $(pwd)/machine-pubkey.pem"
+  echo ""
+  echo "  請將 machine-pubkey.pem 上傳至 Form System Kit Composer 平台。"
+  echo ""
+  exit 0
 fi
-MID=$(cat /etc/machine-id | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-FP=$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" "$MID" 2>/dev/null)
-if [ -z "$FP" ]; then
-  echo "Error: python3 not found. Please install Python 3." >&2
-  exit 1
+
+# 備選：從 TPM handle 直接匯出
+if command -v tpm2_readpublic > /dev/null 2>&1; then
+  if tpm2_readpublic --object-context "$HANDLE" --output machine-pubkey.pem --format pem 2>/dev/null; then
+    if grep -q "BEGIN PUBLIC KEY" machine-pubkey.pem 2>/dev/null; then
+      echo ""
+      echo "  Source   : TPM handle $HANDLE"
+      echo "  Saved to : $(pwd)/machine-pubkey.pem"
+      echo ""
+      echo "  請將 machine-pubkey.pem 上傳至 Form System Kit Composer 平台。"
+      echo ""
+      exit 0
+    fi
+  fi
 fi
-echo "$FP" > machine-id.txt
-echo ""
-echo "  Fingerprint : $FP"
-echo "  Saved to    : $(pwd)/machine-id.txt"
-echo ""
-echo "  請將 machine-id.txt 上傳至 Form System Kit Composer 平台。"
-echo ""
+
+echo "" >&2
+echo "Error: TPM public key not found." >&2
+echo "  Please run first: sudo bash 01_tpm_full_setup.sh" >&2
+echo "" >&2
+exit 1
 `;
 
 // ── Kit 資料 ──────────────────────────────────────────────────────────────
@@ -126,7 +147,7 @@ const state = {
   pkFkSuggestions: null,
   pkFkApplied: null,
   guideAnswers: {},
-  machineFingerprint: '',
+  machinePubkey: '',
 };
 
 const elements = {};
@@ -384,7 +405,7 @@ function bindToolbarActions() {
 
 }
 
-// ── 機器碼綁定關卡 ───────────────────────────────────────────────────────────
+// ── TPM 公鑰綁定關卡 ────────────────────────────────────────────────────────
 async function initMachineGate() {
   const overlay = document.getElementById("machine-gate-overlay");
   if (!overlay) return;
@@ -396,8 +417,8 @@ async function initMachineGate() {
     if (resp.ok) { machines = await resp.json(); serverRunning = true; }
   } catch (_) { /* server not running */ }
 
-  if (serverRunning && Array.isArray(machines) && machines.length > 0) {
-    state.machineFingerprint = machines[0].fingerprint;
+  if (serverRunning && Array.isArray(machines) && machines.length > 0 && machines[0].pubkey) {
+    state.machinePubkey = machines[0].pubkey;
     return; // 已有記錄，直接解鎖，overlay 保持 hidden
   }
 
@@ -407,48 +428,48 @@ async function initMachineGate() {
   }
 
   document.getElementById("gate-download-script")?.addEventListener("click", () => {
-    const blob = new Blob([MACHINE_ID_SCRIPT], { type: "text/plain" });
+    const blob = new Blob([GET_MACHINE_PUBKEY_SCRIPT], { type: "text/plain" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = url; a.download = "get-machine-id.sh";
+    a.href = url; a.download = "get-machine-pubkey.sh";
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
   });
 
-  document.getElementById("gate-machine-id-file")?.addEventListener("change", async (e) => {
+  document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
     const text = (await file.text()).trim();
-    const match = text.match(/[0-9a-f]{64}/i);
+    const isPem = text.includes("-----BEGIN PUBLIC KEY-----") && text.includes("-----END PUBLIC KEY-----");
     const statusEl = document.getElementById("gate-status");
-    if (!match) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "找不到有效 Fingerprint（需 64 位 hex）"; }
+    if (!isPem) {
+      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "找不到有效 PEM 公鑰（需 -----BEGIN PUBLIC KEY----- 格式）"; }
       return;
     }
-    const fp = match[0].toLowerCase();
+    const pem = text;
     if (statusEl) { statusEl.style.color = "var(--ink-3,#6b7280)"; statusEl.textContent = "上傳中…"; }
 
     if (!serverRunning) {
-      state.machineFingerprint = fp;
-      _showGateRegistered([{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
+      state.machinePubkey = pem;
+      _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
       return;
     }
     try {
       const resp = await fetch("/api/register-machine", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fingerprint: fp }),
+        body: JSON.stringify({ pubkey: pem }),
       });
       const data = await resp.json();
       if (data.ok) {
-        state.machineFingerprint = fp;
-        const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
+        state.machinePubkey = pem;
+        const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ pubkey: pem, registeredAt: new Date().toISOString() }]);
         _showGateRegistered(refreshed);
       } else {
         if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = `登錄失敗：${data.error}`; }
       }
     } catch (_) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "伺服器連線失敗，無法登錄機器碼"; }
+      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "伺服器連線失敗，無法登錄 TPM 公鑰"; }
     }
   });
 
@@ -463,12 +484,16 @@ function _showGateRegistered(machines) {
   if (stepsEl) stepsEl.style.opacity = "0.45";
   if (registeredArea) registeredArea.removeAttribute("hidden");
   if (listEl) {
-    listEl.innerHTML = machines.map((m) =>
-      `<div>${m.fingerprint.slice(0, 16)}…${m.fingerprint.slice(-8)}&nbsp;&nbsp;<span style="color:var(--ink-3,#9ca3af);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`
-    ).join("");
+    listEl.innerHTML = machines.map((m) => {
+      // Show PEM header + key fingerprint preview
+      const lines = (m.pubkey || "").split("\n").filter(Boolean);
+      const b64 = lines.filter(l => !l.startsWith("-----")).join("");
+      const preview = b64.length > 20 ? b64.slice(0, 12) + "…" + b64.slice(-8) : (m.pubkey || "").slice(0, 20);
+      return `<div>RSA-2048 公鑰 <code>${preview}</code>&nbsp;&nbsp;<span style="color:var(--ink-3,#9ca3af);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`;
+    }).join("");
   }
   const statusEl = document.getElementById("gate-status");
-  if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ 機器碼已記錄"; }
+  if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ TPM 公鑰已登錄"; }
 }
 
 function bindSearch() {
@@ -1621,7 +1646,7 @@ function buildRecipe() {
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
     },
-    ...(state.machineFingerprint ? { machineFingerprint: state.machineFingerprint } : {}),
+    ...(state.machinePubkey ? { machinePublicKey: state.machinePubkey } : {}),
   };
 }
 
@@ -2196,8 +2221,8 @@ async function downloadPackage() {
     zip.file("phases/04-package.ps1", bom + buildDeployPhase4Ps1());
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
-    if (state.machineFingerprint) {
-      zip.file("machine-id.txt", state.machineFingerprint + "\n");
+    if (state.machinePubkey) {
+      zip.file("machine-pubkey.pem", state.machinePubkey + "\n");
     }
     // Include install-wizard files when served via serve-gui.cjs
     try {

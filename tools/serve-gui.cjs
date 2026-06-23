@@ -62,20 +62,20 @@ function handleRegisterMachine(req, res) {
   req.on("end", () => {
     try {
       const body = JSON.parse(raw || "{}");
-      const fp = String(body.fingerprint || "").trim().toLowerCase();
-      if (!/^[0-9a-f]{64}$/.test(fp)) {
-        json(res, 400, { error: "invalid fingerprint (must be 64-char hex)" });
+      const pubkey = String(body.pubkey || "").trim();
+      if (!pubkey.includes("-----BEGIN PUBLIC KEY-----") || !pubkey.includes("-----END PUBLIC KEY-----")) {
+        json(res, 400, { error: "invalid pubkey (must be RSA PEM format with BEGIN PUBLIC KEY header)" });
         return;
       }
       fs.readFile(machinesFile, "utf8", (err, data) => {
         let machines = [];
         if (!err) { try { machines = JSON.parse(data); } catch { /* skip */ } }
-        if (!machines.some((m) => m.fingerprint === fp)) {
-          machines.push({ fingerprint: fp, registeredAt: new Date().toISOString() });
+        if (!machines.some((m) => m.pubkey === pubkey)) {
+          machines.push({ pubkey, registeredAt: new Date().toISOString() });
         }
         fs.writeFile(machinesFile, JSON.stringify(machines, null, 2), (e) => {
           if (e) { json(res, 500, { error: "write failed" }); return; }
-          json(res, 200, { ok: true, fingerprint: fp });
+          json(res, 200, { ok: true });
         });
       });
     } catch {
@@ -108,11 +108,11 @@ const server = http.createServer((req, res) => {
     handleApiLogs(res);
     return;
   }
-  if (pathname === "/api/get-machine-id-script" && req.method === "GET") {
-    const p = path.join(__dirname, "get-machine-id.sh");
+  if (pathname === "/api/get-machine-pubkey-script" && req.method === "GET") {
+    const p = path.join(__dirname, "get-machine-pubkey.sh");
     fs.readFile(p, (err, data) => {
       if (err) { res.writeHead(404); res.end("Not found"); return; }
-      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": 'attachment; filename="get-machine-id.sh"' });
+      res.writeHead(200, { "Content-Type": "text/plain; charset=utf-8", "Content-Disposition": 'attachment; filename="get-machine-pubkey.sh"' });
       res.end(data);
     });
     return;
