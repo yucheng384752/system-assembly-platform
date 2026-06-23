@@ -252,57 +252,88 @@ def _generate_secret() -> str:
     return _secrets_mod.token_urlsafe(48)
 
 
-def _probe_tpm_fingerprint() -> dict:
-    """
-    Returns {'source': 'tpm2-ek'|'machine-id'|'none', 'fingerprint': str|None, 'available': bool}
-    'available' = True means TPM hardware was used (hardware-bound, non-exportable).
-    """
-    import hashlib as _hl
+_TPM_SIGNING_HANDLE  = "0x81000001"
+_TPM_SIGNING_PEM_PATH = Path("/opt/hiba/tpm/signing_public.pem")
 
-    if platform.system() == "Linux":
-        try:
-            with tempfile.TemporaryDirectory() as tmpdir:
-                ctx_path = Path(tmpdir) / "ek.ctx"
-                pub_path = Path(tmpdir) / "ek.pub"
-                result = subprocess.run(
-                    ["tpm2_createek", "-c", str(ctx_path), "-G", "rsa", "-u", str(pub_path)],
-                    capture_output=True, timeout=10,
-                )
-                if result.returncode == 0 and pub_path.exists():
-                    fp = _hl.sha256(pub_path.read_bytes()).hexdigest()
-                    return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
-        except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
-            pass
-        # Fallback: /etc/machine-id
-        mid_path = Path("/etc/machine-id")
-        if mid_path.exists():
-            raw = mid_path.read_text("utf-8").strip().lower()
-            fp = _hl.sha256(raw.encode()).hexdigest()
-            return {"source": "machine-id", "fingerprint": fp, "available": False}
 
-    elif platform.system() == "Windows":
+def _probe_tpm_signing_pubkey() -> dict:
+    """
+    Returns {'source': 'tpm2-signing-key'|'none', 'pubkey_pem': str|None}
+    Reads the TPM signing public key (RSA-2048 PEM). No machine-id fallback.
+    Priority:
+      1. /opt/hiba/tpm/signing_public.pem  (pre-built by 01_tpm_full_setup.sh)
+      2. tpm2_readpublic on handle 0x81000001 (on-demand export, Linux only)
+    """
+    # 1. Read pre-built signing_public.pem from swtpm/TPM setup script
+    if _TPM_SIGNING_PEM_PATH.exists():
         try:
-            result = subprocess.run(
-                [
-                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
-                    "$ek = Get-TpmEndorsementKeyInfo -HashAlgorithm Sha256; "
-                    "if ($ek -and $ek.PublicKeyHash) "
-                    "{ $ek.PublicKeyHash.Replace('-','').ToLower() } else { exit 1 }",
-                ],
-                capture_output=True, text=True, timeout=15,
-            )
-            if result.returncode == 0 and result.stdout.strip():
-                import hashlib as _hl2
-                fp = _hl2.sha256(result.stdout.strip().encode()).hexdigest()
-                return {"source": "tpm2-ek", "fingerprint": fp, "available": True}
+            pem = _TPM_SIGNING_PEM_PATH.read_text("utf-8").strip()
+            if "BEGIN PUBLIC KEY" in pem:
+                return {"source": "tpm2-signing-key", "pubkey_pem": pem}
         except Exception:
             pass
 
-    return {"source": "none", "fingerprint": None, "available": False}
+    # 2. Export from TPM handle on-demand (Linux)
+    if platform.system() == "Linux":
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                pem_path = Path(tmpdir) / "signing.pem"
+                r = subprocess.run(
+                    ["tpm2_readpublic", "--object-context", _TPM_SIGNING_HANDLE,
+                     "--output", str(pem_path), "--format", "pem"],
+                    capture_output=True, timeout=10,
+                )
+                if r.returncode == 0 and pem_path.exists():
+                    pem = pem_path.read_text("utf-8").strip()
+                    if "BEGIN PUBLIC KEY" in pem:
+                        return {"source": "tpm2-signing-key", "pubkey_pem": pem}
+        except Exception:
+            pass
+
+    return {"source": "none", "pubkey_pem": None}
+
+
+def _wizard_tpm_sign_nonce(nonce: bytes) -> bytes | None:
+    """
+    Ask TPM handle 0x81000001 to sign a nonce (RSASSA-PKCS1v15-SHA256).
+    Returns raw RSA signature bytes, or None if TPM is unavailable.
+    """
+    with tempfile.TemporaryDirectory() as tmpdir:
+        nonce_path = Path(tmpdir) / "nonce.bin"
+        sig_path   = Path(tmpdir) / "sig.bin"
+        nonce_path.write_bytes(nonce)
+        base_cmd = [
+            "tpm2_sign",
+            "--key-context", _TPM_SIGNING_HANDLE,
+            "--hash-algorithm", "sha256",
+            "--scheme", "rsassa",
+            "--signature", str(sig_path),
+            str(nonce_path),
+        ]
+        # Try --format plain first (tpm2-tools >= 4.x)
+        for extra in (["--format", "plain"], []):
+            try:
+                r = subprocess.run(
+                    [*base_cmd[:6], *extra, *base_cmd[6:]],
+                    capture_output=True, timeout=10,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                return None
+            if r.returncode == 0 and sig_path.exists():
+                raw = sig_path.read_bytes()
+                if extra:
+                    return raw
+                # Parse TPMT_SIGNATURE: [2B alg][2B hash][2B size][size bytes sig]
+                if len(raw) >= 6:
+                    sz = int.from_bytes(raw[4:6], "big")
+                    if len(raw) >= 6 + sz and sz > 0:
+                        return raw[6:6 + sz]
+            sig_path.unlink(missing_ok=True)
+    return None
 
 
 def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
-    """Install tpm2-tools, add service user to tss group, probe and save fingerprint. Best-effort."""
+    """Install tpm2-tools, provision TPM signing key, export machine-pubkey.pem. Best-effort."""
     import shutil
 
     # Install tpm2-tools if missing
@@ -310,7 +341,7 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
         log_fn("  INFO  tpm2-tools 未安裝，嘗試自動安裝 (apt-get)...")
         rc = _run_cmd(["apt-get", "install", "-y", "tpm2-tools"], sys_root)
         if rc != 0:
-            log_fn("  WARN  tpm2-tools 安裝失敗（非致命）— 退回 /etc/machine-id fingerprint")
+            log_fn("  WARN  tpm2-tools 安裝失敗（非致命）— 跳過 TPM 機器綁定設定")
             return
         log_fn("  OK  tpm2-tools 安裝完成")
     else:
@@ -321,9 +352,9 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
     if not has_hw_tpm:
         log_fn("  INFO  未偵測到硬體 TPM (/dev/tpmrm0, /dev/tpm0) — 嘗試安裝 swtpm 軟體 vTPM...")
         if not _setup_swtpm_linux(log_fn, sys_root):
-            log_fn("  WARN  swtpm 設定失敗 — 退回 /etc/machine-id fingerprint")
+            log_fn("  WARN  swtpm 設定失敗 — 跳過 TPM 機器綁定設定（授權將為浮動授權）")
             return
-        log_fn("  OK   swtpm vTPM 就緒，繼續儲存指紋...")
+        log_fn("  OK   swtpm vTPM 就緒，繼續匯出公鑰...")
     else:
         log_fn("  OK   硬體 TPM 已偵測到")
         # Add service user to tss group (硬體 TPM 才需要 — swtpm 使用 TCP 不需要此 group)
@@ -340,19 +371,16 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
                 rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
                 log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
 
-    # Probe fingerprint and save (works for both hardware TPM and swtpm)
-    probe = _probe_tpm_fingerprint()
-    if probe["fingerprint"]:
-        fp_file = sys_root / "machine-fingerprint.txt"
-        fp_file.write_text(
-            f"source: {probe['source']}\nfingerprint: {probe['fingerprint']}\n",
-            encoding="utf-8",
-        )
-        log_fn(f"  OK  機器指紋已儲存 → {fp_file.name}")
+    # Export signing public key and save machine-pubkey.pem
+    probe = _probe_tpm_signing_pubkey()
+    if probe["pubkey_pem"]:
+        pubkey_file = sys_root / "machine-pubkey.pem"
+        pubkey_file.write_text(probe["pubkey_pem"] + "\n", encoding="utf-8")
+        log_fn(f"  OK  TPM 公鑰已儲存 → {pubkey_file.name}")
         log_fn(f"  INFO  來源: {probe['source']}")
-        log_fn(f"  INFO  指紋: {probe['fingerprint'][:16]}…（請提供給授權方）")
+        log_fn("  INFO  請將 machine-pubkey.pem 提供給授權方以取得機器綁定授權")
     else:
-        log_fn("  WARN  無法取得機器指紋（TPM 不可用且無 /etc/machine-id）")
+        log_fn("  WARN  無法取得 TPM 公鑰（handle 0x81000001 尚未佈建，請執行 01_tpm_full_setup.sh）")
 
 
 def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
@@ -598,13 +626,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
-        elif path == "/api/machine-id":
-            probe = _probe_tpm_fingerprint()
+        elif path == "/api/machine-pubkey":
+            probe = _probe_tpm_signing_pubkey()
             self._send_json({
-                "found": probe["fingerprint"] is not None,
-                "fingerprint": probe["fingerprint"],
+                "found": probe["pubkey_pem"] is not None,
+                "pubkey_pem": probe["pubkey_pem"],
                 "source": probe["source"],
-                "available": probe["available"],
             })
 
         elif path == "/api/check-license":
@@ -627,43 +654,34 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                     if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at.replace("Z", "+00:00")):
                         self._send_json({"valid": False, "reason": "expired", "expires_at": expires_at})
                         return
-                # Machine fingerprint check (TPM EK preferred, /etc/machine-id as fallback)
-                expected_fp = payload.get("machineFingerprint")
-                if expected_fp:
-                    probe = _probe_tpm_fingerprint()
-                    if not probe["fingerprint"]:
-                        self._send_json({"valid": False, "reason": "no_machine_fingerprint"})
+                # TPM machine binding via challenge-response
+                expected_pubkey = payload.get("machinePublicKey")
+                machine_bound = bool(expected_pubkey)
+                if expected_pubkey:
+                    import os as _os
+                    nonce = _os.urandom(32)
+                    sig = _wizard_tpm_sign_nonce(nonce)
+                    if sig is None:
+                        self._send_json({"valid": False, "reason": "tpm_unavailable",
+                                         "detail": f"TPM handle {_TPM_SIGNING_HANDLE} not responding"})
                         return
-                    if probe["fingerprint"] != expected_fp:
-                        self._send_json({"valid": False, "reason": "fingerprint_mismatch",
-                                         "current_fp": probe["fingerprint"], "source": probe["source"]})
+                    try:
+                        from cryptography.hazmat.primitives import hashes, serialization
+                        from cryptography.hazmat.primitives.asymmetric import padding as _pad
+                        pub = serialization.load_pem_public_key(expected_pubkey.encode())
+                        pub.verify(sig, nonce, _pad.PKCS1v15(), hashes.SHA256())
+                    except Exception as _ve:
+                        self._send_json({"valid": False, "reason": "tpm_mismatch",
+                                         "detail": "challenge-response failed — different TPM"})
                         return
                 licensee = payload.get("licensee", {})
-                fp_source = _probe_tpm_fingerprint()["source"] if expected_fp else "none"
                 self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
-                                 "machine_bound": bool(expected_fp), "fingerprint_source": fp_source})
+                                 "machine_bound": machine_bound,
+                                 "binding_method": "tpm2-challenge-response" if machine_bound else "none"})
             except Exception as exc:
                 self._send_json({"valid": False, "reason": str(exc)})
 
-        elif path == "/api/check-machine-id":
-            import hashlib as _hl
-            mid_file = Path(__file__).parent / "machine-id.txt"
-            if not mid_file.exists():
-                self._send_json({"status": "no_file"})
-                return
-            expected = mid_file.read_text("utf-8").strip().lower()
-            mid_path = Path("/etc/machine-id")
-            if not mid_path.exists():
-                self._send_json({"status": "no_machine_id"})
-                return
-            raw = mid_path.read_text("utf-8").strip().lower()
-            current = _hl.sha256(raw.encode()).hexdigest()
-            if current == expected:
-                self._send_json({"status": "match", "fingerprint": current[:16] + "…"})
-            else:
-                self._send_json({"status": "mismatch",
-                                 "expected": expected[:16] + "…",
-                                 "current": current[:16] + "…"})
+        # /api/check-machine-id removed — replaced by TPM challenge-response in /api/check-license
 
         elif path == "/api/ls":
             from urllib.parse import unquote_plus
@@ -1022,12 +1040,13 @@ a { color: var(--primary); }
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
     <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
-      <label>本機機器碼（Fingerprint）<span id="fp-source-badge" class="badge badge-gray" style="margin-left:8px;font-size:11px;vertical-align:middle"></span></label>
-      <div class="input-btn-row">
-        <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
-        <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
+      <label>本機 TPM 公鑰 <span id="fp-source-badge" class="badge badge-green" style="margin-left:8px;font-size:11px;vertical-align:middle">TPM 硬體綁定</span></label>
+      <textarea id="machine-id-display" readonly rows="5" style="font-family:monospace;font-size:11px;background:#f5f5f5;width:100%;resize:vertical;border:1px solid #e5e7eb;border-radius:6px;padding:8px;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn btn-outline btn-sm" onclick="copyMachinePubkey()">複製公鑰</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadMachinePubkey()">下載 .pem</button>
       </div>
-      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。<br><span id="fp-source-hint" style="color:var(--warn)"></span></div>
+      <div class="hint">若授權需要機器綁定，請將此 RSA 公鑰提供給授權方（可複製或下載 .pem）。<br>授權方以此公鑰簽發 license.lic，系統啟動時透過 TPM 挑戰-回應驗證綁定。</div>
     </div>
     <div class="nav-row">
       <span></span>
@@ -1222,81 +1241,84 @@ const S = {
   pollTimer: null,
 };
 
-// ── Machine fingerprint display & license pre-check ──────────────────────────
+// ── TPM 公鑰顯示 ─────────────────────────────────────────────────────────────
 async function loadMachineId() {
   try {
-    const data = await fetch('/api/machine-id').then(r => r.json());
-    const panel     = document.getElementById('machine-id-panel');
-    const disp      = document.getElementById('machine-id-display');
-    const badge     = document.getElementById('fp-source-badge');
-    const hint      = document.getElementById('fp-source-hint');
-    if (data.found && data.fingerprint) {
-      disp.value = data.fingerprint;
+    const data = await fetch('/api/machine-pubkey').then(r => r.json());
+    const panel = document.getElementById('machine-id-panel');
+    const disp  = document.getElementById('machine-id-display');
+    if (data.found && data.pubkey_pem) {
+      disp.value = data.pubkey_pem;
       panel.style.display = 'block';
-      const isHw = data.source === 'tpm2-ek';
-      if (badge) {
-        badge.textContent = isHw ? '硬體綁定 (TPM 2.0)' : '軟體綁定 (/etc/machine-id)';
-        badge.className   = 'badge ' + (isHw ? 'badge-green' : 'badge-gray');
-        badge.title       = isHw
-          ? 'TPM Endorsement Key — 物理上無法複製到其他機器'
-          : '/etc/machine-id — 可被複製偽造，建議安裝 tpm2-tools';
-      }
-      if (hint && !isHw) {
-        hint.textContent = '⚠ 未偵測到 TPM 2.0，指紋安全性較低。請確認已安裝 tpm2-tools 且 /dev/tpmrm0 存在。';
-      }
     }
   } catch (_) {}
 }
 
-function copyMachineId() {
+function copyMachinePubkey() {
   const v = document.getElementById('machine-id-display')?.value;
   if (v) navigator.clipboard?.writeText(v).catch(() => {});
 }
 
+function downloadMachinePubkey() {
+  const v = document.getElementById('machine-id-display')?.value;
+  if (!v) return;
+  const a = document.createElement('a');
+  a.href = 'data:application/x-pem-file;charset=utf-8,' + encodeURIComponent(v);
+  a.download = 'machine-pubkey.pem';
+  a.click();
+}
+
+// ── License 驗證（TPM 挑戰-回應）────────────────────────────────────────────
 async function checkMachineId() {
-  const resultEl = document.getElementById('license-check-result');
+  const resultEl  = document.getElementById('license-check-result');
   const btnInstall = document.getElementById('btn-start-install');
   if (!resultEl) return;
   resultEl.style.display = 'block';
   resultEl.style.color = '';
   resultEl.style.background = '#f0f9ff';
   resultEl.style.border = '1px solid #bae6fd';
-  resultEl.textContent = '機器碼驗證中…';
+  resultEl.textContent = '授權驗證中…';
   try {
-    const data = await fetch('/api/check-machine-id').then(r => r.json());
-    if (data.status === 'match') {
+    const data = await fetch('/api/check-license').then(r => r.json());
+    if (data.valid) {
+      const bound = data.machine_bound
+        ? ' | 機器綁定：TPM 挑戰-回應 通過'
+        : ' | 浮動授權（未綁定機器）';
       resultEl.style.background = '#f0fdf4';
       resultEl.style.border = '1px solid #86efac';
       resultEl.style.color = '#166534';
-      resultEl.textContent = '✓ 機器碼驗證通過，此機器已授權安裝。';
+      resultEl.textContent = '✓ 授權有效' + bound;
       if (btnInstall) btnInstall.disabled = false;
-    } else if (data.status === 'mismatch') {
+    } else if (data.reason === 'no_license_file') {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = '⚠ 未找到 license.lic，可繼續安裝（無授權限制）。';
+      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'tpm_mismatch') {
       resultEl.style.background = '#fef2f2';
       resultEl.style.border = '1px solid #fca5a5';
       resultEl.style.color = '#991b1b';
-      resultEl.innerHTML =
-        '<strong>❌ 機器碼不符</strong><br>' +
-        '授權機器：<code>' + data.expected + '</code>&nbsp;&nbsp;本機：<code>' + data.current + '</code><br>' +
-        '此套件只能在授權機器上安裝。';
+      resultEl.innerHTML = '<strong>TPM 機器綁定驗證失敗</strong><br>此授權僅限授權機器使用（TPM 挑戰-回應不符）。';
       if (btnInstall) btnInstall.disabled = true;
-    } else if (data.status === 'no_file') {
-      resultEl.style.background = '#fffbeb';
-      resultEl.style.border = '1px solid #fcd34d';
-      resultEl.style.color = '#92400e';
-      resultEl.textContent = '⚠ 此套件未綁定機器，可繼續安裝。';
-      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'tpm_unavailable') {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.innerHTML = '<strong>TPM 無法使用</strong><br>授權需要 TPM，但 handle 0x81000001 無回應。請先執行 01_tpm_full_setup.sh。';
+      if (btnInstall) btnInstall.disabled = true;
     } else {
-      resultEl.style.background = '#fffbeb';
-      resultEl.style.border = '1px solid #fcd34d';
-      resultEl.style.color = '#92400e';
-      resultEl.textContent = '⚠ 無法取得本機機器碼（非 Linux 環境），可繼續安裝。';
-      if (btnInstall) btnInstall.disabled = false;
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.textContent = '授權驗證失敗：' + (data.reason || '未知錯誤');
+      if (btnInstall) btnInstall.disabled = true;
     }
   } catch (_) {
     resultEl.style.background = '#fffbeb';
     resultEl.style.border = '1px solid #fcd34d';
     resultEl.style.color = '#92400e';
-    resultEl.textContent = '⚠ 機器碼驗證失敗，可繼續安裝。';
+    resultEl.textContent = '⚠ 無法連線至本地授權服務，可繼續安裝。';
     if (btnInstall) btnInstall.disabled = false;
   }
 }

@@ -1,19 +1,20 @@
 """
 License verification for Form System Kit Composer generated systems.
-Checks RSA-PSS signature, expiry, and machine fingerprint from license.lic at startup.
+Checks RSA-PSS signature, expiry, and TPM machine binding (PKI challenge-response).
 Failure is logged as a warning; it does NOT block app startup.
 
-Machine fingerprint priority:
-  1. TPM 2.0 EK public key hash  (hardware-bound, non-exportable)
-  2. /etc/machine-id fallback     (Linux only, spoofable — logged as warning)
+Machine binding (PKI challenge-response, requires TPM 2.0):
+  - license.lic embeds machinePublicKey (RSA-2048 PEM from TPM signing key handle 0x81000001)
+  - At verification, backend calls tpm2_sign to sign a random nonce with the persisted key
+  - Signature is verified against machinePublicKey in the license
+  - The TPM private key never leaves the chip — cryptographically non-exportable
+  - No machine-id fallback: licenses without machinePublicKey are floating (unbound)
 """
 from __future__ import annotations
 
-import hashlib
 import json
 import logging
 import os
-import platform
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -21,6 +22,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
+
+_TPM_SIGNING_HANDLE = "0x81000001"
 
 # Public key embedded at package generation time (RSA-2048 SubjectPublicKeyInfo PEM)
 _PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
@@ -45,7 +48,7 @@ class LicenseResult:
 def _find_license_file() -> Path | None:
     candidates = [
         Path(__file__).parents[4] / "license.lic",   # system/license.lic
-        Path(__file__).parents[5] / "license.lic",   # one level up (deploy package root)
+        Path(__file__).parents[5] / "license.lic",   # deploy package root
         Path(os.getcwd()) / "license.lic",
     ]
     for p in candidates:
@@ -74,7 +77,7 @@ def verify_license() -> LicenseResult:
     except Exception as exc:
         return LicenseResult(valid=False, reason=f"malformed license.lic: {exc}")
 
-    # Verify RSA-PSS signature
+    # Verify RSA-PSS license signature (issuer signs the payload)
     try:
         pub_key = serialization.load_pem_public_key(_PUBLIC_KEY_PEM.encode())
         pub_key.verify(
@@ -104,111 +107,104 @@ def verify_license() -> LicenseResult:
     except Exception as exc:
         return LicenseResult(valid=False, reason=f"payload parse error: {exc}")
 
-    # Check machine fingerprint (if embedded in license)
-    expected_fp = payload.get("machineFingerprint")
-    if expected_fp:
-        current_fp = _get_machine_fingerprint()
-        if current_fp is None:
-            return LicenseResult(valid=False, reason="cannot read machine-id for fingerprint check")
-        if current_fp != expected_fp:
-            return LicenseResult(valid=False, reason="machine fingerprint mismatch — license issued for a different machine")
+    # TPM machine binding (PKI challenge-response)
+    expected_pubkey_pem = payload.get("machinePublicKey")
+    if expected_pubkey_pem:
+        if not _verify_tpm_possession(expected_pubkey_pem):
+            return LicenseResult(
+                valid=False,
+                reason=(
+                    "TPM machine binding failed — "
+                    f"ensure TPM handle {_TPM_SIGNING_HANDLE} is provisioned "
+                    "and accessible (run 01_tpm_full_setup.sh)"
+                ),
+            )
+        logger.info("license: TPM machine binding verified via challenge-response")
 
     return LicenseResult(valid=True, licensee=licensee_str, expires_at=expires_at)
 
 
-def _get_machine_fingerprint() -> str | None:
+def _verify_tpm_possession(pubkey_pem: str) -> bool:
     """
-    Returns a hardware-bound machine fingerprint (SHA-256 hex, 64 chars).
-    Tries TPM 2.0 EK first; falls back to /etc/machine-id with a warning.
-    Returns None if neither source is available.
+    Challenge-response: ask TPM to sign a random nonce, verify with the public key
+    embedded in the license. Returns True only if the TPM holds the matching private key.
     """
-    fp = _tpm_ek_fingerprint()
-    if fp is not None:
-        logger.debug("license: fingerprint source=tpm2-ek")
-        return fp
-
-    # Fallback: /etc/machine-id (Linux/systemd — trivially spoofable via file copy)
-    machine_id_path = Path("/etc/machine-id")
-    if machine_id_path.exists():
+    nonce = os.urandom(32)
+    sig = _tpm_sign_nonce(nonce)
+    if sig is None:
         logger.warning(
-            "license: TPM 2.0 not available — falling back to /etc/machine-id "
-            "(weaker binding; install tpm2-tools and add service user to 'tss' group)"
+            "license: TPM signing unavailable — "
+            "tpm2_sign not found or handle %s not provisioned",
+            _TPM_SIGNING_HANDLE,
         )
-        raw = machine_id_path.read_text("utf-8").strip().lower()
-        return hashlib.sha256(raw.encode()).hexdigest()
-
-    return None
-
-
-def _tpm_ek_fingerprint() -> str | None:
-    """SHA-256 of TPM 2.0 Endorsement Key public key bytes. Hardware-bound."""
+        return False
     try:
-        if platform.system() == "Windows":
-            return _tpm_ek_windows()
-        return _tpm_ek_linux()
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("TPM EK fingerprint error: %s", exc)
-        return None
+        from cryptography.hazmat.primitives import hashes, serialization
+        from cryptography.hazmat.primitives.asymmetric import padding
+        pub = serialization.load_pem_public_key(pubkey_pem.encode())
+        pub.verify(sig, nonce, padding.PKCS1v15(), hashes.SHA256())
+        logger.debug("license: TPM challenge-response OK (handle=%s)", _TPM_SIGNING_HANDLE)
+        return True
+    except Exception as exc:
+        logger.warning("license: TPM challenge-response failed: %s", exc)
+        return False
 
 
-def _tpm_ek_linux() -> str | None:
+def _tpm_sign_nonce(nonce: bytes) -> bytes | None:
     """
-    Derives EK public key via tpm2_createek (tpm2-tools >= 4.x).
-    The EK is deterministic: same TPM always yields the same public key bytes.
-
-    Prerequisites:
-      - apt-get install tpm2-tools          (Ubuntu/Debian)
-      - usermod -aG tss <service-user>      (grants /dev/tpmrm0 access without root)
-      - docker-compose: devices: [/dev/tpmrm0:/dev/tpmrm0]  (if containerised)
+    Ask TPM handle 0x81000001 to sign a nonce with RSASSA-PKCS1v15-SHA256.
+    Tries --format plain first (tpm2-tools >= 4.x); falls back to parsing TPMT_SIGNATURE.
+    Returns raw RSA signature bytes, or None if unavailable.
     """
     with tempfile.TemporaryDirectory() as tmpdir:
-        ctx_path = Path(tmpdir) / "ek.ctx"
-        pub_path = Path(tmpdir) / "ek.pub"
+        nonce_path = Path(tmpdir) / "nonce.bin"
+        sig_path   = Path(tmpdir) / "sig.bin"
+        nonce_path.write_bytes(nonce)
+
+        base_cmd = [
+            "tpm2_sign",
+            "--key-context", _TPM_SIGNING_HANDLE,
+            "--hash-algorithm", "sha256",
+            "--scheme", "rsassa",
+            "--signature", str(sig_path),
+            str(nonce_path),
+        ]
+
+        # Attempt 1: --format plain → raw RSA bytes directly
         try:
-            result = subprocess.run(
-                ["tpm2_createek", "-c", str(ctx_path), "-G", "rsa", "-u", str(pub_path)],
-                capture_output=True,
-                timeout=10,
+            r = subprocess.run(
+                [*base_cmd[:6], "--format", "plain", *base_cmd[6:]],
+                capture_output=True, timeout=10,
             )
-        except FileNotFoundError:
-            logger.debug("tpm2_createek not found — install: apt-get install tpm2-tools")
+            if r.returncode == 0 and sig_path.exists():
+                return sig_path.read_bytes()
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
-        except subprocess.TimeoutExpired:
-            logger.debug("tpm2_createek timed out — /dev/tpmrm0 may be inaccessible or service user not in tss group")
+        except Exception:
+            pass
+
+        # Attempt 2: default TPMT_SIGNATURE format → parse manually
+        sig_path.unlink(missing_ok=True)
+        try:
+            r = subprocess.run(base_cmd, capture_output=True, timeout=10)
+            if r.returncode == 0 and sig_path.exists():
+                return _parse_tpmt_rsassa_sig(sig_path.read_bytes())
+        except (FileNotFoundError, subprocess.TimeoutExpired):
             return None
+        except Exception:
+            pass
 
-        if result.returncode != 0:
-            logger.debug(
-                "tpm2_createek exit %d: %s",
-                result.returncode,
-                result.stderr.decode(errors="replace").strip(),
-            )
-            return None
-
-        if not pub_path.exists():
-            return None
-
-        return hashlib.sha256(pub_path.read_bytes()).hexdigest()
-
-
-def _tpm_ek_windows() -> str | None:
-    """
-    Reads TPM EK public key hash via PowerShell Get-TpmEndorsementKeyInfo.
-    Available on Windows 8+ with TPM 2.0 chip (all Windows 11 machines).
-    """
-    result = subprocess.run(
-        [
-            "powershell", "-NoProfile", "-NonInteractive", "-Command",
-            "$ek = Get-TpmEndorsementKeyInfo -HashAlgorithm Sha256; "
-            "if ($ek -and $ek.PublicKeyHash) "
-            "{ $ek.PublicKeyHash.Replace('-','').ToLower() } else { exit 1 }",
-        ],
-        capture_output=True,
-        text=True,
-        timeout=15,
-    )
-    if result.returncode != 0 or not result.stdout.strip():
-        logger.debug("Get-TpmEndorsementKeyInfo failed: %s", result.stderr.strip())
         return None
-    # Double-hash so Windows and Linux fingerprints share the same 64-char hex format
-    return hashlib.sha256(result.stdout.strip().encode()).hexdigest()
+
+
+def _parse_tpmt_rsassa_sig(data: bytes) -> bytes | None:
+    """
+    Extract raw RSA signature bytes from a TPMT_SIGNATURE structure (RSASSA scheme).
+    Layout: [2B alg][2B hash][2B sig_size][sig_size bytes]
+    """
+    if len(data) < 6:
+        return None
+    sig_size = int.from_bytes(data[4:6], "big")
+    if len(data) < 6 + sig_size or sig_size == 0:
+        return None
+    return data[6 : 6 + sig_size]
