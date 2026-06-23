@@ -31,6 +31,191 @@ from pathlib import Path
 _DEFAULT_PORT = 9981
 _HERE = Path(__file__).parent.resolve()
 
+# ── Embedded persistent swtpm setup script ────────────────────────────────────
+# 當偵測到沒有硬體 TPM 時，由 _setup_swtpm_linux() 寫入磁碟並執行
+_SWTPM_SETUP_SCRIPT = r"""#!/usr/bin/env bash
+# 01_tpm_full_setup.sh — 持久化 swtpm 初始化（由 install-wizard 自動執行）
+set -uo pipefail
+
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+ok()   { echo -e "${GREEN}[TPM] ✓ $1${NC}"; }
+err()  { echo -e "${RED}[TPM] ✗ $1${NC}"; }
+info() { echo -e "${YELLOW}[TPM] ▸ $1${NC}"; }
+skip() { echo -e "${CYAN}[TPM] ↷ $1（已存在，跳過）${NC}"; }
+die()  { err "$1"; exit 1; }
+
+TPM_DIR="/opt/hiba/tpm"
+TPM_STATE="${TPM_DIR}/swtpm-state"
+HANDLE="0x81000001"
+TCTI_ENV_FILE="/etc/profile.d/hiba-tpm.sh"
+SWTPM_SERVICE="/etc/systemd/system/swtpm.service"
+TCTI_CONF="${TPM_DIR}/tcti.conf"
+SWTPM_LOG="${TPM_DIR}/swtpm.log"
+TCTI_VALUE="swtpm:host=127.0.0.1,port=2321"
+
+REAL_USER="${SUDO_USER:-${USER:-$(logname 2>/dev/null || whoami)}}"
+
+info "STAGE 0：前置確認"
+[[ $EUID -eq 0 ]] || die "需要 root 權限（請以 sudo 執行安裝精靈）"
+for cmd in swtpm swtpm_setup tpm2_createprimary tpm2_create tpm2_load \
+           tpm2_evictcontrol tpm2_readpublic tpm2_flushcontext openssl; do
+  command -v "$cmd" >/dev/null 2>&1 && ok "$cmd" || die "$cmd 未找到"
+done
+
+mkdir -p "$TPM_DIR" "$TPM_STATE"
+chown -R "$REAL_USER":"$REAL_USER" "$TPM_DIR"
+chmod 700 "$TPM_STATE"
+ok "目錄：$TPM_DIR"
+
+info "STAGE 1：swtpm 狀態初始化（冪等）"
+STATE_MARKER="${TPM_STATE}/.initialized"
+if [[ -f "$STATE_MARKER" ]]; then
+  skip "swtpm 狀態已存在，指紋維持不變"
+else
+  swtpm_setup --tpm2 --tpmstate "$TPM_STATE" --allow-signing --createek \
+    2>>"$SWTPM_LOG" || die "swtpm_setup 失敗，查看：$SWTPM_LOG"
+  touch "$STATE_MARKER"
+  chown "$REAL_USER":"$REAL_USER" "$STATE_MARKER"
+  ok "swtpm 狀態初始化完成（EK 已固定）"
+fi
+
+info "STAGE 2：swtpm systemd 服務"
+cat > "$TCTI_CONF" <<TCTIEOF
+TPM2TOOLS_TCTI=${TCTI_VALUE}
+TCTIEOF
+chmod 644 "$TCTI_CONF"
+ok "TCTI 設定：$TCTI_CONF"
+
+if [[ ! -f "$SWTPM_SERVICE" ]]; then
+  cat > "$SWTPM_SERVICE" <<SVCEOF
+[Unit]
+Description=Software TPM (swtpm) for HiBA-AB / Form System
+After=network.target
+Before=hiba-subweb.service
+
+[Service]
+Type=forking
+User=root
+ExecStartPre=/bin/mkdir -p ${TPM_STATE}
+ExecStart=/usr/bin/swtpm socket \\
+  --tpmstate dir=${TPM_STATE} \\
+  --ctrl type=tcp,port=2322 \\
+  --server type=tcp,port=2321 \\
+  --tpm2 --flags startup-clear --daemon \\
+  --log file=${SWTPM_LOG},level=5
+ExecStop=/usr/bin/pkill -f "swtpm socket"
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+  ok "swtpm.service 建立完成"
+else
+  skip "swtpm.service"
+fi
+
+systemctl daemon-reload
+systemctl enable swtpm.service
+systemctl restart swtpm.service
+sleep 2
+systemctl is-active --quiet swtpm.service || { journalctl -u swtpm.service -n 10 --no-pager; die "swtpm.service 啟動失敗"; }
+ok "swtpm.service 運行中（開機自啟）"
+ss -tlnp 2>/dev/null | grep -q "2321" || die "swtpm port 2321 未就緒"
+ok "TCP port 2321 就緒"
+
+info "STAGE 3：全域環境變數"
+cat > "$TCTI_ENV_FILE" <<ENVEOF
+# HiBA-AB / Form System swtpm TCTI
+export TPM2TOOLS_TCTI="${TCTI_VALUE}"
+ENVEOF
+chmod 644 "$TCTI_ENV_FILE"
+export TPM2TOOLS_TCTI="$TCTI_VALUE"
+ok "環境變數：$TCTI_ENV_FILE"
+
+SUBWEB_ENV="/opt/hiba/subweb/.env"
+if [[ -f "$SUBWEB_ENV" ]]; then
+  sed -i '/^TPM2TOOLS_TCTI/d' "$SUBWEB_ENV"
+  echo "TPM2TOOLS_TCTI=${TCTI_VALUE}" >> "$SUBWEB_ENV"
+  ok "hiba-subweb .env 更新"
+fi
+
+info "STAGE 4：清空 TPM context"
+sudo -E tpm2_clear --hierarchy owner 2>/dev/null || \
+  sudo -E tpm2_clear -c o 2>/dev/null || \
+  sudo -E tpm2_clear 2>/dev/null || err "tpm2_clear 失敗（非致命）"
+
+info "STAGE 5：建立 Primary Key"
+rm -f "${TPM_DIR}/primary.ctx"
+tpm2_createprimary --hierarchy owner --key-algorithm rsa --hash-algorithm sha256 \
+  --key-context "${TPM_DIR}/primary.ctx" || die "tpm2_createprimary 失敗"
+[[ -s "${TPM_DIR}/primary.ctx" ]] && ok "primary.ctx" || die "primary.ctx 為空"
+
+info "STAGE 6：建立 RSA-2048 Signing Key"
+rm -f "${TPM_DIR}/signing.pub" "${TPM_DIR}/signing.priv"
+tpm2_create \
+  --parent-context "${TPM_DIR}/primary.ctx" \
+  --key-algorithm "rsa2048:rsassa:null" \
+  --hash-algorithm sha256 \
+  --public  "${TPM_DIR}/signing.pub" \
+  --private "${TPM_DIR}/signing.priv" || die "tpm2_create 失敗"
+[[ -s "${TPM_DIR}/signing.pub" ]]  && ok "signing.pub"  || die "signing.pub 不存在"
+[[ -s "${TPM_DIR}/signing.priv" ]] && ok "signing.priv" || die "signing.priv 不存在"
+
+info "STAGE 7：載入並持久化至 $HANDLE"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_flushcontext --saved-session    2>/dev/null || true
+rm -f "${TPM_DIR}/signing.ctx"
+tpm2_load \
+  --parent-context "${TPM_DIR}/primary.ctx" \
+  --public  "${TPM_DIR}/signing.pub" \
+  --private "${TPM_DIR}/signing.priv" \
+  --key-context "${TPM_DIR}/signing.ctx" || die "tpm2_load 失敗"
+[[ -s "${TPM_DIR}/signing.ctx" ]] && ok "signing.ctx" || die "signing.ctx 不存在"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_evictcontrol --hierarchy owner --object-context "$HANDLE" "$HANDLE" 2>/dev/null && \
+  echo "[TPM] (舊 Handle 已清除)" || true
+tpm2_evictcontrol --hierarchy owner --object-context "${TPM_DIR}/signing.ctx" \
+  "$HANDLE" || die "tpm2_evictcontrol 失敗"
+ok "持久化完成：$HANDLE"
+
+info "STAGE 8：匯出公鑰與 EK Fingerprint"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_readpublic --object-context "$HANDLE" \
+  --output "${TPM_DIR}/signing_public.pem" --format pem || die "tpm2_readpublic 失敗"
+ok "公鑰：${TPM_DIR}/signing_public.pem"
+EK_FP=$(openssl pkey -in "${TPM_DIR}/signing_public.pem" -pubin -outform DER 2>/dev/null \
+  | sha256sum | awk '{print $1}')
+echo "$EK_FP" > "${TPM_DIR}/ek_fingerprint.txt"
+chown "$REAL_USER":"$REAL_USER" "${TPM_DIR}/ek_fingerprint.txt"
+ok "EK Fingerprint：$EK_FP"
+
+info "STAGE 9：最終驗證 + 簽章測試"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_getcap handles-persistent 2>/dev/null | grep -q "$HANDLE" && \
+  ok "Handle $HANDLE 確認存在" || die "Handle 不在清單中"
+echo "hiba-test" > /tmp/_hiba_test.txt
+tpm2_sign --key-context "$HANDLE" --hash-algorithm sha256 --scheme rsassa \
+  --signature /tmp/_hiba_sig.bin /tmp/_hiba_test.txt 2>/dev/null && \
+  ok "簽章測試通過" || err "簽章測試失敗（非致命）"
+rm -f /tmp/_hiba_test.txt /tmp/_hiba_sig.bin
+
+systemctl is-enabled hiba-subweb.service 2>/dev/null | grep -q "enabled" && \
+  systemctl restart hiba-subweb.service && ok "hiba-subweb.service 已重啟" || true
+
+echo ""
+echo "========================================================"
+echo "[TPM] swtpm 持久化初始化完成"
+echo "  Fingerprint : $EK_FP"
+echo "  State       : $TPM_STATE（開機保留）"
+echo "  TCTI        : $TCTI_VALUE"
+echo "========================================================"
+"""
+
 # ── Global state ──────────────────────────────────────────────────────────────
 _lock = threading.Lock()
 _install_state: dict = {
@@ -131,26 +316,31 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
     else:
         log_fn("  OK  tpm2-tools 已存在")
 
-    # Check TPM device
-    if not Path("/dev/tpmrm0").exists():
-        log_fn("  WARN  /dev/tpmrm0 不存在 — 此機器可能沒有 TPM 2.0 晶片，跳過 TPM 設定")
-        return
+    # Check TPM device — fallback to swtpm if no hardware TPM found
+    has_hw_tpm = Path("/dev/tpmrm0").exists() or Path("/dev/tpm0").exists()
+    if not has_hw_tpm:
+        log_fn("  INFO  未偵測到硬體 TPM (/dev/tpmrm0, /dev/tpm0) — 嘗試安裝 swtpm 軟體 vTPM...")
+        if not _setup_swtpm_linux(log_fn, sys_root):
+            log_fn("  WARN  swtpm 設定失敗 — 退回 /etc/machine-id fingerprint")
+            return
+        log_fn("  OK   swtpm vTPM 就緒，繼續儲存指紋...")
+    else:
+        log_fn("  OK   硬體 TPM 已偵測到")
+        # Add service user to tss group (硬體 TPM 才需要 — swtpm 使用 TCP 不需要此 group)
+        if os.getuid() == 0:
+            service_user = os.environ.get("SUDO_USER", "")
+            if not service_user:
+                env_path = sys_root / ".env"
+                if env_path.exists():
+                    for line in env_path.read_text().splitlines():
+                        if line.startswith("SERVICE_USER="):
+                            service_user = line.split("=", 1)[1].strip("'\"")
+                            break
+            if service_user:
+                rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
+                log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
 
-    # Add SUDO_USER or a detected service user to tss group
-    if os.getuid() == 0:
-        service_user = os.environ.get("SUDO_USER", "")
-        if not service_user:
-            env_path = sys_root / ".env"
-            if env_path.exists():
-                for line in env_path.read_text().splitlines():
-                    if line.startswith("SERVICE_USER="):
-                        service_user = line.split("=", 1)[1].strip("'\"")
-                        break
-        if service_user:
-            rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
-            log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
-
-    # Probe fingerprint and save
+    # Probe fingerprint and save (works for both hardware TPM and swtpm)
     probe = _probe_tpm_fingerprint()
     if probe["fingerprint"]:
         fp_file = sys_root / "machine-fingerprint.txt"
@@ -163,6 +353,63 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
         log_fn(f"  INFO  指紋: {probe['fingerprint'][:16]}…（請提供給授權方）")
     else:
         log_fn("  WARN  無法取得機器指紋（TPM 不可用且無 /etc/machine-id）")
+
+
+def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
+    """
+    安裝 swtpm 套件並執行持久化 swtpm 初始化腳本。
+    呼叫時機：_setup_tpm_linux() 偵測到沒有硬體 TPM (/dev/tpmrm0, /dev/tpm0) 時。
+    成功後設定 TPM2TOOLS_TCTI 環境變數，使 _probe_tpm_fingerprint() 透過 swtpm 取得指紋。
+    回傳 True 表示 swtpm 成功啟動且 TCTI 已設定。
+    """
+    import shutil
+
+    # 安裝 swtpm + swtpm-tools（若未安裝）
+    pkgs_needed: list[str] = []
+    if not shutil.which("swtpm"):
+        pkgs_needed.append("swtpm")
+    if not shutil.which("swtpm_setup"):
+        pkgs_needed.append("swtpm-tools")
+
+    if pkgs_needed:
+        log_fn(f"  INFO  安裝 swtpm 套件：{' '.join(pkgs_needed)}")
+        rc = _run_cmd(["apt-get", "install", "-y"] + pkgs_needed, sys_root)
+        if rc != 0:
+            log_fn("  WARN  swtpm 套件安裝失敗（apt-get 錯誤）")
+            return False
+        log_fn("  OK   swtpm 套件安裝完成")
+    else:
+        log_fn("  OK   swtpm 已安裝")
+
+    # 將內嵌腳本寫入暫存檔並執行
+    script_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(_SWTPM_SETUP_SCRIPT)
+            script_path = f.name
+
+        os.chmod(script_path, 0o755)
+        log_fn("  INFO  執行 swtpm 持久化初始化（約 10–30 秒）...")
+        rc = _run_cmd(["bash", script_path], sys_root)
+        if rc != 0:
+            log_fn(f"  WARN  swtpm 初始化腳本結束碼 {rc}（可能部分步驟失敗）")
+            return False
+    finally:
+        if script_path and Path(script_path).exists():
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+    # 設定 TCTI 環境變數，使後續 tpm2_createek 透過 swtpm 運作
+    tcti = "swtpm:host=127.0.0.1,port=2321"
+    os.environ["TPM2TOOLS_TCTI"] = tcti
+    log_fn(f"  OK   TPM2TOOLS_TCTI={tcti}")
+    log_fn("  OK   swtpm vTPM 持久化完成（/opt/hiba/tpm/swtpm-state）")
+    log_fn("  INFO  重開機後 swtpm 由 systemd 自動啟動，指紋不變")
+    return True
 
 
 def _venv_bin(sys_root: Path, name: str) -> Path:
