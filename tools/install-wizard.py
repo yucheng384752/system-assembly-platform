@@ -492,7 +492,7 @@ def _install_worker(env: dict, sys_root: Path) -> None:
 
         # Step 0.5: TPM setup (Linux only, best-effort — does not abort on failure)
         if platform.system() == "Linux":
-            log(f"\n{'='*60}\n  TPM 2.0 機器指紋設定\n{'='*60}")
+            log(f"\n{'='*60}\n  TPM 2.0 機器公鑰設定\n{'='*60}")
             _setup_tpm_linux(log, sys_root)
 
         # Step 1: Create venv
