@@ -154,6 +154,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 except Exception as e:
                     print(f" Warning: failed to seed stations: {e}")
 
+                # 2.7) Sync station codes into table_registry so import_v2 can resolve them
+                try:
+                    from app.models.station import Station
+
+                    async with async_session_factory() as db:
+                        existing_codes = set(
+                            (await db.execute(select(TableRegistry.table_code)))
+                            .scalars()
+                            .all()
+                        )
+                        station_rows = (
+                            await db.execute(select(Station.code, Station.name))
+                        ).all()
+                        added = 0
+                        for code, name in station_rows:
+                            if code not in existing_codes:
+                                db.add(TableRegistry(table_code=code, display_name=name or code))
+                                added += 1
+                        if added:
+                            await db.commit()
+                            print(f" Synced {added} station code(s) into table_registry")
+                except Exception as e:
+                    print(f" Warning: failed to sync station codes to table_registry: {e}")
+
             # 3) Optional: bootstrap a manager user (for first-time setup)
             try:
                 from app.core.bootstrap import bootstrap_manager_user_if_configured

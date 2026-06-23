@@ -1,4 +1,4 @@
-"""Generic Forms API — schema-driven form types, record storage, and CSV upload."""
+﻿"""Generic Forms API — schema-driven form types, record storage, and CSV upload."""
 from __future__ import annotations
 
 import io
@@ -187,15 +187,18 @@ async def delete_form(
     """Delete a form type and all its records."""
     station = await _get_station(code, tenant.id, db)
 
+    # Delete records (no ORM cascade to GenericRecord)
     await db.execute(
         sql_delete(GenericRecord).where(
             GenericRecord.station_id == station.id,
             GenericRecord.tenant_id == tenant.id,
         )
     )
+    # Delete schemas
     await db.execute(
         sql_delete(StationSchema).where(StationSchema.station_id == station.id)
     )
+    # Delete station
     await db.execute(sql_delete(Station).where(Station.id == station.id))
     await db.commit()
 
@@ -210,6 +213,7 @@ async def set_schema(
     """Set (or replace) the active schema for a form type."""
     station = await _get_station(code, tenant.id, db)
 
+    # Deactivate old schemas
     old = (
         await db.execute(
             select(StationSchema).where(
