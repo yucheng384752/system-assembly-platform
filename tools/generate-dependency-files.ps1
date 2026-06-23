@@ -221,7 +221,7 @@ $packageJsonPath = Join-Path $frontendPath "package.json"
 # Generate vite.config.ts if missing
 $viteConfigPath = Join-Path $frontendPath "vite.config.ts"
 if (-not (Test-Path $viteConfigPath)) {
-    $c = "import { defineConfig } from 'vite'`nimport react from '@vitejs/plugin-react'`n`nexport default defineConfig({`n  plugins: [react()],`n  server: {`n    proxy: {`n      '/api': 'http://localhost:8000',`n    },`n  },`n  build: {`n    outDir: 'dist',`n  },`n})`n"
+    $c = "import { defineConfig } from 'vite'`nimport react from '@vitejs/plugin-react'`n`nexport default defineConfig({`n  plugins: [react()],`n  server: {`n    proxy: {`n      '/api': process.env.VITE_PROXY_TARGET || 'http://localhost:8000',`n    },`n  },`n  build: {`n    outDir: 'dist',`n  },`n})`n"
     [System.IO.File]::WriteAllText($viteConfigPath, $c, $utf8NoBom)
 }
 

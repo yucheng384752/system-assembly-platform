@@ -9,6 +9,25 @@ export function detectFileType(name: string): FileType {
   return "P3";
 }
 
+/**
+ * Detect a table code using available form codes from the API.
+ * Returns null when no match is found (caller should prompt user to select).
+ */
+export function detectTableCode(name: string, availableCodes: string[]): string | null {
+  if (name.toLowerCase().endsWith(".pdf")) return "PDF";
+  const nameLower = name.toLowerCase();
+  for (const code of availableCodes) {
+    const codeLower = code.toLowerCase();
+    if (nameLower.startsWith(codeLower + "_") || nameLower.startsWith(codeLower + "-")) {
+      return code;
+    }
+  }
+  if (name.startsWith("P1_")) return "P1";
+  if (name.startsWith("P2_")) return "P2";
+  if (name.startsWith("P3_")) return "P3";
+  return null;
+}
+
 export function deriveLotNoFromFilename(name: string): string {
   const base = name.replace(/\.csv$/i, "");
   const parts = base.split("_");

@@ -517,39 +517,40 @@ class ImportService:
                     row.errors_json = []
                     continue
 
-                # LOT NO validation (all tables): extract from row content
-                lot_no_val = self._extract_lot_no_from_row_dict(
-                    data if isinstance(data, dict) else {}
-                )
-                if not lot_no_val:
-                    errors.append(
-                        {
-                            "field": "lot_no",
-                            "message": "Missing lot_no in row content",
-                        }
+                # LOT NO validation — P1/P2/P3 only; generic forms use schema-defined key fields
+                if table.table_code in ("P1", "P2", "P3"):
+                    lot_no_val = self._extract_lot_no_from_row_dict(
+                        data if isinstance(data, dict) else {}
                     )
-                else:
-                    m = lot_no_flexible_pattern.match(str(lot_no_val).strip())
-                    canonical = f"{m.group(1)}_{m.group(2).zfill(2)}" if m else None
+                    if not lot_no_val:
+                        errors.append(
+                            {
+                                "field": "lot_no",
+                                "message": "Missing lot_no in row content",
+                            }
+                        )
+                    else:
+                        m = lot_no_flexible_pattern.match(str(lot_no_val).strip())
+                        canonical = f"{m.group(1)}_{m.group(2).zfill(2)}" if m else None
 
-                    if table.table_code in ("P1", "P2"):
-                        # P1/P2 enforce strict 7+2 format
-                        if not canonical or not lot_no_pattern.match(canonical):
-                            errors.append(
-                                {
-                                    "field": "lot_no",
-                                    "message": f"Invalid lot_no format: {lot_no_val}",
-                                }
-                            )
-                    elif table.table_code == "P3":
-                        # P3 allows suffixes (e.g. 2507173_02_18) but must still start with 7+2
-                        if not canonical:
-                            errors.append(
-                                {
-                                    "field": "lot_no",
-                                    "message": f"Invalid lot_no format: {lot_no_val}",
-                                }
-                            )
+                        if table.table_code in ("P1", "P2"):
+                            # P1/P2 enforce strict 7+2 format
+                            if not canonical or not lot_no_pattern.match(canonical):
+                                errors.append(
+                                    {
+                                        "field": "lot_no",
+                                        "message": f"Invalid lot_no format: {lot_no_val}",
+                                    }
+                                )
+                        elif table.table_code == "P3":
+                            # P3 allows suffixes (e.g. 2507173_02_18) but must still start with 7+2
+                            if not canonical:
+                                errors.append(
+                                    {
+                                        "field": "lot_no",
+                                        "message": f"Invalid lot_no format: {lot_no_val}",
+                                    }
+                                )
 
                 # Check required fields
                 for field in required_fields:
@@ -696,6 +697,9 @@ class ImportService:
 
             p2_rows_by_key: dict[tuple[int, int], list[dict[str, Any]]] = {}
             p2_lot_raw_by_norm: dict[int, str] = {}
+
+            # Collection for generic forms (non-P1/P2/P3)
+            generic_rows_list: list[dict[str, Any]] = []
 
             # Process by file
             for file_record in job.files:
@@ -1040,6 +1044,10 @@ class ImportService:
                             )
                             self.db.add(p3_item)
 
+                else:
+                    # Generic form: collect valid staging rows for post-loop commit
+                    generic_rows_list.extend(row_data)
+
             # Apply merged + deduped rows to DB (P1/P2).
             if table.table_code == "P1":
                 from app.models.p1_record import P1Record
@@ -1168,6 +1176,63 @@ class ImportService:
 
                     self.db.add(p2_item)
 
+            # Generic form commit → GenericRecord (for non-P1/P2/P3 table codes)
+            if table.table_code not in ("P1", "P2", "P3") and generic_rows_list:
+                from app.models.generic_record import GenericRecord
+                from app.models.station import Station, StationSchema
+
+                station = await self._get_generic_station(table.table_code, job.tenant_id)
+                if station is None:
+                    raise ValueError(
+                        f"Station not found for table_code={table.table_code!r}, "
+                        f"tenant_id={job.tenant_id}"
+                    )
+
+                schema = await self._get_active_station_schema_for_station(station.id)
+                unique_key_fields: list[str] = []
+                if schema and schema.unique_key_fields:
+                    unique_key_fields = list(schema.unique_key_fields)
+
+                for idx, row_data_dict in enumerate(generic_rows_list):
+                    if not row_data_dict or not isinstance(row_data_dict, dict):
+                        continue
+                    if unique_key_fields:
+                        lot_no_raw = "_".join(
+                            str(row_data_dict.get(f, "")) for f in unique_key_fields
+                        ).strip("_") or str(idx)
+                    else:
+                        lot_no_raw = str(idx)
+                    lot_no_norm = self._generic_lot_no_norm(lot_no_raw)
+
+                    existing_stmt = select(GenericRecord).where(
+                        GenericRecord.tenant_id == job.tenant_id,
+                        GenericRecord.station_id == station.id,
+                        GenericRecord.lot_no_raw == lot_no_raw,
+                    )
+                    existing_result = await self.db.execute(existing_stmt)
+                    existing_rec = existing_result.scalar_one_or_none()
+
+                    if existing_rec:
+                        existing_rec.data = row_data_dict
+                        existing_rec.updated_at = datetime.now(timezone.utc)
+                    else:
+                        self.db.add(
+                            GenericRecord(
+                                id=uuid.uuid4(),
+                                tenant_id=job.tenant_id,
+                                station_id=station.id,
+                                schema_version_id=schema.id if schema else None,
+                                lot_no_raw=lot_no_raw,
+                                lot_no_norm=lot_no_norm,
+                                data=row_data_dict,
+                            )
+                        )
+                await self.db.flush()
+                logger.info(
+                    f"Generic commit: wrote {len(generic_rows_list)} rows to generic_records "
+                    f"(table_code={table.table_code}, tenant={job.tenant_id})"
+                )
+
             self._touch_status(
                 job,
                 ImportJobStatus.COMPLETED,
@@ -1240,6 +1305,43 @@ class ImportService:
                 },
             )
             raise e
+
+    async def _get_generic_station(
+        self, table_code: str, tenant_id: uuid.UUID
+    ) -> Any | None:
+        """Look up a Station by code for a given tenant."""
+        from app.models.station import Station
+
+        stmt = select(Station).where(
+            Station.tenant_id == tenant_id,
+            Station.code == table_code,
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def _get_active_station_schema_for_station(
+        self, station_id: uuid.UUID
+    ) -> Any | None:
+        """Return the active StationSchema for a station (highest version, is_active=True)."""
+        from app.models.station import StationSchema
+
+        stmt = (
+            select(StationSchema)
+            .where(
+                StationSchema.station_id == station_id,
+                StationSchema.is_active == True,  # noqa: E712
+            )
+            .order_by(StationSchema.version.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _generic_lot_no_norm(raw: str) -> int:
+        """Stable numeric value for a generic lot_no_raw (digits only, or 0)."""
+        digits = "".join(c for c in str(raw) if c.isdigit())
+        return int(digits) if digits else 0
 
     def _extract_lot_no(self, filename: str) -> str:
         stem = Path(filename).stem
