@@ -2289,6 +2289,44 @@ async function downloadPackage() {
       const exeResp = await fetch("/api/wizard-exe");
       if (exeResp.ok) zip.file("install-wizard.exe", await exeResp.arrayBuffer());
     } catch (_) { /* exe not built yet or server not running, skip */ }
+
+    // ── system/ bundle（install-wizard 路徑驗證需要 system/backend/requirements.txt）──
+    try {
+      btn.textContent = "打包 system…";
+      const sysResp = await fetch("/api/system-bundle");
+      if (sysResp.ok) {
+        const data = await sysResp.json();
+        if (data.available && Array.isArray(data.files)) {
+          for (const f of data.files) {
+            // base64 → Uint8Array，放入 system/<relpath>
+            const bin = atob(f.b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            zip.file("system/" + f.path, bytes);
+          }
+        }
+      }
+    } catch (_) { /* server not running or no system dir, skip */ }
+
+    // ── license.lic（偵測到 issuer 私鑰且已登錄 TPM 公鑰時自動簽發）──
+    if (state.machinePubkey) {
+      try {
+        btn.textContent = "簽發授權…";
+        const licResp = await fetch("/api/issue-license", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pubkey: state.machinePubkey, days: 365 }),
+        });
+        if (licResp.ok) {
+          const data = await licResp.json();
+          if (data.ok && data.license) {
+            zip.file("system/license.lic", JSON.stringify(data.license, null, 2));
+          }
+        }
+      } catch (_) { /* issuer key not configured, skip — license can be added manually */ }
+    }
+
+    btn.textContent = "壓縮中…";
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");

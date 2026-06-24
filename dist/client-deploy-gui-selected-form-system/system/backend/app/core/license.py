@@ -27,13 +27,13 @@ _TPM_SIGNING_HANDLE = "0x81000001"
 
 # Public key embedded at package generation time (RSA-2048 SubjectPublicKeyInfo PEM)
 _PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAms0567xqNQST0UP8AS3j
-8TehTrLfKCO9BxXKT4R2RLQcHqe41hMqfFQ8HlL0IdN4tbh0L4RJyz49Jkd2fvH7
-RtqoygGTtMCwa3eT7dBaL9q8QX0qjYxQ+qcICP4VBd/d/qgWej/UG+Sr7DWE193L
-BjmbFbqngraWpRO/3aP1uPcMkH0BMU58vRrN/ft4f6uGBrCidanamyiZLUkmHNuz
-T7CnIb9FQHcBvDKKKNLUVql+PhvKqmRUNCVeRTklsosaMueIYNnVYLzY7Q6wW+At
-n8nEgV0cwTS6q2ySisKTSyeyMlFggMH/qffc56ES6SAW/coD1WQb1mm8SDUxh7vi
-IwIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1wQ/q3fbmYmd8545NJk
+/qEyMwtmPRaJFpoALjvxEvrfVIe/H58X1UTkGCept4Ata20HUvr1D8LUsr3jxJUi
+48INzbau+HKxwq+fvEaaGPNdgIKZpLOM0TM/g/cdtIvneWsmn4ZEV6q8UTTql7Zp
+5mveUc6KY6QWtqEPOxFwVl7RXWxpF/yBu2S0itRdo5ZNkT/70BbJEuL/PAQbuMlw
+cb9f08cCqoCsARydnO2znpT6f5mMXodZY/5GJIm3UlcXpSFZWOm3T5Gds46SdRUk
+/4X9IffUlLFmHvV0y7sJmQ1WDquDJDuJydls5Y3ByvaokjNdbGhAr9k09QlXy7hy
+EwIDAQAB
 -----END PUBLIC KEY-----"""
 
 
@@ -46,14 +46,27 @@ class LicenseResult:
 
 
 def _find_license_file() -> Path | None:
+    # license.py 位於 system/backend/app/core/license.py，故：
+    #   parents[3] = system/         parents[4] = 部署包根目錄
+    # Docker 內為 /app/app/core/license.py，cwd=/app
+    here = Path(__file__).resolve()
     candidates = [
-        Path(__file__).parents[4] / "license.lic",   # system/license.lic
-        Path(__file__).parents[5] / "license.lic",   # deploy package root
+        here.parents[3] / "license.lic",   # system/license.lic
+        here.parents[4] / "license.lic",   # 部署包根目錄 (deploy root)
         Path(os.getcwd()) / "license.lic",
+        Path(os.getcwd()).parent / "license.lic",
     ]
+    # parents[5] 可能超出範圍（Docker 淺層路徑），故 try-guard
+    try:
+        candidates.append(here.parents[5] / "license.lic")
+    except IndexError:
+        pass
     for p in candidates:
-        if p.exists():
-            return p
+        try:
+            if p.exists():
+                return p
+        except (OSError, ValueError):
+            continue
     return None
 
 

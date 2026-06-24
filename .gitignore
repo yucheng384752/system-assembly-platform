@@ -23,3 +23,10 @@ output/
 # OS/editor noise
 .DS_Store
 Thumbs.db
+
+# about agent
+.claude/
+.codex-claude-mailbox/
+# License issuer private key — NEVER commit
+tools/issuer-private-key.pem
+data/issuer-private-key.pem
