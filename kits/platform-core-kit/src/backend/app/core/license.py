@@ -163,12 +163,29 @@ def _verify_tpm_possession(pubkey_pem: str) -> bool:
         return False
 
 
+def _tpm_subprocess_env() -> dict:
+    """
+    回傳給 tpm2_* subprocess 的環境變數。
+    若 os.environ 已有 TPM2TOOLS_TCTI 則沿用；否則偵測 swtpm 狀態目錄，
+    自動指向 swtpm socket（後端進程通常未繼承 /etc/profile.d/ 的 TCTI）。
+    """
+    env = dict(os.environ)
+    if env.get("TPM2TOOLS_TCTI"):
+        return env
+    # swtpm 由 01_tpm_full_setup.sh 佈建於 /opt/hiba/tpm/swtpm-state
+    swtpm_marker = Path("/opt/hiba/tpm/swtpm-state/.initialized")
+    if swtpm_marker.exists():
+        env["TPM2TOOLS_TCTI"] = "swtpm:host=127.0.0.1,port=2321"
+    return env
+
+
 def _tpm_sign_nonce(nonce: bytes) -> bytes | None:
     """
     Ask TPM handle 0x81000001 to sign a nonce with RSASSA-PKCS1v15-SHA256.
     Tries --format plain first (tpm2-tools >= 4.x); falls back to parsing TPMT_SIGNATURE.
     Returns raw RSA signature bytes, or None if unavailable.
     """
+    sub_env = _tpm_subprocess_env()
     with tempfile.TemporaryDirectory() as tmpdir:
         nonce_path = Path(tmpdir) / "nonce.bin"
         sig_path   = Path(tmpdir) / "sig.bin"
@@ -187,7 +204,7 @@ def _tpm_sign_nonce(nonce: bytes) -> bytes | None:
         try:
             r = subprocess.run(
                 [*base_cmd[:6], "--format", "plain", *base_cmd[6:]],
-                capture_output=True, timeout=10,
+                capture_output=True, timeout=10, env=sub_env,
             )
             if r.returncode == 0 and sig_path.exists():
                 return sig_path.read_bytes()
@@ -199,7 +216,7 @@ def _tpm_sign_nonce(nonce: bytes) -> bytes | None:
         # Attempt 2: default TPMT_SIGNATURE format → parse manually
         sig_path.unlink(missing_ok=True)
         try:
-            r = subprocess.run(base_cmd, capture_output=True, timeout=10)
+            r = subprocess.run(base_cmd, capture_output=True, timeout=10, env=sub_env)
             if r.returncode == 0 and sig_path.exists():
                 return _parse_tpmt_rsassa_sig(sig_path.read_bytes())
         except (FileNotFoundError, subprocess.TimeoutExpired):

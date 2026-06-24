@@ -449,9 +449,30 @@ def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
     tcti = "swtpm:host=127.0.0.1,port=2321"
     os.environ["TPM2TOOLS_TCTI"] = tcti
     log_fn(f"  OK   TPM2TOOLS_TCTI={tcti}")
+    # 關鍵：寫入 form-system 後端 .env，使後端啟動時 license 挑戰-回應能連到 swtpm
+    # （否則 tpm2_sign 預設找 /dev/tpmrm0 硬體裝置，在 swtpm VM 上會失敗）
+    _append_env_key(sys_root, "TPM2TOOLS_TCTI", tcti, log_fn)
     log_fn("  OK   swtpm vTPM 持久化完成（/opt/hiba/tpm/swtpm-state）")
     log_fn("  INFO  重開機後 swtpm 由 systemd 自動啟動，指紋不變")
     return True
+
+
+def _append_env_key(sys_root: Path, key: str, value: str, log_fn) -> None:
+    """將 key=value 寫入 system/.env 與 system/backend/.env（若已存在則取代該行）。"""
+    line = f"{key}='{value}'"
+    targets = [sys_root / ".env"]
+    backend_dir = sys_root / "backend"
+    if backend_dir.is_dir():
+        targets.append(backend_dir / ".env")
+    for env_path in targets:
+        try:
+            existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+            kept = [ln for ln in existing.splitlines() if not ln.startswith(f"{key}=")]
+            kept.append(line)
+            env_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        except OSError as e:
+            log_fn(f"  WARN  寫入 {key} 至 {env_path.name} 失敗：{e}")
+    log_fn(f"  OK   {key} 已寫入後端 .env")
 
 
 def _venv_bin(sys_root: Path, name: str) -> Path:
