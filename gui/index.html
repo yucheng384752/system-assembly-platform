@@ -240,17 +240,17 @@
               <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
                 <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">1</span>
                 <div>
-                  <strong>下載 TPM 公鑰腳本</strong>
-                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">將腳本傳至目標 Linux 伺服器執行（需先完成 TPM 初始化）。</p>
-                  <button class="ghost-action" id="gate-download-script" type="button">⬇ 下載 get-machine-pubkey.sh</button>
+                  <strong>下載 TPM 設定包</strong>
+                  <p style="margin:4px 0 8px;font-size:13px;color:var(--ink-3,#6b7280);">壓縮檔含完整初始化腳本與公鑰匯出腳本，上傳至目標 Linux / Pi 伺服器後解壓。</p>
+                  <button class="ghost-action" id="gate-download-script" type="button">⬇ 下載 tpm-setup-bundle.zip</button>
                 </div>
               </div>
               <div style="display:flex;gap:14px;margin-bottom:20px;align-items:flex-start;">
                 <span style="min-width:24px;height:24px;background:var(--teal,#06b6d4);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0;margin-top:2px;">2</span>
                 <div>
-                  <strong>在伺服器執行腳本</strong>
-                  <code style="display:block;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;color:var(--ink-1,#1e293b);">bash get-machine-pubkey.sh</code>
-                  <p style="margin:0;font-size:13px;color:var(--ink-3,#6b7280);">執行後在同目錄產生 <code>machine-pubkey.pem</code>。若尚未初始化 TPM，請先執行 <code>sudo bash 01_tpm_full_setup.sh</code>。</p>
+                  <strong>在伺服器執行初始化（需 sudo，首次一次）</strong>
+                  <code style="display:block;background:var(--ink-8,#f1f5f9);padding:8px 12px;border-radius:6px;font-size:12px;margin:8px 0;color:var(--ink-1,#1e293b);">sudo bash 01_tpm_full_setup.sh</code>
+                  <p style="margin:0;font-size:13px;color:var(--ink-3,#6b7280);">自動安裝 swtpm、建立持久化 TPM 金鑰，完成後同目錄產生 <code>machine-pubkey.pem</code>。</p>
                 </div>
               </div>
               <div style="display:flex;gap:14px;margin-bottom:4px;align-items:flex-start;">
