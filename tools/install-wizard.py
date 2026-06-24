@@ -336,6 +336,14 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
     """Install tpm2-tools, provision TPM signing key, export machine-pubkey.pem. Best-effort."""
     import shutil
 
+    # 提早偵測 root：TPM 佈建需寫入 /opt/hiba/tpm 與 apt 安裝，皆需 root
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        log_fn("  WARN  未以 root 執行 — 跳過 TPM 機器綁定（授權將為浮動授權）")
+        log_fn("  INFO  若需 TPM 機器綁定，請以 sudo 重新執行安裝精靈：")
+        log_fn("  INFO    sudo python3 install-wizard.py")
+        log_fn("  INFO  或先在伺服器執行 sudo bash 01_tpm_full_setup.sh 再安裝")
+        return
+
     # Install tpm2-tools if missing
     if not shutil.which("tpm2_createek"):
         log_fn("  INFO  tpm2-tools 未安裝，嘗試自動安裝 (apt-get)...")
@@ -446,6 +454,56 @@ def _venv_bin(sys_root: Path, name: str) -> Path:
     return sys_root / ".venv" / "bin" / name
 
 
+def _fs_supports_symlinks(d: Path) -> bool:
+    """偵測目錄所在檔案系統是否支援 symlink（VirtualBox 共享資料夾 vboxsf 不支援）。"""
+    if platform.system() == "Windows":
+        return True
+    test_target = d / ".__symlink_probe_target"
+    test_link = d / ".__symlink_probe_link"
+    try:
+        test_target.write_text("x", encoding="utf-8")
+        if test_link.is_symlink() or test_link.exists():
+            test_link.unlink()
+        os.symlink(test_target.name, test_link)
+        return test_link.is_symlink()
+    except (OSError, NotImplementedError):
+        return False
+    finally:
+        for p in (test_link, test_target):
+            try:
+                if p.is_symlink() or p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+
+
+def _create_venv(sys_root: Path, log_fn) -> int:
+    """
+    建立 .venv。在不支援 symlink 的檔案系統（如 VirtualBox 共享資料夾）上，
+    Python venv 預設會嘗試建立 lib64 -> lib symlink 而失敗，故：
+      - 改用 --copies（bin/python 用複製而非 symlink）
+      - 預先建立 lib64 為真實目錄，讓 venv 跳過 symlink 建立
+    """
+    import shutil
+
+    venv_path = sys_root / ".venv"
+    # 手動清空（取代 --clear，因 --clear 會刪掉預建的 lib64）
+    if venv_path.exists():
+        shutil.rmtree(venv_path, ignore_errors=True)
+
+    cmd = [sys.executable, "-m", "venv"]
+    if not _fs_supports_symlinks(sys_root):
+        log_fn("  INFO  偵測到檔案系統不支援 symlink（如 VirtualBox 共享資料夾 /media/sf_*）")
+        log_fn("  INFO  改用 --copies 模式並預建 lib64 目錄以繞過 symlink 限制")
+        try:
+            (venv_path / "lib64").mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log_fn(f"  WARN  預建 lib64 失敗：{e}")
+        cmd.append("--copies")
+    cmd.append(str(venv_path))
+    return _run_cmd(cmd, sys_root)
+
+
 def _write_env(sys_root: Path, values: dict) -> None:
     lines: list[str] = []
     for k, v in values.items():
@@ -497,12 +555,12 @@ def _install_worker(env: dict, sys_root: Path) -> None:
 
         # Step 1: Create venv
         step(1, "建立 Python 虛擬環境")
-        rc = _run_cmd(
-            [sys.executable, "-m", "venv", "--clear", str(sys_root / ".venv")],
-            sys_root,
-        )
+        rc = _create_venv(sys_root, log)
         if rc != 0:
-            raise RuntimeError(f"venv 建立失敗 (exit {rc})")
+            raise RuntimeError(
+                f"venv 建立失敗 (exit {rc})。"
+                f"若部署於 VirtualBox 共享資料夾，建議先複製到原生路徑（如 ~/form-system）再安裝。"
+            )
         log("  OK  .venv 建立完成")
 
         # Step 2: pip install
