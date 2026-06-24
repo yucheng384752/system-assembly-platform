@@ -9,6 +9,36 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _resolve_env_files() -> list[str]:
+    """
+    回傳 .env 候選絕對路徑（依優先序，後者覆蓋前者）。
+
+    config.py 位於 system/backend/app/core/config.py，故：
+      parents[2] = backend/   parents[3] = system/
+    安裝精靈把 .env 寫在 system/.env，但後端常從 backend/ 啟動，
+    因此 pydantic 預設的相對 ".env"（依 cwd）會找不到。改用絕對路徑涵蓋兩處。
+    """
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+    try:
+        backend_dir = here.parents[2]
+        system_dir = here.parents[3]
+        candidates.extend([system_dir / ".env", backend_dir / ".env"])
+    except IndexError:
+        pass
+    # cwd 的 .env 優先序最高（最後載入），保留既有行為（Docker 等）
+    candidates.append(Path(os.getcwd()) / ".env")
+    # 去重並保留順序
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in candidates:
+        s = str(p)
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -18,7 +48,7 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_resolve_env_files(),
         env_file_encoding="utf-8",
         case_sensitive=False,
         enable_decoding=False,

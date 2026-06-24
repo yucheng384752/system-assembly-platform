@@ -509,7 +509,13 @@ def _write_env(sys_root: Path, values: dict) -> None:
     for k, v in values.items():
         safe = str(v).replace("\\", "\\\\").replace("'", "\\'")
         lines.append(f"{k}='{safe}'")
-    (sys_root / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    content = "\n".join(lines) + "\n"
+    # 寫到 system/.env（供 docker-compose / 參考）與 system/backend/.env
+    # （後端常從 backend/ 啟動，pydantic 依 cwd 找 .env）。雙寫確保兩種啟動方式皆可讀到。
+    (sys_root / ".env").write_text(content, encoding="utf-8")
+    backend_dir = sys_root / "backend"
+    if backend_dir.is_dir():
+        (backend_dir / ".env").write_text(content, encoding="utf-8")
 
 
 def _run_cmd(cmd: list[str], cwd: Path) -> int:
