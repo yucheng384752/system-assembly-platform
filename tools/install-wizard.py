@@ -386,7 +386,13 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
         pubkey_file.write_text(probe["pubkey_pem"] + "\n", encoding="utf-8")
         log_fn(f"  OK  TPM 公鑰已儲存 → {pubkey_file.name}")
         log_fn(f"  INFO  來源: {probe['source']}")
-        log_fn("  INFO  請將 machine-pubkey.pem 提供給授權方以取得機器綁定授權")
+        # 若部署包已含 license.lic，表示授權已綁定，不需再提供公鑰
+        lic_present = (sys_root / "license.lic").exists() or (sys_root.parent / "license.lic").exists()
+        if lic_present:
+            log_fn("  OK  偵測到 license.lic — 授權已綁定本機 TPM，啟動時將自動驗證")
+        else:
+            log_fn("  INFO  本機未含 license.lic（浮動授權）。")
+            log_fn("  INFO  若已於 Kit Composer 上傳此公鑰，授權應已記錄；否則請提供 machine-pubkey.pem 給授權方")
     else:
         log_fn("  WARN  無法取得 TPM 公鑰（handle 0x81000001 尚未佈建，請執行 01_tpm_full_setup.sh）")
 
@@ -504,6 +510,100 @@ def _create_venv(sys_root: Path, log_fn) -> int:
     return _run_cmd(cmd, sys_root)
 
 
+def _pg_db_exists(name: str) -> bool:
+    """檢查本機 PostgreSQL 是否已有指定 database（以 postgres 帳號查詢）。"""
+    try:
+        out = subprocess.check_output(
+            ["sudo", "-u", "postgres", "psql", "-tAc",
+             f"SELECT 1 FROM pg_database WHERE datname='{name}';"],
+            text=True, stderr=subprocess.DEVNULL, timeout=15,
+        )
+        return out.strip() == "1"
+    except Exception:
+        return False
+
+
+def _print_manual_pg_sql(log_fn, name: str, user: str, pw: str) -> None:
+    log_fn("  INFO  請手動建立 PostgreSQL role 與 database（需 root）：")
+    log_fn(f"    sudo -u postgres psql -c \"CREATE ROLE \\\"{user}\\\" LOGIN PASSWORD '{pw}';\"")
+    log_fn(f"    sudo -u postgres createdb -O {user} {name}")
+
+
+def _provision_postgres_linux(env: dict, log_fn) -> bool:
+    """
+    為本機 PostgreSQL 自動建立 role + database（best-effort，需 root + peer auth）。
+    回傳 True 表示佈建成功或非必要（如 SQLite / 遠端 DB），False 表示需手動處理。
+    """
+    import shutil
+
+    db_url = str(env.get("DATABASE_URL", ""))
+    if "postgresql" not in db_url:
+        log_fn("  INFO  未使用 PostgreSQL（SQLite 模式），略過 DB 佈建")
+        return True
+
+    host = str(env.get("DB_HOST", "localhost")).strip()
+    if host not in ("localhost", "127.0.0.1", "::1", ""):
+        log_fn(f"  INFO  PostgreSQL 主機為 {host}（非本機），略過自動佈建")
+        return True
+
+    name = str(env.get("DB_NAME", "")).strip()
+    user = str(env.get("DB_USERNAME", "")).strip()
+    pw = str(env.get("DB_PASSWORD", ""))
+    if not (name and user):
+        log_fn("  WARN  缺少 DB_NAME / DB_USERNAME，略過 DB 佈建")
+        return True
+
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+
+    # 1. 確認 psql 存在，否則安裝 postgresql（需 root）
+    if not shutil.which("psql"):
+        if not is_root:
+            log_fn("  WARN  未安裝 PostgreSQL 且非 root，無法自動安裝")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        log_fn("  INFO  安裝 PostgreSQL（apt-get）...")
+        _run_cmd(["apt-get", "update", "-q"], Path("/tmp"))
+        rc = _run_cmd(["apt-get", "install", "-y", "postgresql"], Path("/tmp"))
+        if rc != 0:
+            log_fn("  WARN  PostgreSQL 安裝失敗")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        _run_cmd(["service", "postgresql", "start"], Path("/tmp"))
+
+    if not is_root:
+        log_fn("  WARN  非 root，無法以 postgres 帳號建立 role/database")
+        _print_manual_pg_sql(log_fn, name, user, pw)
+        return False
+
+    # 2. 建立 / 更新 role（idempotent）
+    role_sql = (
+        f"DO $$ BEGIN "
+        f"IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{user}') THEN "
+        f"CREATE ROLE \"{user}\" LOGIN PASSWORD '{pw}'; "
+        f"ELSE ALTER ROLE \"{user}\" LOGIN PASSWORD '{pw}'; "
+        f"END IF; END $$;"
+    )
+    rc = _run_cmd(
+        ["sudo", "-u", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-c", role_sql],
+        Path("/tmp"),
+    )
+    if rc != 0:
+        log_fn("  WARN  建立 PostgreSQL role 失敗")
+        _print_manual_pg_sql(log_fn, name, user, pw)
+        return False
+    log_fn(f"  OK  PostgreSQL role '{user}' 就緒")
+
+    # 3. 建立 database（CREATE DATABASE 不可在 transaction 內，故先檢查再建）
+    if not _pg_db_exists(name):
+        rc = _run_cmd(["sudo", "-u", "postgres", "createdb", "-O", user, name], Path("/tmp"))
+        if rc != 0:
+            log_fn("  WARN  建立 PostgreSQL database 失敗")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+    log_fn(f"  OK  PostgreSQL database '{name}' 就緒（owner: {user}）")
+    return True
+
+
 def _write_env(sys_root: Path, values: dict) -> None:
     lines: list[str] = []
     for k, v in values.items():
@@ -583,6 +683,12 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         step(3, "資料庫初始化")
         python = _venv_bin(sys_root, "python")
         bd = sys_root / "backend"
+
+        # 3a. PostgreSQL 佈建（本機 PostgreSQL 時自動建立 role + database）
+        if platform.system() == "Linux":
+            if not _provision_postgres_linux(env, log):
+                log("  WARN  PostgreSQL 未自動佈建 — 請依上方指令手動建立後重試")
+
         if (bd / "alembic.ini").exists():
             rc = _run_cmd([str(python), "-m", "alembic", "upgrade", "head"], bd)
         elif (bd / "app" / "core" / "generated_db_bootstrap.py").exists():
