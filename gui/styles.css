@@ -206,6 +206,46 @@ button {
   gap: 18px;
 }
 
+.flow-layout {
+  grid-template-columns: 1fr;
+}
+
+.database-layout {
+  align-items: start;
+}
+
+.database-card-stage {
+  display: grid;
+}
+
+.db-requirements-card,
+.upload-source-card {
+  grid-area: 1 / 1;
+  transition: transform 280ms ease, opacity 220ms ease, max-height 280ms ease, padding 220ms ease, border-width 220ms ease;
+}
+
+.upload-source-card {
+  opacity: 0;
+  transform: translateX(18px);
+  pointer-events: none;
+}
+
+.database-layout.is-ready .db-requirements-card {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  border-width: 0;
+  opacity: 0;
+  overflow: hidden;
+  transform: translateX(-36px);
+}
+
+.database-layout.is-ready .upload-source-card {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
 .panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -1576,6 +1616,23 @@ select:focus {
   margin: 0;
 }
 
+.pem-verify-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.pem-verify-row .ghost-action {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+}
+
 .deploy-btn {
   margin-top: 8px;
   width: 100%;
@@ -2600,6 +2657,31 @@ select:focus {
   gap: 5px;
   font-size: 12px;
   color: var(--ink-3);
+}
+
+.node-col-item.is-fk {
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #5eead4;
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-weight: 700;
+}
+
+.node-col-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fk-badge {
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #0f766e;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .node-col-item .col-type {

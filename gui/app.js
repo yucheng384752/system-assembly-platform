@@ -122,7 +122,7 @@ const flows = [
     description: "上傳 CSV、Excel 或 PDF，驗證內容後匯入正式資料表",
     kits: ["upload-validation-kit", "import-pipeline-kit"],
     subflows: [
-      { id: "pdf-convert", name: "PDF → CSV 客製化", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
+      { id: "pdf-convert", name: "PDF → CSV", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
     ],
     pages: ["上傳頁", "匯入工作頁", "錯誤檢視頁"],
   },
@@ -136,12 +136,12 @@ const flows = [
   },
   {
     id: "analytics",
-    name: "資料分析（客製化）",
-    description: "客製儀表板、圖表摘要與異常偵測分析",
+    name: "資料分析",
+    description: "儀表板、圖表摘要與異常偵測分析",
     kits: ["analytics-kit"],
     requiresFlows: ["query-trace"],
     subflows: [],
-    pages: ["分析儀表板", "客製報表頁"],
+    pages: ["分析儀表板", "報表頁"],
   },
   {
     id: "generic-forms",
@@ -187,7 +187,7 @@ const state = {
   tableData: new Map(),
   pkFkSuggestions: null,
   pkFkApplied: null,
-  guideAnswers: {},
+  fkHighlights: new Set(),
   machinePubkey: '',
 };
 
@@ -208,7 +208,6 @@ async function start() {
   bindFlows();
   bindCsvUpload();
   bindNodeEditor();
-  bindGuide();
   renderAll();
   await initMachineGate();
 }
@@ -244,115 +243,6 @@ function esc(str) {
 
 function kit(id, name, category, required, capability, dependencies, subfeatures = [], optionalDependencies = []) {
   return { id, name, category, required, capability, dependencies, subfeatures, optionalDependencies };
-}
-
-// ── 架構引導問題 ──────────────────────────────────────────────────────────────
-const architectureQuestions = [
-  {
-    id: "scale",
-    label: "預計資料量級",
-    choices: [
-      { id: "small", label: "小型", hint: "< 10 萬筆 / 月" },
-      { id: "medium", label: "中型", hint: "10 萬 ~ 100 萬筆 / 月" },
-      { id: "large", label: "大型", hint: "> 100 萬筆 / 月" },
-    ],
-  },
-  {
-    id: "multitenancy",
-    label: "是否需要多租戶隔離",
-    choices: [
-      { id: "yes", label: "是", hint: "多個客戶共用一套系統" },
-      { id: "no", label: "否", hint: "單一組織使用" },
-    ],
-  },
-];
-
-function renderArchitectureGuide() {
-  const container = document.getElementById("guide-questions");
-  if (!container) return;
-  container.innerHTML = architectureQuestions.map((q) => `
-    <div class="guide-question-card">
-      <h4>${esc(q.label)}</h4>
-      <div class="guide-choice-grid">
-        ${q.choices.map((c) => `
-          <button type="button" class="guide-choice${state.guideAnswers[q.id] === c.id ? " is-selected" : ""}" data-guide-choice="${esc(q.id)}:${esc(c.id)}">
-            <strong>${esc(c.label)}</strong>
-            <span>${esc(c.hint)}</span>
-          </button>
-        `).join("")}
-      </div>
-    </div>
-  `).join("");
-}
-
-function bindGuide() {
-  document.querySelector("#open-guide")?.addEventListener("click", () => {
-    renderArchitectureGuide();
-    renderGuideResult();
-    document.querySelector("#architecture-guide").hidden = false;
-  });
-  document.querySelector("#guide-close")?.addEventListener("click", () => {
-    document.querySelector("#architecture-guide").hidden = true;
-  });
-  document.querySelector("#guide-apply")?.addEventListener("click", applyGuideRecommendation);
-  document.querySelector("#guide-questions")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-guide-choice]");
-    if (!btn) return;
-    const [qId, cId] = btn.dataset.guideChoice.split(":");
-    state.guideAnswers[qId] = cId;
-    btn.closest(".guide-choice-grid").querySelectorAll(".guide-choice").forEach((b) => b.classList.remove("is-selected"));
-    btn.classList.add("is-selected");
-    renderGuideResult();
-  });
-}
-
-function computeGuideRecommendation() {
-  const scale = state.guideAnswers.scale || "small";
-  const multi = state.guideAnswers.multitenancy || "no";
-  const ids = ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit", "upload-validation-kit", "import-pipeline-kit"];
-  if (scale === "medium" || scale === "large") ids.push("query-traceability-kit", "analytics-kit", "station-admin-kit");
-  if (scale === "large") ids.push("logs-ops-kit");
-  if (multi === "yes") ids.push("audit-edit-kit");
-  return ids;
-}
-
-function renderGuideResult() {
-  const container = document.getElementById("guide-result-kit-list");
-  if (!container) return;
-  const ids = computeGuideRecommendation();
-  container.innerHTML = ids.map((id) => {
-    const k = state.kits.find((item) => item.id === id);
-    if (!k) return "";
-    return `<div class="guide-result-kit-card">
-      <strong>${esc(k.name)}</strong>
-      <span>${esc(k.capability)}</span>
-      ${k.required ? '<span class="guide-result-req">必選</span>' : ""}
-    </div>`;
-  }).join("");
-}
-
-function applyGuideRecommendation() {
-  const scale = state.guideAnswers.scale || "small";
-  const multi = state.guideAnswers.multitenancy || "no";
-
-  // Sync selectedFlows so flow cards visually reflect the recommendation
-  state.selectedFlows.clear();
-  state.selectedSubflows.clear();
-  state.selectedFlows.add("data-import");
-  if (scale === "medium" || scale === "large") {
-    state.selectedFlows.add("query-trace");
-    state.selectedFlows.add("analytics");
-    state.selectedFlows.add("governance");
-  }
-  if (multi === "yes" && scale === "small") {
-    state.selectedFlows.add("governance");
-  }
-
-  // Apply exact kit selection from recommendation (may differ slightly from flow bundling)
-  resetToRequiredKits();
-  computeGuideRecommendation().forEach((id) => addKitWithDependencies(id));
-  renderAll();
-  document.querySelector("#architecture-guide").hidden = true;
 }
 
 // ── Kit Manifest 載入 ────────────────────────────────────────────────────────
@@ -439,10 +329,16 @@ function bindToolbarActions() {
     applyFlowSelection();
     renderAll();
   });
-  document.querySelector("#copy-generation-command").addEventListener("click", copyGenerationCommand);
+  document.querySelector("#copy-generation-command")?.addEventListener("click", copyGenerationCommand);
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
+  document.querySelector("#package-machine-pubkey-file")?.addEventListener("change", (event) => {
+    handleMachinePubkeyFile(event.target.files?.[0], {
+      statusEl: document.querySelector("#package-pem-status"),
+      showGate: false,
+    });
+  });
 
 }
 
@@ -460,7 +356,9 @@ async function initMachineGate() {
 
   if (serverRunning && Array.isArray(machines) && machines.length > 0 && machines[0].pubkey) {
     state.machinePubkey = machines[0].pubkey;
-    return; // 已有記錄，直接解鎖，overlay 保持 hidden
+    overlay.removeAttribute("hidden");
+    _showGateRegistered(machines);
+    return;
   }
 
   overlay.removeAttribute("hidden");
@@ -492,45 +390,75 @@ async function initMachineGate() {
     }
   });
 
-  document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = (await file.text()).trim();
-    const isPem = text.includes("-----BEGIN PUBLIC KEY-----") && text.includes("-----END PUBLIC KEY-----");
-    const statusEl = document.getElementById("gate-status");
-    if (!isPem) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "找不到有效 PEM 公鑰（需 -----BEGIN PUBLIC KEY----- 格式）"; }
-      return;
-    }
-    const pem = text;
-    if (statusEl) { statusEl.style.color = "var(--ink-3,#6b7280)"; statusEl.textContent = "上傳中…"; }
-
-    if (!serverRunning) {
-      state.machinePubkey = pem;
-      _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
-      return;
-    }
-    try {
-      const resp = await fetch("/api/register-machine", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pubkey: pem }),
-      });
-      const data = await resp.json();
-      if (data.ok) {
-        state.machinePubkey = pem;
-        const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ pubkey: pem, registeredAt: new Date().toISOString() }]);
-        _showGateRegistered(refreshed);
-      } else {
-        if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = `登錄失敗：${data.error}`; }
-      }
-    } catch (_) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "伺服器連線失敗，無法登錄 TPM 公鑰"; }
-    }
+  document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", (e) => {
+    handleMachinePubkeyFile(e.target.files?.[0], {
+      statusEl: document.getElementById("gate-status"),
+      serverRunning,
+      showGate: true,
+    });
   });
 
   document.getElementById("gate-bypass-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
   document.getElementById("gate-proceed-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+}
+
+async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, showGate = false } = {}) {
+  if (!file) return;
+  const pem = (await file.text()).trim();
+  const isPem = pem.includes("-----BEGIN PUBLIC KEY-----") && pem.includes("-----END PUBLIC KEY-----");
+  if (!isPem) {
+    if (statusEl) {
+      statusEl.style.color = "var(--red,#dc2626)";
+      statusEl.textContent = "找不到有效 PEM 公鑰";
+    }
+    return;
+  }
+
+  if (statusEl) {
+    statusEl.style.color = "var(--ink-3,#6b7280)";
+    statusEl.textContent = "驗證中…";
+  }
+
+  if (!serverRunning) {
+    state.machinePubkey = pem;
+    if (showGate) _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 格式有效（離線模式）";
+    }
+    return;
+  }
+
+  try {
+    const resp = await fetch("/api/register-machine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pubkey: pem }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      if (statusEl) {
+        statusEl.style.color = "var(--red,#dc2626)";
+        statusEl.textContent = `驗證失敗：${data.error || "invalid PEM"}`;
+      }
+      return;
+    }
+    state.machinePubkey = pem;
+    if (showGate) {
+      const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ pubkey: pem, registeredAt: new Date().toISOString() }]);
+      _showGateRegistered(refreshed);
+    }
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 已驗證並登錄";
+    }
+  } catch (_) {
+    state.machinePubkey = pem;
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 格式有效（未連接伺服器）";
+    }
+  }
 }
 
 function _showGateRegistered(machines) {
@@ -806,17 +734,10 @@ function renderUploadedTables() {
     ? `<div class="pk-fk-detect-bar pk-fk-applied">
         <span>✓ 已套用 ${applied.pkCount} 個 PK、${applied.fkCount} 個 FK 到 Schema 與欄位關係編輯器</span>
       </div>`
-    : `<div class="pk-fk-detect-bar">
-        <button class="ghost-action" id="pk-fk-detect" type="button">🔍 自動偵測 PK / FK</button>
-        <span class="pk-fk-hint">分析欄位名稱與資料唯一性</span>
-      </div>`;
+    : "";
 
   elements.uploadedTablesList.innerHTML = tableItems + bannerHtml;
 
-  document.querySelector("#pk-fk-detect")?.addEventListener("click", () => {
-    state.pkFkSuggestions = detectPkFk();
-    renderUploadedTables();
-  });
   document.querySelector("#pk-fk-apply")?.addEventListener("click", () => {
     const sug = state.pkFkSuggestions;
     applyPkFkSuggestions(sug);
@@ -828,6 +749,19 @@ function renderUploadedTables() {
     // 3 秒後清除成功提示
     setTimeout(() => { state.pkFkApplied = null; renderUploadedTables(); }, 3000);
   });
+}
+
+function findForeignKeys() {
+  if (!state.uploadedTables.length) return;
+  const sug = detectPkFk();
+  applyPkFkSuggestions(sug);
+  state.fkHighlights = new Set(sug.fks.map((f) => `${f.tableId}::${f.colName}`));
+  state.pkFkApplied = { pkCount: sug.pks.length, fkCount: sug.fks.length };
+  state.pkFkSuggestions = null;
+  renderUploadedTables();
+  renderNodeEditorSummary();
+  renderGeneration();
+  openNodeEditor();
 }
 
 // ── PK / FK 評分輔助函式 ──────────────────────────────────────────────────────
@@ -970,12 +904,15 @@ function renderNodeEditorSummary() {
   const el = elements.nodeEditorSummary;
   if (!el) return;
   const openBtn = document.querySelector("#open-node-editor");
+  const findBtn = document.querySelector("#find-fk");
   if (!state.uploadedTables.length) {
     el.innerHTML = `<div class="empty-state">上傳 CSV 後開啟欄位關係編輯器</div>`;
     if (openBtn) openBtn.disabled = true;
+    if (findBtn) findBtn.disabled = true;
     return;
   }
   if (openBtn) openBtn.disabled = false;
+  if (findBtn) findBtn.disabled = false;
   const order = state.nodeOrder.length ? state.nodeOrder : state.uploadedTables.map((t) => t.id);
   const chips = order.map((id, i) => {
     const t = state.uploadedTables.find((x) => x.id === id);
@@ -993,6 +930,7 @@ function renderNodeEditorSummary() {
 }
 
 function bindNodeEditor() {
+  document.querySelector("#find-fk")?.addEventListener("click", findForeignKeys);
   document.querySelector("#open-node-editor")?.addEventListener("click", openNodeEditor);
   document.querySelector("#node-editor-close")?.addEventListener("click", closeNodeEditor);
   document.querySelector("#node-editor-cancel")?.addEventListener("click", closeNodeEditor);
@@ -1032,9 +970,10 @@ function renderNodeCanvas() {
     const connector = i < order.length - 1
       ? `<div class="node-connector">→<span>Step ${i + 1}→${i + 2}</span></div>`
       : "";
-    const colsHtml = schema.slice(0, 3).map((col) =>
-      `<div class="node-col-item"><span class="col-type">${col.type[0].toUpperCase()}</span>${esc(col.displayName || col.name)}</div>`
-    ).join("") + (schema.length > 3 ? `<div class="node-col-more">…還有 ${schema.length - 3} 欄</div>` : "");
+    const colsHtml = schema.map((col) => {
+      const isFk = state.fkHighlights.has(`${tableId}::${col.name}`) || Boolean(col.fkTarget);
+      return `<div class="node-col-item ${isFk ? "is-fk" : ""}"><span class="col-type">${col.type[0].toUpperCase()}</span><span class="node-col-name">${esc(col.displayName || col.name)}</span>${isFk ? '<span class="fk-badge">FK</span>' : ""}</div>`;
+    }).join("");
     const childBtnClass = rel ? "node-child-btn has-child" : "node-child-btn";
     const childBtnLabel = rel ? `↓ 子表格：${esc(state.uploadedTables.find((x) => x.id === rel.childTableId)?.tableName || "")}` : "↓ 設定子表格";
     const childConfigHtml = rel ? buildChildConfigHtml(tableId, rel) : "";
@@ -1280,7 +1219,7 @@ function subfeatureTemplate(subfeature, locked) {
   const key = subfeatureKey(subfeature.parentId, subfeature.id);
   const checked = locked || state.selectedSubfeatures.get(subfeature.parentId)?.has(subfeature.id) ? "checked" : "";
   const disabled = locked ? "disabled" : "";
-  const entitlement = subfeature.entitlement ? `<span class="subfeature-service-note">需要方案或客製權益</span>` : "";
+  const entitlement = subfeature.entitlement ? `<span class="subfeature-service-note">需要方案權益</span>` : "";
   return `
     <div class="subfeature-item">
       <div>
@@ -1389,10 +1328,17 @@ function renderAll() {
   renderFlows();
   renderKits();
   renderSummary();
+  renderDatabaseLayout();
   renderNodeEditorSummary();
   renderDatabaseRecommendation();
   renderPreview();
   renderGeneration();
+}
+
+function renderDatabaseLayout() {
+  const ready = ["usage-scale", "data-criticality", "analytics-need", "deployment-mode"]
+    .every((id) => document.querySelector(`#${id}`)?.value);
+  document.querySelector("#database-layout")?.classList.toggle("is-ready", ready);
 }
 
 function renderSummary() {
@@ -1411,7 +1357,7 @@ function summaryTemplate(item) {
 function dependencyTemplate(item) {
   const deps = item.dependencies.length ? item.dependencies.map((id) => esc(findKit(id)?.name || id)).join("、") : "無";
   const paid = selectedSubfeatures(item).filter((subfeature) => subfeature.entitlement).length;
-  return `<div class="dependency-item"><strong>${esc(item.id)}</strong><span>依賴：${deps}</span><span>${paid ? `付費或客製 gating：${paid} 項` : "無 gating"}</span></div>`;
+  return `<div class="dependency-item"><strong>${esc(item.id)}</strong><span>依賴：${deps}</span><span>${paid ? `付費 gating：${paid} 項` : "無 gating"}</span></div>`;
 }
 
 function computeDbEngine() {
@@ -1437,6 +1383,7 @@ function scoreByValue(id, weights) {
 }
 
 function renderPreview() {
+  if (!elements.previewBody) return;
   const items = selectedKits();
   if (!items.length) {
     if (elements.previewTabs) elements.previewTabs.innerHTML = "";
@@ -1645,21 +1592,21 @@ const kitMockups = {
 
 function renderGeneration() {
   const recipe = buildRecipe();
-  elements.generationSummary.innerHTML = [
+  if (elements.generationSummary) elements.generationSummary.innerHTML = [
     ["流程", recipe.selectedFlows.join("、") || "（未選擇）"],
     ["Kit", recipe.enabledKits.join("、")],
     ["Database", recipe.database.engine],
     ["資料表", recipe.tableSchemas.length ? `${recipe.tableSchemas.length} 個（含欄位定義）` : "未上傳"],
   ].map(([title, body]) => `<div class="summary-item"><strong>${title}</strong><span>${body}</span></div>`).join("");
   const rn = recipeName();
-  elements.packageFileList.innerHTML = [
+  if (elements.packageFileList) elements.packageFileList.innerHTML = [
     [`assembly/${rn}.recipe.json`,        "recipe.json 的組裝輸入"],
     [`assembly/${rn}-resolved-plan.json`, "kit 依賴解析結果"],
     ["dist/generated-system",             "組裝後的系統目錄"],
     [`dist/client-deploy-${rn}.zip`,      "客戶部署套件（最終輸出）"],
   ].map(([item, desc]) => `<div class="dependency-item"><strong>${item}</strong><span>${desc}</span></div>`).join("");
-  elements.assemblyCommandList.innerHTML = assemblyCommands().map((command) => `<div class="dependency-item"><code>${command}</code></div>`).join("");
-  elements.recipeOutput.value = recipeJsonText();
+  if (elements.assemblyCommandList) elements.assemblyCommandList.innerHTML = assemblyCommands().map((command) => `<div class="dependency-item"><code>${command}</code></div>`).join("");
+  if (elements.recipeOutput) elements.recipeOutput.value = recipeJsonText();
 }
 
 // ── Recipe / 輸出 ─────────────────────────────────────────────────────────────
@@ -2102,7 +2049,7 @@ function buildDeploySh(recipe, dateStr) {
     `echo "=== 部署完成 ==="`,
     `if [ "\${BACKGROUND}" -eq 1 ]; then`,
     `    mkdir -p "\${SYS_ROOT}/logs"`,
-    `    (cd "\${SYS_ROOT}/backend" && nohup "\${VENV}/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
+    `    (cd "\${SYS_ROOT}/backend" && nohup "\${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
     `    echo "$!" > "\${SYS_ROOT}/logs/backend.pid")`,
     `    ok "後端已在背景啟動  port=8000"`,
     `    info "日誌：\${SYS_ROOT}/logs/backend.log"`,
@@ -2111,7 +2058,7 @@ function buildDeploySh(recipe, dateStr) {
     `    fi`,
     `else`,
     `    info "啟動後端："`,
-    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"`,
+    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"`,
     `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --reload  # 開發模式"`,
     `    if [ -f "\${SYS_ROOT}/frontend/package.json" ]; then`,
     `        info "啟動前端："`,
@@ -2263,6 +2210,16 @@ async function downloadPackage() {
 
   try {
     if (typeof JSZip === "undefined") throw new Error("JSZip 未載入");
+    const manifestResp = await fetch("/api/package-manifest");
+    if (manifestResp.ok) {
+      const manifest = await manifestResp.json();
+      if (manifest && manifest.ok === false) {
+        throw new Error(`Package incomplete: missing ${(manifest.missing || []).join(", ")}. Run tools/build-wizard-exe.ps1 before packaging.`);
+      }
+    } else if (manifestResp.status === 422) {
+      const manifest = await manifestResp.json().catch(() => ({}));
+      throw new Error(manifest.message || "Package incomplete. Run tools/build-wizard-exe.ps1 before packaging.");
+    }
     const recipe = buildRecipe();
     const dateStr = new Date().toISOString().slice(0, 16).replace("T", " ");
     const zip = new JSZip();
@@ -2341,6 +2298,7 @@ async function downloadPackage() {
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   } catch (err) {
     console.error("downloadPackage failed:", err);
+    alert(err instanceof Error ? err.message : String(err));
     btn.textContent = "下載失敗";
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   }

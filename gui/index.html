@@ -20,8 +20,7 @@
         <nav class="nav-list" aria-label="主要流程">
           <button class="nav-item is-active" data-view="configure"><span>01</span>選擇業務流程</button>
           <button class="nav-item" data-view="database"><span>02</span>資料保存方式</button>
-          <button class="nav-item" data-view="preview"><span>03</span>系統預覽</button>
-          <button class="nav-item" data-view="generate"><span>04</span>輸出部署套件</button>
+          <button class="nav-item" data-view="generate"><span>03</span>輸出部署套件</button>
         </nav>
 
         <div class="sidebar-foot">
@@ -38,10 +37,9 @@
             <p class="eyebrow">Step 1</p>
             <h2>選擇業務流程</h2>
             <p>勾選系統要支援的業務流程，系統自動組裝所需模組。進階可展開調整個別 Kit。</p>
-            <button class="ghost-action" id="open-guide" type="button" style="margin-top:12px;">幫我推薦 Kit 組合</button>
           </header>
 
-          <div class="layout-two">
+          <div class="layout-two flow-layout">
             <section class="panel">
               <div class="panel-head">
                 <h3>業務流程</h3>
@@ -67,14 +65,6 @@
                 <div class="kit-grid" id="kit-grid"></div>
               </details>
             </section>
-
-            <section class="panel">
-              <h3>目前選擇</h3>
-              <div id="selection-summary" class="summary-list"></div>
-              <div class="divider"></div>
-              <h3>依賴與風險</h3>
-              <div id="dependency-list" class="dependency-list"></div>
-            </section>
           </div>
         </section>
 
@@ -86,57 +76,65 @@
             <p>上傳表單資料後，系統會依使用人數、資料重要性與追溯需求，協助選擇適合的資料保存方式。</p>
           </header>
 
-          <div class="layout-two">
-            <section class="panel form-panel">
-              <h3>上傳資料來源 <span class="hint-text">（選填）</span></h3>
-              <div class="csv-upload-zone" id="csv-upload-zone">
-                <input type="file" id="csv-file-input" multiple accept=".csv,.tsv" hidden />
-                <p>拖曳 CSV / TSV 至此，或</p>
-                <button class="ghost-action" id="csv-browse-btn" type="button">選擇檔案</button>
-                <small>支援多檔上傳，暫存於此次工作階段</small>
-              </div>
-              <div id="uploaded-tables-list" class="uploaded-tables-list"></div>
-
-              <div class="divider"></div>
-              <h3>正式資料保存需求</h3>
+          <div class="layout-two database-layout" id="database-layout">
+            <div class="database-card-stage">
+              <section class="panel form-panel db-requirements-card">
+                <h3>正式資料保存需求</h3>
 
               <label>
                 <span class="lbl">會有多少人一起使用？</span>
                 <select id="usage-scale">
+                  <option value="" selected disabled>請選擇</option>
                   <option value="single">單人 Demo / 驗證</option>
-                  <option value="team" selected>2 到 20 人團隊</option>
+                  <option value="team">2 到 20 人團隊</option>
                   <option value="company">跨部門或正式營運</option>
                 </select>
               </label>
               <label>
                 <span class="lbl">這些資料是否會成為正式紀錄？</span>
                 <select id="data-criticality">
+                  <option value="" selected disabled>請選擇</option>
                   <option value="demo">可重建測試資料</option>
-                  <option value="ops" selected>日常營運資料</option>
+                  <option value="ops">日常營運資料</option>
                   <option value="critical">稽核、追溯、正式紀錄</option>
                 </select>
               </label>
               <label>
                 <span class="lbl">是否需要查詢、追溯或報表？</span>
                 <select id="analytics-need">
+                  <option value="" selected disabled>請選擇</option>
                   <option value="low">低，只需要查詢</option>
                   <option value="medium">中，需要摘要與報表</option>
-                  <option value="high" selected>高，需要圖表、異常與客製分析</option>
+                  <option value="high">高，需要圖表、異常與分析</option>
                 </select>
               </label>
               <label>
                 <span class="lbl">系統會安裝在哪裡？</span>
                 <select id="deployment-mode">
+                  <option value="" selected disabled>請選擇</option>
                   <option value="local">本機 Demo</option>
                   <option value="intranet">內網部署</option>
-                  <option value="cloud" selected>正式雲端/主機部署</option>
+                  <option value="cloud">正式雲端/主機部署</option>
                 </select>
               </label>
-            </section>
+              </section>
+
+              <section class="panel form-panel upload-source-card">
+                <h3>上傳資料來源 <span class="hint-text">（選填）</span></h3>
+                <div class="csv-upload-zone" id="csv-upload-zone">
+                  <input type="file" id="csv-file-input" multiple accept=".csv,.tsv" hidden />
+                  <p>拖曳 CSV / TSV 至此，或</p>
+                  <button class="ghost-action" id="csv-browse-btn" type="button">選擇檔案</button>
+                  <small>支援多檔上傳，暫存於此次工作階段</small>
+                </div>
+                <div id="uploaded-tables-list" class="uploaded-tables-list"></div>
+              </section>
+            </div>
 
             <section class="panel">
               <div class="panel-head">
                 <h3>欄位關係編輯</h3>
+                <button class="ghost-action" id="find-fk" type="button" disabled>尋找FK</button>
                 <button class="ghost-action" id="open-node-editor" type="button" disabled>開啟編輯器</button>
               </div>
               <div id="node-editor-summary" class="node-editor-summary">
@@ -152,28 +150,10 @@
           </div>
         </section>
 
-        <!-- ── Step 3：系統預覽 ── -->
-        <section class="view" id="view-preview">
-          <header class="page-head">
-            <p class="eyebrow">Step 3</p>
-            <h2>系統預覽</h2>
-            <p>依照目前選擇的業務流程，即時預覽產生後的系統頁面結構。</p>
-          </header>
-
-          <div class="mock-app-frame">
-            <div class="mock-app-chrome">
-              <span></span><span></span><span></span>
-              <div>localhost:8000 — 已選流程即時渲染</div>
-            </div>
-            <div class="mock-app-tabs" id="preview-tabs"></div>
-            <div class="mock-app-shell" id="preview-body"></div>
-          </div>
-        </section>
-
-        <!-- ── Step 4：輸出部署套件 ── -->
+        <!-- ── Step 3：輸出部署套件 ── -->
         <section class="view" id="view-generate">
           <header class="page-head">
-            <p class="eyebrow">Step 4</p>
+            <p class="eyebrow">Step 3</p>
             <h2>輸出部署套件</h2>
             <p>下載<strong>開發者組裝包</strong>，在 form-system-kit-composer 目錄執行腳本，自動組裝 kit 內容並產生可直接交付給部署人員的客戶 ZIP。</p>
           </header>
@@ -193,32 +173,14 @@
                 <li>將客戶 ZIP 交給部署人員解壓執行</li>
               </ol>
               <p class="deploy-cta-files">包含：recipe.json · deploy.ps1 · phases/ · deploy.sh · README.md · install-wizard.py</p>
+              <div class="pem-verify-row">
+                <label class="ghost-action" for="package-machine-pubkey-file">上傳 PEM 驗證</label>
+                <input type="file" id="package-machine-pubkey-file" accept=".pem,.txt" hidden />
+                <span id="package-pem-status"></span>
+              </div>
               <button class="deploy-btn" id="download-package" type="button">下載 .zip</button>
             </div>
           </div>
-
-          <details class="recipe-details">
-            <summary>進階：Recipe JSON 與 Assembly 指令</summary>
-            <div class="layout-two" style="margin-top:14px">
-              <section class="panel generation-panel">
-                <h3>Recipe JSON</h3>
-                <textarea id="recipe-output" class="recipe-output" readonly spellcheck="false"></textarea>
-                <div class="action-row">
-                  <button class="ghost-action" id="copy-recipe-json" type="button">複製</button>
-                  <button class="ghost-action" id="download-recipe-json" type="button">下載 JSON</button>
-                </div>
-              </section>
-              <section class="panel generation-panel">
-                <h3>產出項目</h3>
-                <div class="dependency-list" id="package-file-list"></div>
-                <div class="divider"></div>
-                <h3>Assembly 指令</h3>
-                <div class="dependency-list" id="assembly-command-list"></div>
-                <div class="divider"></div>
-                <button class="ghost-action" id="copy-generation-command">複製組裝指令</button>
-              </section>
-            </div>
-          </details>
         </section>
 
 
@@ -301,34 +263,6 @@
             <span class="node-editor-status" id="node-editor-status"></span>
             <button class="ghost-action" id="node-editor-cancel" type="button">取消</button>
             <button class="primary-action" id="node-editor-confirm" type="button">確認設定</button>
-          </div>
-        </div>
-      </div>
-
-      <!-- ── 架構引導覆蓋層 ── -->
-      <div class="guide-overlay architecture-guide" id="architecture-guide" hidden>
-        <div class="guide-overlay-panel">
-          <div class="guide-overlay-head">
-            <div class="guide-overlay-head-text">
-              <p class="eyebrow">架構引導</p>
-              <h2>幫我推薦 Kit 組合</h2>
-              <p>回答幾個問題，系統自動推薦最適合的 Kit 組合。</p>
-            </div>
-            <button class="guide-overlay-close" id="guide-close" type="button" aria-label="關閉">✕</button>
-          </div>
-          <div class="guide-overlay-body">
-            <div class="guide-overlay-left" id="guide-questions"></div>
-            <div class="guide-overlay-right">
-              <div class="guide-overlay-result-head">
-                <p class="eyebrow">推薦結果</p>
-                <h3>建議 Kit 組合</h3>
-                <p class="guide-result-desc">依您的回答，以下是建議選用的 Kit。</p>
-              </div>
-              <div id="guide-result-kit-list"></div>
-            </div>
-          </div>
-          <div class="guide-overlay-actions">
-            <button class="ghost-action" id="guide-apply" type="button">套用推薦</button>
           </div>
         </div>
       </div>
