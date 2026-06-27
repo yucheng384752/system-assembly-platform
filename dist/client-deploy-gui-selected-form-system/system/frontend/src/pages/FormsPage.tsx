@@ -1,4 +1,6 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
+import { getApiKeyValue, getApiKeyHeaderName } from "../services/auth";
+import { TENANT_STORAGE_KEY } from "../services/tenant";
 
 type FieldType = "string" | "integer" | "decimal" | "date" | "boolean";
 
@@ -29,6 +31,15 @@ interface RecordRow {
 type SubTab = "schema" | "upload" | "records";
 
 const FIELD_TYPES: FieldType[] = ["string", "integer", "decimal", "date", "boolean"];
+
+function apiHeaders(extra: Record<string, string> = {}): HeadersInit {
+  const tenantId = window.localStorage.getItem(TENANT_STORAGE_KEY) || "";
+  const apiKey = getApiKeyValue();
+  const h: Record<string, string> = { ...extra };
+  if (tenantId) h["X-Tenant-Id"] = tenantId;
+  if (apiKey) h[getApiKeyHeaderName()] = apiKey;
+  return h;
+}
 
 const cell: CSSProperties = { padding: "6px 8px", border: "1px solid #ddd" };
 const btn = (color = "#2563eb"): CSSProperties => ({
@@ -68,7 +79,7 @@ export function FormsPage() {
   async function loadForms() {
     setLoading(true);
     try {
-      const res = await fetch("/api/forms");
+      const res = await fetch("/api/forms", { headers: apiHeaders() });
       if (res.ok) setForms(await res.json());
     } finally {
       setLoading(false);
@@ -92,7 +103,7 @@ export function FormsPage() {
     if (!newCode.trim()) return;
     const res = await fetch("/api/forms", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: apiHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify({ code: newCode.trim().toUpperCase(), name: newName.trim() || newCode.trim(), sort_order: 0 }),
     });
     if (res.ok) {
@@ -106,7 +117,7 @@ export function FormsPage() {
 
   async function deleteForm(code: string) {
     if (!confirm(`確定刪除表單 ${code} 及其所有紀錄？`)) return;
-    await fetch(`/api/forms/${code}`, { method: "DELETE" });
+    await fetch(`/api/forms/${code}`, { method: "DELETE", headers: apiHeaders() });
     if (selected?.code === code) setSelected(null);
     loadForms();
   }
@@ -117,7 +128,7 @@ export function FormsPage() {
     try {
       const res = await fetch(`/api/forms/${selected.code}/schema`, {
         method: "PUT",
-        headers: { "Content-Type": "application/json" },
+        headers: apiHeaders({ "Content-Type": "application/json" }),
         body: JSON.stringify({ fields: editFields }),
       });
       if (res.ok) {
@@ -147,7 +158,7 @@ export function FormsPage() {
       const fd = new FormData();
       fd.append("file", uploadFile);
       fd.append("allow_duplicate", String(allowDup));
-      const res = await fetch(`/api/forms/${selected.code}/upload`, { method: "POST", body: fd });
+      const res = await fetch(`/api/forms/${selected.code}/upload`, { method: "POST", headers: apiHeaders(), body: fd });
       if (res.ok) setUploadResult(await res.json());
       else {
         const err = await res.json().catch(() => ({}));
@@ -160,7 +171,7 @@ export function FormsPage() {
 
   async function loadRecords(p = page) {
     if (!selected) return;
-    const res = await fetch(`/api/forms/${selected.code}/records?page=${p}&page_size=${PAGE_SIZE}`);
+    const res = await fetch(`/api/forms/${selected.code}/records?page=${p}&page_size=${PAGE_SIZE}`, { headers: apiHeaders() });
     if (res.ok) {
       const data = await res.json();
       setRecords(data.records);
@@ -174,7 +185,7 @@ export function FormsPage() {
 
   async function deleteRecord(id: string) {
     if (!selected) return;
-    await fetch(`/api/forms/${selected.code}/records/${id}`, { method: "DELETE" });
+    await fetch(`/api/forms/${selected.code}/records/${id}`, { method: "DELETE", headers: apiHeaders() });
     loadRecords(page);
   }
 
