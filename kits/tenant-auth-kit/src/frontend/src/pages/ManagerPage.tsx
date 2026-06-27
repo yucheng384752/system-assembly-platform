@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useToast } from '../components/common/ToastContext'
+import { getApiKeyHeaderName, getApiKeyValue } from '../services/auth'
 import './../styles/manager-page.css'
 
 type WhoAmI = {
@@ -20,6 +21,13 @@ type TenantUserRow = {
   is_active: boolean
   created_at?: string | null
   last_login_at?: string | null
+}
+
+function apiHeaders(extra: Record<string, string> = {}): HeadersInit {
+  const apiKey = getApiKeyValue()
+  const h: Record<string, string> = { ...extra }
+  if (apiKey) h[getApiKeyHeaderName()] = apiKey
+  return h
 }
 
 async function readErrorDetail(res: Response): Promise<string> {
@@ -56,7 +64,7 @@ export function ManagerPage() {
   const refreshWhoami = async () => {
     setLoadingWhoami(true)
     try {
-      const res = await fetch('/api/auth/whoami')
+      const res = await fetch('/api/auth/whoami', { headers: apiHeaders() })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
         showToast('error', detail || t('manager.toast.whoamiFailed'))
@@ -78,7 +86,7 @@ export function ManagerPage() {
     try {
       const params = new URLSearchParams()
       if (includeInactive) params.set('include_inactive', 'true')
-      const res = await fetch(`/api/auth/users?${params.toString()}`)
+      const res = await fetch(`/api/auth/users?${params.toString()}`, { headers: apiHeaders() })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
         showToast(
@@ -134,7 +142,7 @@ export function ManagerPage() {
     try {
       const res = await fetch('/api/auth/users', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({ username, password, role: createRole }),
       })
       if (!res.ok) {
@@ -171,7 +179,7 @@ export function ManagerPage() {
     try {
       const res = await fetch(`/api/auth/users/${u.id}`, {
         method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
+        headers: apiHeaders({ 'Content-Type': 'application/json' }),
         body: JSON.stringify(patch),
       })
       if (!res.ok) {
@@ -201,7 +209,7 @@ export function ManagerPage() {
 
     setSavingUserId(u.id)
     try {
-      const res = await fetch(`/api/auth/users/${u.id}`, { method: 'DELETE' })
+      const res = await fetch(`/api/auth/users/${u.id}`, { method: 'DELETE', headers: apiHeaders() })
       if (!res.ok) {
         const detail = await readErrorDetail(res)
         showToast(
