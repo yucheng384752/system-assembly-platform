@@ -75,12 +75,13 @@ def _coerce(value: Any, ftype: str) -> Any:
     s = str(value).strip()
     if not s:
         return None
-    if ftype == "integer":
+    ftype_lower = ftype.lower()
+    if ftype_lower == "integer":
         try:
             return int(float(s))
         except (ValueError, TypeError):
             return s
-    if ftype == "decimal":
+    if ftype_lower in ("decimal", "float", "number"):
         try:
             return float(s)
         except (ValueError, TypeError):
@@ -103,7 +104,7 @@ async def _get_station(code: str, tenant_id: uuid.UUID, db: AsyncSession) -> Sta
         await db.execute(
             select(Station).where(
                 Station.tenant_id == tenant_id,
-                Station.code == code.strip().upper(),
+                Station.code == code.strip(),
             )
         )
     ).scalar_one_or_none()
@@ -153,7 +154,7 @@ async def create_form(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new form type (station)."""
-    code = body.code.strip().upper()
+    code = body.code.strip()
     if not code:
         raise HTTPException(status_code=422, detail="code is required")
 
@@ -330,7 +331,23 @@ async def upload_csv(
         return UploadResult(total=0, imported=0, skipped=0, errors=[])
 
     fields: list[dict] = schema.record_fields or []
-    key_fields = [f["name"] for f in fields if f.get("is_key")]
+
+    # Reject upload when no CSV column matches any schema field
+    if fields:
+        csv_columns = set(df.columns)
+        schema_source_names = {f.get("sourceName") or f.get("name") for f in fields if f.get("sourceName") or f.get("name")}
+        if not csv_columns & schema_source_names:
+            raise HTTPException(
+                status_code=422,
+                detail=f"No CSV columns match the form schema. Expected headers: {sorted(schema_source_names)}, got: {sorted(csv_columns)}",
+            )
+
+    # Support both API-created format (name/is_key) and bootstrap format (fieldKey/sourceName/role)
+    key_fields = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("is_key") or f.get("role") == "lot"
+    ]
 
     imported = 0
     skipped = 0
@@ -342,22 +359,23 @@ async def upload_csv(
         row_errors: list[str] = []
 
         for field in fields:
-            fname = field["name"]
+            field_key = field.get("fieldKey") or field.get("name")  # DB storage key
+            source_name = field.get("sourceName") or field_key  # CSV column header
             ftype = field.get("type", "string")
-            raw_val = row_dict.get(fname)
+            raw_val = row_dict.get(source_name)
             coerced = _coerce(raw_val, ftype)
 
             if field.get("required") and coerced is None:
-                row_errors.append(f"'{fname}' 為必填欄位")
+                row_errors.append(f"'{source_name}' 為必填欄位")
             else:
-                row_data[fname] = coerced
+                row_data[field_key] = coerced
 
         if row_errors:
             errors.append({"row": row_idx + 1, "errors": row_errors})
             continue
 
         key_val = (
-            "_".join(str(row_data.get(k) or "") for k in key_fields)
+            "_".join(str(row_data.get(k) or "") for k in key_fields if k)
             if key_fields
             else str(uuid.uuid4())
         )

@@ -63,7 +63,7 @@ class Settings(BaseSettings):
     )
 
     # API server settings
-    api_host: str = Field(default="0.0.0.0", description="API server host")
+    api_host: str = Field(default="127.0.0.1", description="API server host")
     api_port: int = Field(default=8000, ge=1, le=65535, description="API server port")
 
     # File upload settings
@@ -355,8 +355,18 @@ class Settings(BaseSettings):
     @field_validator("upload_temp_dir")
     @classmethod
     def ensure_upload_dir_exists(cls, v: str) -> str:
-        """Ensure upload directory exists."""
-        Path(v).mkdir(parents=True, exist_ok=True)
+        """Ensure upload directory exists, owned by the non-root user when run via sudo."""
+        upload_path = Path(v)
+        upload_path.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt" and os.getuid() == 0:
+            import pwd
+            sudo_user = os.environ.get("SUDO_USER", "")
+            if sudo_user:
+                try:
+                    pw = pwd.getpwnam(sudo_user)
+                    os.chown(upload_path, pw.pw_uid, pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
         return v
 
     @property

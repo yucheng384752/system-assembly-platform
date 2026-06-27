@@ -1,4 +1,6 @@
 import hashlib
+import csv
+import io
 import logging
 import shutil
 import uuid
@@ -23,17 +25,56 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_tenant, get_db
 from app.core import database
 from app.core.config import get_settings
-from app.models.core.schema_registry import TableRegistry
+from app.models.core.schema_registry import SchemaVersion, TableRegistry
 from app.models.core.tenant import Tenant
 from app.models.import_job import ImportFile, ImportJob, ImportJobStatus, StagingRow
 from app.models.upload_job import UploadJob
 from app.schemas.import_job import ImportJobErrorRow, ImportJobRead
+from app.core.monitoring import report_user_action
 from app.services.audit_events import write_audit_event_best_effort
 from app.services.import_v2 import ImportService
 
 router = APIRouter()
 settings = get_settings()
 logger = logging.getLogger(__name__)
+
+ALLOWED_IMPORT_EXTENSIONS = {".csv", ".xlsx"}
+MAX_IMPORT_FILES_PER_JOB = 10
+
+
+def _safe_upload_filename(raw_filename: str | None) -> str:
+    """Return a safe basename for persisted uploads."""
+    original = (raw_filename or "").strip()
+    filename = Path(original).name
+    if not filename or filename in {".", ".."}:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid upload filename",
+        )
+    if filename != original or "/" in original or "\\" in original:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Upload filename must not contain path components",
+        )
+
+    suffix = Path(filename).suffix.lower()
+    if suffix not in ALLOWED_IMPORT_EXTENSIONS:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported file extension: {suffix or '(none)'}",
+        )
+    return filename
+
+
+def _safe_child_path(base_dir: Path, filename: str) -> Path:
+    base = base_dir.resolve()
+    target = (base / filename).resolve()
+    if target != base and base not in target.parents:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Illegal upload path",
+        )
+    return target
 
 
 class ImportJobFromUploadJobRequest(BaseModel):
@@ -42,15 +83,125 @@ class ImportJobFromUploadJobRequest(BaseModel):
     allow_duplicate: bool = False
 
 
-def _infer_table_code_from_filename(filename: str) -> str | None:
-    # Heuristic: prefer leading token before '_' (e.g., P1_2503033_01.csv)
-    name = (filename or "").strip()
-    if not name:
-        return None
-    token = Path(name).name.split("_", 1)[0].upper()
-    if token in {"P1", "P2", "P3"}:
-        return token
-    return None
+def compute_header_fingerprint(headers: list[str]) -> str:
+    canonical = "|".join(sorted(h.strip() for h in headers if h and h.strip()))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+async def _read_csv_headers(file: UploadFile) -> list[str]:
+    content = await file.read()
+    await file.seek(0)
+    for encoding in ("utf-8-sig", "cp950"):
+        try:
+            text_content = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text_content = content.decode("utf-8-sig", errors="ignore")
+    reader = csv.reader(io.StringIO(text_content))
+    return next(reader, [])
+
+
+def _read_csv_headers_from_bytes(content: bytes) -> list[str]:
+    for encoding in ("utf-8-sig", "cp950"):
+        try:
+            text_content = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text_content = content.decode("utf-8-sig", errors="ignore")
+    reader = csv.reader(io.StringIO(text_content))
+    return next(reader, [])
+
+
+async def _resolve_table_registry(
+    db: AsyncSession,
+    table_code: str | None,
+    files: list[UploadFile],
+) -> tuple[TableRegistry, str]:
+    requested = (table_code or "").strip()
+    if requested and requested.upper() != "UNKNOWN":
+        normalized = requested
+        result = await db.execute(
+            select(TableRegistry).where(TableRegistry.table_code == normalized)
+        )
+        table_registry = result.scalar_one_or_none()
+        if table_registry:
+            return table_registry, normalized
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid table code: {normalized}",
+        )
+
+    csv_files = [
+        file for file in files
+        if Path(file.filename or "").suffix.lower() == ".csv"
+    ]
+    if not csv_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="table_code is required for non-CSV imports",
+        )
+
+    headers = await _read_csv_headers(csv_files[0])
+    fingerprint = compute_header_fingerprint(headers)
+    result = await db.execute(
+        select(TableRegistry)
+        .join(SchemaVersion, SchemaVersion.table_id == TableRegistry.id)
+        .where(SchemaVersion.header_fingerprint == fingerprint)
+    )
+    table_registry = result.scalar_one_or_none()
+    if table_registry:
+        return table_registry, table_registry.table_code
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unable to resolve table_code from CSV header fingerprint: {fingerprint}",
+    )
+
+
+async def _resolve_table_registry_from_bytes(
+    db: AsyncSession,
+    table_code: str | None,
+    filename: str,
+    content: bytes,
+) -> tuple[TableRegistry, str]:
+    requested = (table_code or "").strip()
+    if requested and requested.upper() != "UNKNOWN":
+        normalized = requested
+        result = await db.execute(
+            select(TableRegistry).where(TableRegistry.table_code == normalized)
+        )
+        table_registry = result.scalar_one_or_none()
+        if table_registry:
+            return table_registry, normalized
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid table code: {normalized}",
+        )
+
+    if Path(filename or "").suffix.lower() != ".csv":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="table_code is required for non-CSV imports",
+        )
+
+    fingerprint = compute_header_fingerprint(_read_csv_headers_from_bytes(content))
+    result = await db.execute(
+        select(TableRegistry)
+        .join(SchemaVersion, SchemaVersion.table_id == TableRegistry.id)
+        .where(SchemaVersion.header_fingerprint == fingerprint)
+    )
+    table_registry = result.scalar_one_or_none()
+    if table_registry:
+        return table_registry, table_registry.table_code
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unable to resolve table_code from CSV header fingerprint: {fingerprint}",
+    )
 
 
 async def _mark_job_failed(job_id: uuid.UUID, error: Exception | str) -> None:
@@ -137,7 +288,7 @@ async def process_import_job_background(
 async def create_import_job(
     request: Request,
     background_tasks: BackgroundTasks,
-    table_code: str = Form(..., description="Target table code (e.g., 'P1', 'P2')"),
+    table_code: str | None = Form(None, description="Target table code or UNKNOWN for header auto-detection"),
     allow_duplicate: bool = Form(
         False, description="Allow importing the same file content multiple times"
     ),
@@ -148,19 +299,22 @@ async def create_import_job(
     """
     Create a new import job with uploaded files.
     """
-    # 1. Validate Table Code
-    stmt = select(TableRegistry).where(TableRegistry.table_code == table_code)
-    result = await db.execute(stmt)
-    table_registry = result.scalar_one_or_none()
-
-    if not table_registry:
+    if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid table code: {table_code}",
+            detail="At least one file is required",
+        )
+    if len(files) > MAX_IMPORT_FILES_PER_JOB:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail=f"Too many files. Maximum: {MAX_IMPORT_FILES_PER_JOB}",
         )
 
+    safe_filenames = [_safe_upload_filename(f.filename) for f in files]
+    table_registry, resolved_table_code = await _resolve_table_registry(db, table_code, files)
+
     # 1.5 Check Mixed Batch (Extensions)
-    exts = {Path(f.filename).suffix.lower() for f in files}
+    exts = {Path(name).suffix.lower() for name in safe_filenames}
     if len(exts) > 1:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -198,9 +352,10 @@ async def create_import_job(
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     try:
-        for file in files:
+        total_upload_size = 0
+        for file, safe_filename in zip(files, safe_filenames, strict=True):
             # Calculate Hash & Save
-            file_path = upload_dir / file.filename
+            file_path = _safe_child_path(upload_dir, safe_filename)
 
             sha256_hash = hashlib.sha256()
             file_size = 0
@@ -208,9 +363,28 @@ async def create_import_job(
             # Write to disk and hash
             with open(file_path, "wb") as buffer:
                 while content := await file.read(1024 * 1024):  # 1MB chunks
+                    projected_file_size = file_size + len(content)
+                    projected_total_size = total_upload_size + len(content)
+                    if projected_file_size > settings.max_upload_size_bytes:
+                        raise HTTPException(
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail=(
+                                f"File exceeds maximum size "
+                                f"({settings.max_upload_size_mb}MB): {safe_filename}"
+                            ),
+                        )
+                    if projected_total_size > (
+                        settings.max_upload_size_bytes * MAX_IMPORT_FILES_PER_JOB
+                    ):
+                        raise HTTPException(
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail="Import batch exceeds maximum total size",
+                        )
+
                     sha256_hash.update(content)
                     buffer.write(content)
-                    file_size += len(content)
+                    file_size = projected_file_size
+                    total_upload_size = projected_total_size
 
             file_hash = sha256_hash.hexdigest()
 
@@ -234,7 +408,7 @@ async def create_import_job(
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail={
                         "detail": "File content is duplicate (same SHA-256).",
-                        "filename": file.filename,
+                            "filename": safe_filename,
                         "file_hash": file_hash,
                         "duplicate_of": {
                             "job_id": str(dup_job.id),
@@ -251,7 +425,7 @@ async def create_import_job(
                 job_id=job_id,
                 tenant_id=current_tenant.id,
                 table_id=table_registry.id,
-                filename=file.filename,
+                filename=safe_filename,
                 file_hash=file_hash,
                 storage_path=str(file_path),
                 file_size=file_size,
@@ -284,12 +458,19 @@ async def create_import_job(
         metadata={
             "job_id": str(job.id),
             "batch_id": job.batch_id,
-            "table_code": table_code,
+            "table_code": resolved_table_code,
             "total_files": len(files),
             "allow_duplicate": bool(allow_duplicate),
         },
         client_host=request.client.host if request.client else None,
         user_agent=request.headers.get("user-agent"),
+    )
+
+    _ip = request.client.host if request.client else "unknown"
+    report_user_action(
+        action="import_job_create",
+        state="success",
+        describe=f"job={job.id} table={resolved_table_code} files={len(files)} tenant={current_tenant.code} ip={_ip}",
     )
 
     # Eager load files for response
@@ -299,7 +480,7 @@ async def create_import_job(
 
     stmt = (
         select(ImportJob)
-        .where(ImportJob.id == job_id)
+        .where(ImportJob.id == job_id, ImportJob.tenant_id == current_tenant.id)
         .execution_options(populate_existing=True)
     )
     # We rely on lazy loading working if we access it before session close,
@@ -327,7 +508,9 @@ async def create_import_job(
                 "Skip background processing: async_session_factory not initialized"
             )
 
-    return job
+    response = ImportJobRead.model_validate(job)
+    response.table_code = resolved_table_code
+    return response
 
 
 @router.post(
@@ -367,26 +550,13 @@ async def create_import_job_from_upload_job(
             detail="Upload job file_content is empty",
         )
 
-    # 2) Determine table_code
-    table_code = (
-        payload.table_code or ""
-    ).strip().upper() or _infer_table_code_from_filename(upload_job.filename)
-    if not table_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="table_code is required (cannot infer from filename)",
-        )
-
-    # 3) Validate TableRegistry
-    result = await db.execute(
-        select(TableRegistry).where(TableRegistry.table_code == table_code)
+    content = bytes(upload_job.file_content)
+    table_registry, table_code = await _resolve_table_registry_from_bytes(
+        db,
+        payload.table_code,
+        upload_job.filename,
+        content,
     )
-    table_registry = result.scalar_one_or_none()
-    if not table_registry:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid table code: {table_code}",
-        )
 
     # 4) Create ImportJob + ImportFile
     job_id = uuid.uuid4()
@@ -420,7 +590,6 @@ async def create_import_job_from_upload_job(
     try:
         filename = Path(upload_job.filename).name
         file_path = upload_dir / filename
-        content = bytes(upload_job.file_content)
         file_hash = hashlib.sha256(content).hexdigest()
         file_size = len(content)
         file_path.write_bytes(content)
@@ -475,6 +644,13 @@ async def create_import_job_from_upload_job(
         user_agent=request.headers.get("user-agent"),
     )
 
+    _ip = request.client.host if request.client else "unknown"
+    report_user_action(
+        action="import_job_create",
+        state="success",
+        describe=f"job={job_id} table={table_code} tenant={current_tenant.code} ip={_ip}",
+    )
+
     from sqlalchemy.orm import selectinload
 
     stmt = (
@@ -519,7 +695,13 @@ async def get_import_job(
             status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found"
         )
 
-    return job
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    table_code_str = tr_result.scalar_one_or_none()
+    response = ImportJobRead.model_validate(job)
+    response.table_code = table_code_str
+    return response
 
 
 @router.get("/jobs/{job_id}/errors", response_model=list[ImportJobErrorRow])
@@ -626,6 +808,13 @@ async def commit_import_job(
             user_agent=request.headers.get("user-agent"),
         )
 
+        _ip = request.client.host if request.client else "unknown"
+        report_user_action(
+            action="import_job_commit",
+            state="requested",
+            describe=f"job={job.id} tenant={current_tenant.code} ip={_ip}",
+        )
+
     # In tests we need deterministic behavior; commit synchronously.
     if settings.environment.lower() == "testing":
         service = ImportService(db)
@@ -656,7 +845,12 @@ async def commit_import_job(
     result = await db.execute(stmt)
     job = result.scalar_one()
 
-    return job
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    response = ImportJobRead.model_validate(job)
+    response.table_code = tr_result.scalar_one_or_none()
+    return response
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=ImportJobRead)
@@ -711,6 +905,13 @@ async def cancel_import_job(
             },
             client_host=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
+        )
+
+        _ip = request.client.host if request.client else "unknown"
+        report_user_action(
+            action="import_job_cancel",
+            state="success",
+            describe=f"job={job.id} tenant={current_tenant.code} ip={_ip}",
         )
 
     from sqlalchemy.orm import selectinload
