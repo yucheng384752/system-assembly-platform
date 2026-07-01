@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "logs-ops-kit",
+    "displayName":  "日誌與維運",
+    "installOrder":  90,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

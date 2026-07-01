@@ -4,8 +4,7 @@ from enum import Enum
 from typing import Any
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import ENUM, UUID
-from app.core.db_types import JsonBColumn
+from sqlalchemy.dialects.postgresql import ENUM, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -72,19 +71,19 @@ class PdfConversionJob(Base):
     )
 
     output_paths: Mapped[list[str] | None] = mapped_column(
-        JsonBColumn(),
+        JSONB,
         nullable=True,
         comment="Converted output paths (e.g. multiple csv files extracted from zip)",
     )
 
     ingested_upload_jobs: Mapped[list[dict[str, Any]] | None] = mapped_column(
-        JsonBColumn(),
+        JSONB,
         nullable=True,
         comment="Upload jobs created from converted outputs (for idempotency)",
     )
 
     error_summary: Mapped[dict[str, Any] | None] = mapped_column(
-        JsonBColumn(),
+        JSONB,
         nullable=True,
         comment="Error summary / diagnostics",
     )

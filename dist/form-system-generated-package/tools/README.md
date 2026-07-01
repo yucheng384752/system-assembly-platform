@@ -51,7 +51,10 @@ Future tools for this project:
     `dist/generated-system.zip`.
 
 14. `test-all.ps1`
-    Run the full local validation suite.
+    Run the full local validation suite. By default this requires the generated
+    frontend production bundle. Use `-SkipFrontendBuild` for offline or
+    sandboxed validation when npm install/build is expected to be unavailable or
+    too slow; the generated-system structural checks still run.
 
 The current version intentionally starts with specs because the target system
 needs confirmed module boundaries before moving code.

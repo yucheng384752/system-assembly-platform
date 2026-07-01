@@ -15,7 +15,8 @@
                         "analytics-kit",
                         "station-admin-kit",
                         "audit-edit-kit",
-                        "logs-ops-kit"
+                        "logs-ops-kit",
+                        "generic-forms-kit"
                     ],
     "selectedSubfeatures":  {
                                 "platform-core-kit":  [
@@ -47,7 +48,10 @@
                                                    ],
                                 "logs-ops-kit":  [
 
-                                                 ]
+                                                 ],
+                                "generic-forms-kit":  [
+
+                                                      ]
                             },
     "selectedSubfeatureOptions":  {
 

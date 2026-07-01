@@ -246,6 +246,27 @@ button {
   pointer-events: auto;
 }
 
+.card-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.card-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-2);
+  transition: background 280ms ease, transform 280ms ease;
+}
+
+.database-layout:not(.is-ready) .card-dot:first-child,
+.database-layout.is-ready .card-dot:last-child {
+  background: var(--teal);
+  transform: scale(1.25);
+}
+
 .panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -3391,4 +3412,216 @@ select:focus {
 }
 .log-table tr:last-child td {
   border-bottom: none;
+}
+
+.reasoning-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.reasoning-status {
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.reasoning-view {
+  min-height: 320px;
+}
+
+.reasoning-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.reasoning-panel {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: white;
+  padding: 16px;
+}
+
+.reasoning-span-2 {
+  grid-column: span 2;
+}
+
+.reasoning-panel h3,
+.reasoning-panel h4 {
+  margin: 0 0 12px;
+  color: var(--ink-1);
+}
+
+.reasoning-panel h4 {
+  font-size: 13px;
+}
+
+.reasoning-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.reasoning-metric {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px;
+  background: var(--surface-2);
+}
+
+.reasoning-metric span {
+  display: block;
+  color: var(--ink-3);
+  font-size: 12px;
+}
+
+.reasoning-metric strong {
+  display: block;
+  color: var(--teal);
+  font-size: 24px;
+  margin-top: 4px;
+}
+
+.reasoning-pipeline {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(120px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.reasoning-step {
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  padding: 12px;
+  background: var(--surface-2);
+}
+
+.reasoning-step > span {
+  display: inline-flex;
+  width: 26px;
+  height: 26px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--ink-2);
+  font-size: 11px;
+  font-weight: 700;
+  margin-bottom: 8px;
+}
+
+.reasoning-step.is-ok {
+  border-color: color-mix(in srgb, var(--teal) 35%, var(--line));
+}
+
+.reasoning-step.is-warn {
+  border-color: var(--amber);
+  background: #fffbeb;
+}
+
+.reasoning-step strong {
+  display: block;
+  color: var(--ink-1);
+  font-size: 13px;
+}
+
+.reasoning-step p {
+  margin: 4px 0 0;
+  color: var(--ink-3);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.reasoning-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.reasoning-tag {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 12px;
+  padding: 4px 9px;
+}
+
+.reasoning-list {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 12px;
+  line-height: 1.8;
+}
+
+.reasoning-list code,
+.reasoning-edge code {
+  color: var(--teal);
+}
+
+.reasoning-list span {
+  display: block;
+  color: var(--ink-4);
+}
+
+.reasoning-edge {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.reasoning-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.reasoning-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.reasoning-table th,
+.reasoning-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.reasoning-table th {
+  background: var(--surface-3);
+  color: var(--ink-2);
+}
+
+.reasoning-warning {
+  border: 1px solid var(--amber);
+  border-radius: var(--r);
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 12px;
+  padding: 10px 12px;
+}
+
+.reasoning-warning.is-ok {
+  border-color: color-mix(in srgb, var(--teal) 35%, var(--line));
+  background: color-mix(in srgb, var(--teal) 8%, white);
+  color: var(--teal);
+}
+
+@media (max-width: 900px) {
+  .reasoning-grid,
+  .reasoning-columns,
+  .reasoning-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .reasoning-span-2 {
+    grid-column: auto;
+  }
 }

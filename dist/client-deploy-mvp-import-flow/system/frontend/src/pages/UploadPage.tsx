@@ -51,7 +51,7 @@ export function UploadPage() {
       fileList,
       existingFiles: files,
       confirmLikelyDuplicate: (file) =>
-        window.confirm("\u5075\u6e2c\u5230\u7591\u4f3c\u91cd\u8907\u6a94\u6848\uff1a" + file.name + "\n\u662f\u5426\u4ecd\u8981\u52a0\u5165\u4e0a\u50b3\u6e05\u55ae\uff1f"),
+        window.confirm(t('upload.confirm.likelyDuplicate').replace('{{fileName}}', file.name)),
     });
 
     showFileAddResultToasts({

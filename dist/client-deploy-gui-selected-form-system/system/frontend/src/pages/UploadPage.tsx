@@ -56,7 +56,7 @@ export function UploadPage() {
       existingFiles: files,
       setFiles,
       confirmLikelyDuplicate: (file) =>
-        window.confirm("\u5075\u6e2c\u5230\u7591\u4f3c\u91cd\u8907\u6a94\u6848\uff1a" + file.name + "\n\u662f\u5426\u4ecd\u8981\u52a0\u5165\u4e0a\u50b3\u6e05\u55ae\uff1f"),
+        window.confirm(t('upload.confirm.likelyDuplicate').replace('{{fileName}}', file.name)),
       showToast,
       t,
       availableCodes: availableForms.map((f) => f.code),
@@ -270,7 +270,7 @@ export function UploadPage() {
             <div key={f.id}>
               {f.type === "UNKNOWN" && availableForms.length > 0 && (
                 <div style={{ padding: "6px 12px", background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: "6px", marginBottom: "4px", display: "flex", alignItems: "center", gap: "8px", fontSize: "13px" }}>
-                  <span style={{ color: "#92400e" }}>⚠ 未識別表單類型，請選擇：</span>
+                  <span style={{ color: "#92400e" }}>未識別表單類型，請選擇：</span>
                   <select
                     value=""
                     onChange={(e) => { if (e.target.value) handleSetFileTableCode(f.id, e.target.value); }}

@@ -1,27 +1,27 @@
 ﻿{
-    "generatedAt":  "2026-05-21T03:51:28",
-    "sourceRecipe":  "mvp-import-flow",
+    "generatedAt":  "2026-07-01T18:11:20",
+    "sourceRecipe":  "gui-selected-form-system",
     "resolvedKitOrder":  [
                              "platform-core-kit",
                              "tenant-auth-kit",
                              "station-data-link-kit",
                              "upload-validation-kit",
-                             "import-pipeline-kit"
+                             "import-pipeline-kit",
+                             "query-traceability-kit",
+                             "analytics-kit",
+                             "station-admin-kit",
+                             "audit-edit-kit",
+                             "logs-ops-kit"
                          ],
     "database":  {
-                     "selectedByUserIntent":  {
-                                                  "usageScale":  "team",
-                                                  "dataCriticality":  "production",
-                                                  "needsTenantIsolation":  true,
-                                                  "needsAnalytics":  false,
-                                                  "needsBackgroundJobs":  true
-                                              },
                      "engine":  "postgresql",
-                     "reasonForNonTechnicalUser":  "MVP 需要租戶隔離、檔案上傳、匯入工作與正式資料表，因此建議使用 PostgreSQL。"
+                     "connectionOwner":  "platform-core-kit",
+                     "autoGenerateConnection":  true
                  },
     "scripts":  [
                     "scripts\\check-prerequisites.ps1",
                     "scripts\\check-db.ps1",
+                    "scripts\\configure-env.ps1",
                     "scripts\\install.ps1",
                     "scripts\\migrate.ps1",
                     "scripts\\smoke-start.ps1",
@@ -33,5 +33,6 @@
     "dependencyManifest":  "dependency-manifest.json",
     "dependencyPlan":  "dependency-plan.json",
     "dbBootstrapPlan":  "db-bootstrap-plan.json",
+    "assemblyIr":  "assembly\\assembly-ir.json",
     "status":  "runnable-envelope"
 }

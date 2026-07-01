@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-05-21T03:51:28",
+    "generatedAt":  "2026-07-01T18:11:20",
     "sourcePlan":  "assembly\\db-plan\\db-assembly-plan.json",
     "engine":  "postgresql",
     "connectionOwner":  "platform-core-kit",
@@ -18,7 +18,1657 @@
                      "Import available backend model modules.",
                      "Use Alembic when backend\\alembic.ini exists.",
                      "Use SQLAlchemy metadata create_all when Alembic is not present.",
+                     "Seed table_registry and schema_versions from db-bootstrap-plan.json when schema seed data exists.",
                      "Run scripts\\check-db.ps1 without -Connect for structural validation.",
                      "Run scripts\\check-db.ps1 -Connect to verify an actual database connection."
-                 ]
+                 ],
+    "schemaContract":  {
+                           "tables":  {
+                                          "tenants":  {
+                                                          "kitOwner":  "platform-core-kit",
+                                                          "contractStatus":  "canonical",
+                                                          "columns":  [
+                                                                          {
+                                                                              "name":  "id",
+                                                                              "type":  "UUID",
+                                                                              "nullable":  false,
+                                                                              "pk":  true,
+                                                                              "default":  "uuid4()"
+                                                                          },
+                                                                          {
+                                                                              "name":  "name",
+                                                                              "type":  "String(100)",
+                                                                              "nullable":  false,
+                                                                              "unique":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "code",
+                                                                              "type":  "String(50)",
+                                                                              "nullable":  false,
+                                                                              "unique":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "is_active",
+                                                                              "type":  "Boolean",
+                                                                              "nullable":  false,
+                                                                              "default":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "is_default",
+                                                                              "type":  "Boolean",
+                                                                              "nullable":  false,
+                                                                              "default":  false
+                                                                          },
+                                                                          {
+                                                                              "name":  "created_at",
+                                                                              "type":  "DateTime(tz)",
+                                                                              "nullable":  false,
+                                                                              "default":  "now()"
+                                                                          },
+                                                                          {
+                                                                              "name":  "updated_at",
+                                                                              "type":  "DateTime(tz)",
+                                                                              "nullable":  false,
+                                                                              "default":  "now()",
+                                                                              "onupdate":  "now()"
+                                                                          }
+                                                                      ]
+                                                      },
+                                          "tenant_users":  {
+                                                               "kitOwner":  "tenant-auth-kit",
+                                                               "contractStatus":  "canonical",
+                                                               "columns":  [
+                                                                               {
+                                                                                   "name":  "id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "pk":  true,
+                                                                                   "default":  "uuid4()"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "tenant_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "tenants.id",
+                                                                                   "index":  true
+                                                                               },
+                                                                               {
+                                                                                   "name":  "username",
+                                                                                   "type":  "String(100)",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "password_hash",
+                                                                                   "type":  "String(255)",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "must_change_password",
+                                                                                   "type":  "Boolean",
+                                                                                   "nullable":  false,
+                                                                                   "default":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "role",
+                                                                                   "type":  "String(30)",
+                                                                                   "nullable":  false,
+                                                                                   "default":  "user"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "is_active",
+                                                                                   "type":  "Boolean",
+                                                                                   "nullable":  false,
+                                                                                   "default":  true
+                                                                               },
+                                                                               {
+                                                                                   "name":  "created_at",
+                                                                                   "type":  "DateTime(tz)",
+                                                                                   "nullable":  false,
+                                                                                   "default":  "now()"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "last_login_at",
+                                                                                   "type":  "DateTime(tz)",
+                                                                                   "nullable":  true
+                                                                               }
+                                                                           ],
+                                                               "constraints":  [
+                                                                                   {
+                                                                                       "type":  "unique",
+                                                                                       "name":  "uq_tenant_users_tenant_username",
+                                                                                       "columns":  [
+                                                                                                       "tenant_id",
+                                                                                                       "username"
+                                                                                                   ]
+                                                                                   }
+                                                                               ]
+                                                           },
+                                          "tenant_api_keys":  {
+                                                                  "kitOwner":  "tenant-auth-kit",
+                                                                  "contractStatus":  "canonical",
+                                                                  "columns":  [
+                                                                                  {
+                                                                                      "name":  "id",
+                                                                                      "type":  "UUID",
+                                                                                      "nullable":  false,
+                                                                                      "pk":  true,
+                                                                                      "default":  "uuid4()"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "tenant_id",
+                                                                                      "type":  "UUID",
+                                                                                      "nullable":  false,
+                                                                                      "fk":  "tenants.id",
+                                                                                      "index":  true
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "user_id",
+                                                                                      "type":  "UUID",
+                                                                                      "nullable":  true,
+                                                                                      "fk":  "tenant_users.id",
+                                                                                      "index":  true
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "key_hash",
+                                                                                      "type":  "String(64)",
+                                                                                      "nullable":  false,
+                                                                                      "unique":  true,
+                                                                                      "index":  true,
+                                                                                      "note":  "HMAC-SHA256 hex digest"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "label",
+                                                                                      "type":  "String(100)",
+                                                                                      "nullable":  false,
+                                                                                      "default":  "default"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "is_active",
+                                                                                      "type":  "Boolean",
+                                                                                      "nullable":  false,
+                                                                                      "default":  true
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "created_at",
+                                                                                      "type":  "DateTime(tz)",
+                                                                                      "nullable":  false,
+                                                                                      "default":  "now()"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "last_used_at",
+                                                                                      "type":  "DateTime(tz)",
+                                                                                      "nullable":  true
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "revoked_at",
+                                                                                      "type":  "DateTime(tz)",
+                                                                                      "nullable":  true
+                                                                                  }
+                                                                              ]
+                                                              },
+                                          "table_registry":  {
+                                                                 "kitOwner":  "station-data-link-kit",
+                                                                 "contractStatus":  "canonical",
+                                                                 "columns":  [
+                                                                                 {
+                                                                                     "name":  "id",
+                                                                                     "type":  "UUID",
+                                                                                     "nullable":  false,
+                                                                                     "pk":  true,
+                                                                                     "default":  "uuid4()"
+                                                                                 },
+                                                                                 {
+                                                                                     "name":  "table_code",
+                                                                                     "type":  "String(50)",
+                                                                                     "nullable":  false,
+                                                                                     "unique":  true,
+                                                                                     "note":  "e.g. p1_records"
+                                                                                 },
+                                                                                 {
+                                                                                     "name":  "display_name",
+                                                                                     "type":  "String(100)",
+                                                                                     "nullable":  false
+                                                                                 },
+                                                                                 {
+                                                                                     "name":  "created_at",
+                                                                                     "type":  "DateTime(tz)",
+                                                                                     "nullable":  false,
+                                                                                     "default":  "now()"
+                                                                                 }
+                                                                             ]
+                                                             },
+                                          "schema_versions":  {
+                                                                  "kitOwner":  "station-data-link-kit",
+                                                                  "contractStatus":  "canonical",
+                                                                  "columns":  [
+                                                                                  {
+                                                                                      "name":  "id",
+                                                                                      "type":  "UUID",
+                                                                                      "nullable":  false,
+                                                                                      "pk":  true,
+                                                                                      "default":  "uuid4()"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "table_id",
+                                                                                      "type":  "UUID",
+                                                                                      "nullable":  false,
+                                                                                      "fk":  "table_registry.id"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "schema_hash",
+                                                                                      "type":  "String(64)",
+                                                                                      "nullable":  false,
+                                                                                      "note":  "SHA256 of schema_json"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "header_fingerprint",
+                                                                                      "type":  "String(64)",
+                                                                                      "nullable":  false,
+                                                                                      "note":  "hash of sorted headers"
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "schema_json",
+                                                                                      "type":  "JSON",
+                                                                                      "nullable":  false
+                                                                                  },
+                                                                                  {
+                                                                                      "name":  "created_at",
+                                                                                      "type":  "DateTime(tz)",
+                                                                                      "nullable":  false,
+                                                                                      "default":  "now()"
+                                                                                  }
+                                                                              ]
+                                                              },
+                                          "upload_jobs":  {
+                                                              "kitOwner":  "upload-validation-kit",
+                                                              "contractStatus":  "canonical",
+                                                              "columns":  [
+                                                                              {
+                                                                                  "name":  "id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  false,
+                                                                                  "pk":  true,
+                                                                                  "default":  "uuid4()"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "filename",
+                                                                                  "type":  "String(255)",
+                                                                                  "nullable":  false
+                                                                              },
+                                                                              {
+                                                                                  "name":  "file_content",
+                                                                                  "type":  "LargeBinary",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "created_at",
+                                                                                  "type":  "DateTime(tz)",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "now()"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "tenant_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "tenants.id",
+                                                                                  "index":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "actor_api_key_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "tenant_api_keys.id",
+                                                                                  "index":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "actor_label_snapshot",
+                                                                                  "type":  "String(100)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_changed_at",
+                                                                                  "type":  "DateTime(tz)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_kind",
+                                                                                  "type":  "String(20)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_api_key_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "tenant_api_keys.id",
+                                                                                  "index":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_label_snapshot",
+                                                                                  "type":  "String(100)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "status",
+                                                                                  "type":  "ENUM[PENDING,VALIDATED,IMPORTED]",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "PENDING"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "total_rows",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "valid_rows",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "invalid_rows",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "process_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  false,
+                                                                                  "unique":  true,
+                                                                                  "index":  true,
+                                                                                  "default":  "uuid4()"
+                                                                              }
+                                                                          ]
+                                                          },
+                                          "import_jobs":  {
+                                                              "kitOwner":  "import-pipeline-kit",
+                                                              "contractStatus":  "canonical",
+                                                              "columns":  [
+                                                                              {
+                                                                                  "name":  "id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  false,
+                                                                                  "pk":  true,
+                                                                                  "default":  "uuid4()"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "tenant_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  false,
+                                                                                  "fk":  "tenants.id"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "table_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  false,
+                                                                                  "fk":  "table_registry.id"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "schema_version_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "schema_versions.id"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "batch_id",
+                                                                                  "type":  "String(100)",
+                                                                                  "nullable":  false,
+                                                                                  "unique":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "status",
+                                                                                  "type":  "String(20)",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "UPLOADED"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "progress",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  false,
+                                                                                  "default":  0
+                                                                              },
+                                                                              {
+                                                                                  "name":  "total_files",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  false,
+                                                                                  "default":  0
+                                                                              },
+                                                                              {
+                                                                                  "name":  "total_rows",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  false,
+                                                                                  "default":  0
+                                                                              },
+                                                                              {
+                                                                                  "name":  "error_count",
+                                                                                  "type":  "Integer",
+                                                                                  "nullable":  false,
+                                                                                  "default":  0
+                                                                              },
+                                                                              {
+                                                                                  "name":  "error_summary",
+                                                                                  "type":  "JSON",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "{}"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "created_at",
+                                                                                  "type":  "DateTime(tz)",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "now()"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "updated_at",
+                                                                                  "type":  "DateTime(tz)",
+                                                                                  "nullable":  false,
+                                                                                  "default":  "now()",
+                                                                                  "onupdate":  "now()"
+                                                                              },
+                                                                              {
+                                                                                  "name":  "actor_api_key_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "tenant_api_keys.id",
+                                                                                  "index":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "actor_label_snapshot",
+                                                                                  "type":  "String(100)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_changed_at",
+                                                                                  "type":  "DateTime(tz)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_kind",
+                                                                                  "type":  "String(20)",
+                                                                                  "nullable":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_api_key_id",
+                                                                                  "type":  "UUID",
+                                                                                  "nullable":  true,
+                                                                                  "fk":  "tenant_api_keys.id",
+                                                                                  "index":  true
+                                                                              },
+                                                                              {
+                                                                                  "name":  "last_status_actor_label_snapshot",
+                                                                                  "type":  "String(100)",
+                                                                                  "nullable":  true
+                                                                              }
+                                                                          ]
+                                                          },
+                                          "import_files":  {
+                                                               "kitOwner":  "import-pipeline-kit",
+                                                               "contractStatus":  "canonical",
+                                                               "columns":  [
+                                                                               {
+                                                                                   "name":  "id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "pk":  true,
+                                                                                   "default":  "uuid4()"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "job_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "import_jobs.id",
+                                                                                   "ondelete":  "CASCADE"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "tenant_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "tenants.id"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "table_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "table_registry.id"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "filename",
+                                                                                   "type":  "String(255)",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "file_hash",
+                                                                                   "type":  "String(64)",
+                                                                                   "nullable":  false,
+                                                                                   "note":  "SHA-256"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "storage_path",
+                                                                                   "type":  "String(512)",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "file_size",
+                                                                                   "type":  "Integer",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "row_count",
+                                                                                   "type":  "Integer",
+                                                                                   "nullable":  false,
+                                                                                   "default":  0
+                                                                               },
+                                                                               {
+                                                                                   "name":  "created_at",
+                                                                                   "type":  "DateTime(tz)",
+                                                                                   "nullable":  false,
+                                                                                   "default":  "now()"
+                                                                               }
+                                                                           ]
+                                                           },
+                                          "staging_rows":  {
+                                                               "kitOwner":  "import-pipeline-kit",
+                                                               "contractStatus":  "canonical",
+                                                               "columns":  [
+                                                                               {
+                                                                                   "name":  "id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "pk":  true,
+                                                                                   "default":  "uuid4()"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "job_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "import_jobs.id",
+                                                                                   "ondelete":  "CASCADE",
+                                                                                   "index":  true
+                                                                               },
+                                                                               {
+                                                                                   "name":  "file_id",
+                                                                                   "type":  "UUID",
+                                                                                   "nullable":  false,
+                                                                                   "fk":  "import_files.id",
+                                                                                   "ondelete":  "CASCADE"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "row_index",
+                                                                                   "type":  "Integer",
+                                                                                   "nullable":  false,
+                                                                                   "note":  "1-based row number in source file"
+                                                                               },
+                                                                               {
+                                                                                   "name":  "parsed_json",
+                                                                                   "type":  "JSON",
+                                                                                   "nullable":  false
+                                                                               },
+                                                                               {
+                                                                                   "name":  "errors_json",
+                                                                                   "type":  "JSON",
+                                                                                   "nullable":  true
+                                                                               },
+                                                                               {
+                                                                                   "name":  "is_valid",
+                                                                                   "type":  "Boolean",
+                                                                                   "nullable":  false,
+                                                                                   "default":  true,
+                                                                                   "index":  true
+                                                                               }
+                                                                           ]
+                                                           },
+                                          "row_edits":  {
+                                                            "kitOwner":  "audit-edit-kit",
+                                                            "contractStatus":  "canonical",
+                                                            "columns":  [
+                                                                            {
+                                                                                "name":  "id",
+                                                                                "type":  "UUID",
+                                                                                "nullable":  false,
+                                                                                "pk":  true,
+                                                                                "default":  "uuid4()"
+                                                                            },
+                                                                            {
+                                                                                "name":  "tenant_id",
+                                                                                "type":  "UUID",
+                                                                                "nullable":  false,
+                                                                                "fk":  "tenants.id",
+                                                                                "index":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "table_code",
+                                                                                "type":  "String(50)",
+                                                                                "nullable":  false,
+                                                                                "index":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "record_id",
+                                                                                "type":  "UUID",
+                                                                                "nullable":  false,
+                                                                                "index":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "reason_id",
+                                                                                "type":  "String(100)",
+                                                                                "nullable":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "reason_text",
+                                                                                "type":  "String(255)",
+                                                                                "nullable":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "before_json",
+                                                                                "type":  "JSON",
+                                                                                "nullable":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "after_json",
+                                                                                "type":  "JSON",
+                                                                                "nullable":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "created_by",
+                                                                                "type":  "String(100)",
+                                                                                "nullable":  true
+                                                                            },
+                                                                            {
+                                                                                "name":  "created_at",
+                                                                                "type":  "DateTime(tz)",
+                                                                                "nullable":  false,
+                                                                                "default":  "now()"
+                                                                            }
+                                                                        ]
+                                                        },
+                                          "records":  {
+                                                          "kitOwner":  "upload-validation-kit",
+                                                          "contractStatus":  "stub",
+                                                          "note":  "stub generated by assemble-system.ps1; exact columns are domain-specific",
+                                                          "columns":  [
+                                                                          {
+                                                                              "name":  "id",
+                                                                              "type":  "UUID",
+                                                                              "nullable":  false,
+                                                                              "pk":  true,
+                                                                              "default":  "uuid4()"
+                                                                          },
+                                                                          {
+                                                                              "name":  "lot_no",
+                                                                              "type":  "String(20)",
+                                                                              "nullable":  false,
+                                                                              "index":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "data_type",
+                                                                              "type":  "ENUM[P1,P2,P3]",
+                                                                              "nullable":  false
+                                                                          },
+                                                                          {
+                                                                              "name":  "production_date",
+                                                                              "type":  "Date",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "additional_data",
+                                                                              "type":  "JSON",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "machine_no",
+                                                                              "type":  "String(50)",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "mold_no",
+                                                                              "type":  "String(50)",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "production_lot",
+                                                                              "type":  "Integer",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "product_name",
+                                                                              "type":  "String(200)",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "quantity",
+                                                                              "type":  "Integer",
+                                                                              "nullable":  true
+                                                                          },
+                                                                          {
+                                                                              "name":  "notes",
+                                                                              "type":  "String(1000)",
+                                                                              "nullable":  true
+                                                                          }
+                                                                      ]
+                                                      },
+                                          "p2_items":  {
+                                                           "kitOwner":  "upload-validation-kit",
+                                                           "contractStatus":  "stub",
+                                                           "note":  "stub generated by assemble-system.ps1",
+                                                           "columns":  [
+                                                                           {
+                                                                               "name":  "id",
+                                                                               "type":  "UUID",
+                                                                               "nullable":  false,
+                                                                               "pk":  true,
+                                                                               "default":  "uuid4()"
+                                                                           },
+                                                                           {
+                                                                               "name":  "record_id",
+                                                                               "type":  "UUID",
+                                                                               "nullable":  false,
+                                                                               "fk":  "records.id",
+                                                                               "ondelete":  "CASCADE",
+                                                                               "index":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "winder_number",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "sheet_width",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness1",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness2",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness3",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness4",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness5",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness6",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "thickness7",
+                                                                               "type":  "Float",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "appearance",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "rough_edge",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "slitting_result",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "row_data",
+                                                                               "type":  "JSON",
+                                                                               "nullable":  true
+                                                                           }
+                                                                       ]
+                                                       },
+                                          "p3_items":  {
+                                                           "kitOwner":  "import-pipeline-kit",
+                                                           "contractStatus":  "stub",
+                                                           "note":  "stub generated by assemble-system.ps1",
+                                                           "columns":  [
+                                                                           {
+                                                                               "name":  "id",
+                                                                               "type":  "UUID",
+                                                                               "nullable":  false,
+                                                                               "pk":  true,
+                                                                               "default":  "uuid4()"
+                                                                           },
+                                                                           {
+                                                                               "name":  "record_id",
+                                                                               "type":  "UUID",
+                                                                               "nullable":  false,
+                                                                               "fk":  "records.id",
+                                                                               "ondelete":  "CASCADE",
+                                                                               "index":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "product_id",
+                                                                               "type":  "String(100)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "lot_no",
+                                                                               "type":  "String(20)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "production_lot",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "production_date",
+                                                                               "type":  "Date",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "machine_no",
+                                                                               "type":  "String(50)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "mold_no",
+                                                                               "type":  "String(50)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "specification",
+                                                                               "type":  "String(200)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "bottom_tape_lot",
+                                                                               "type":  "String(100)",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "row_no",
+                                                                               "type":  "Integer",
+                                                                               "nullable":  true
+                                                                           },
+                                                                           {
+                                                                               "name":  "row_data",
+                                                                               "type":  "JSON",
+                                                                               "nullable":  true
+                                                                           }
+                                                                       ],
+                                                           "constraints":  [
+                                                                               {
+                                                                                   "type":  "unique",
+                                                                                   "name":  "uq_p3_item_record_product",
+                                                                                   "columns":  [
+                                                                                                   "record_id",
+                                                                                                   "product_id"
+                                                                                               ]
+                                                                               }
+                                                                           ]
+                                                       }
+                                      },
+                           "relationships":  [
+                                                 {
+                                                     "from":  "tenants.id",
+                                                     "to":  "generic_records.tenant_id",
+                                                     "type":  "1:N",
+                                                     "enforcement":  "foreign-key"
+                                                 },
+                                                 {
+                                                     "from":  "form_definitions.table_code",
+                                                     "to":  "generic_records.form_code",
+                                                     "type":  "1:N",
+                                                     "enforcement":  "logical"
+                                                 },
+                                                 {
+                                                     "from":  "schema_versions.id",
+                                                     "to":  "generic_records.schema_version_id",
+                                                     "type":  "1:N",
+                                                     "enforcement":  "foreign-key"
+                                                 },
+                                                 {
+                                                     "from":  "entry.lot_no",
+                                                     "to":  "inspection.lot_no",
+                                                     "type":  "traceability",
+                                                     "enforcement":  "logical"
+                                                 },
+                                                 {
+                                                     "from":  "material.material_code",
+                                                     "to":  "production.material_code",
+                                                     "type":  "traceability",
+                                                     "enforcement":  "logical"
+                                                 },
+                                                 {
+                                                     "from":  "production.production_batch_no",
+                                                     "to":  "quality.production_batch_no",
+                                                     "type":  "traceability",
+                                                     "enforcement":  "logical"
+                                                 }
+                                             ],
+                           "indexes":  [
+                                           {
+                                               "name":  "ix_generic_records_tenant_form_code",
+                                               "target":  "generic_records",
+                                               "columns":  [
+                                                               "tenant_id",
+                                                               "form_code"
+                                                           ]
+                                           },
+                                           {
+                                               "name":  "ix_generic_records_tenant_lot_no",
+                                               "target":  "generic_records",
+                                               "columns":  [
+                                                               "tenant_id",
+                                                               "lot_no"
+                                                           ]
+                                           },
+                                           {
+                                               "name":  "ix_generic_records_tenant_record_date",
+                                               "target":  "generic_records",
+                                               "columns":  [
+                                                               "tenant_id",
+                                                               "record_date"
+                                                           ]
+                                           },
+                                           {
+                                               "name":  "ix_generic_records_data_gin",
+                                               "target":  "generic_records",
+                                               "columns":  [
+                                                               "data"
+                                                           ],
+                                               "using":  "gin"
+                                           }
+                                       ],
+                           "schemaVersions":  [
+                                                  {
+                                                      "formCode":  "daihui_entry",
+                                                      "displayName":  "入庫單",
+                                                      "version":  1,
+                                                      "schemaHash":  "23aaed15acd97c5888880c49683bd3308decd12fe1ae63e24ce110a2b3c779bf",
+                                                      "headerFingerprint":  "158c147b072fb296e7253ea1cf06a44217f030c6c03bcbe2b508eaac44ab6b18",
+                                                      "schemaJson":  {
+                                                                         "formCode":  "daihui_entry",
+                                                                         "displayName":  "入庫單",
+                                                                         "strategy":  "hybrid-generic",
+                                                                         "sampleScope":  "partial",
+                                                                         "fields":  [
+                                                                                        {
+                                                                                            "sourceName":  "表單名稱",
+                                                                                            "fieldKey":  "form_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "form_name"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "入庫日期",
+                                                                                            "fieldKey":  "entry_date",
+                                                                                            "type":  "Date",
+                                                                                            "role":  "date"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "規格",
+                                                                                            "fieldKey":  "specification",
+                                                                                            "type":  "String",
+                                                                                            "role":  "product"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "批號",
+                                                                                            "fieldKey":  "lot_no",
+                                                                                            "type":  "String",
+                                                                                            "role":  "lot"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "數量",
+                                                                                            "fieldKey":  "quantity",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "quantity"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "總重量",
+                                                                                            "fieldKey":  "total_weight",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "weight"
+                                                                                        }
+                                                                                    ],
+                                                                         "mappings":  {
+                                                                                          "dateColumn":  "入庫日期",
+                                                                                          "lotColumn":  "批號",
+                                                                                          "materialColumn":  null,
+                                                                                          "productColumn":  "規格",
+                                                                                          "quantityColumn":  "數量",
+                                                                                          "weightColumn":  "總重量",
+                                                                                          "qualityColumn":  null
+                                                                                      }
+                                                                     }
+                                                  },
+                                                  {
+                                                      "formCode":  "daihui_inspection",
+                                                      "displayName":  "錫棒製程檢查表",
+                                                      "version":  1,
+                                                      "schemaHash":  "48fe0b963a268be91169ccb8f5dbfbeb1917c7ce97025aff3e2a75a773c862a1",
+                                                      "headerFingerprint":  "1c0fcbd2a81bc9e227c4048817db906fdf8f176082593b9cf33994d78abfbdd5",
+                                                      "schemaJson":  {
+                                                                         "formCode":  "daihui_inspection",
+                                                                         "displayName":  "錫棒製程檢查表",
+                                                                         "strategy":  "hybrid-generic",
+                                                                         "sampleScope":  "partial",
+                                                                         "fields":  [
+                                                                                        {
+                                                                                            "sourceName":  "表單名稱",
+                                                                                            "fieldKey":  "form_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "form_name"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "品名",
+                                                                                            "fieldKey":  "product_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "product"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "製造日期",
+                                                                                            "fieldKey":  "manufactured_date",
+                                                                                            "type":  "Date",
+                                                                                            "role":  "date"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "批號",
+                                                                                            "fieldKey":  "lot_no",
+                                                                                            "type":  "String",
+                                                                                            "role":  "lot"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "重量_實測值",
+                                                                                            "fieldKey":  "measured_weight",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "weight"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "鑄模溫度_實測值",
+                                                                                            "fieldKey":  "measured_casting_temperature",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "measurement"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "品質判定",
+                                                                                            "fieldKey":  "quality_result",
+                                                                                            "type":  "String",
+                                                                                            "role":  "quality_result"
+                                                                                        }
+                                                                                    ],
+                                                                         "mappings":  {
+                                                                                          "dateColumn":  "製造日期",
+                                                                                          "lotColumn":  "批號",
+                                                                                          "materialColumn":  null,
+                                                                                          "productColumn":  "品名",
+                                                                                          "quantityColumn":  null,
+                                                                                          "weightColumn":  "重量_實測值",
+                                                                                          "qualityColumn":  "品質判定"
+                                                                                      }
+                                                                     }
+                                                  },
+                                                  {
+                                                      "formCode":  "daihui_material",
+                                                      "displayName":  "領料退料單",
+                                                      "version":  1,
+                                                      "schemaHash":  "ff4a61f4c822ee16416be574134ffa53bac62f0790b6f436b73619b07f5d53ff",
+                                                      "headerFingerprint":  "2ae5201d2ea68f13dd0774feeaf3cff2f2533411fc9f9b8093c54a73d3b01b36",
+                                                      "schemaJson":  {
+                                                                         "formCode":  "daihui_material",
+                                                                         "displayName":  "領料退料單",
+                                                                         "strategy":  "hybrid-generic",
+                                                                         "sampleScope":  "partial",
+                                                                         "fields":  [
+                                                                                        {
+                                                                                            "sourceName":  "表單名稱",
+                                                                                            "fieldKey":  "form_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "form_name"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "單據類型",
+                                                                                            "fieldKey":  "document_type",
+                                                                                            "type":  "String",
+                                                                                            "role":  "status"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "領料日期",
+                                                                                            "fieldKey":  "material_issue_date",
+                                                                                            "type":  "Date",
+                                                                                            "role":  "date"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "原料卡號",
+                                                                                            "fieldKey":  "material_code",
+                                                                                            "type":  "String",
+                                                                                            "role":  "material"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "領料重量",
+                                                                                            "fieldKey":  "issued_weight",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "weight"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "領料人",
+                                                                                            "fieldKey":  "issued_by",
+                                                                                            "type":  "String",
+                                                                                            "role":  "actor"
+                                                                                        }
+                                                                                    ],
+                                                                         "mappings":  {
+                                                                                          "dateColumn":  "領料日期",
+                                                                                          "lotColumn":  null,
+                                                                                          "materialColumn":  "原料卡號",
+                                                                                          "productColumn":  null,
+                                                                                          "quantityColumn":  null,
+                                                                                          "weightColumn":  "領料重量",
+                                                                                          "qualityColumn":  null
+                                                                                      }
+                                                                     }
+                                                  },
+                                                  {
+                                                      "formCode":  "daihui_production",
+                                                      "displayName":  "生產紀錄卡",
+                                                      "version":  1,
+                                                      "schemaHash":  "7369328eb6887025539c156e47194865114fce4ad04e80b6df663a935cd275a9",
+                                                      "headerFingerprint":  "504a14bd1b7b0be94e95adaf6480926b4d6e1443010ef434c1988e6fe69da75d",
+                                                      "schemaJson":  {
+                                                                         "formCode":  "daihui_production",
+                                                                         "displayName":  "生產紀錄卡",
+                                                                         "strategy":  "hybrid-generic",
+                                                                         "sampleScope":  "partial",
+                                                                         "fields":  [
+                                                                                        {
+                                                                                            "sourceName":  "表單名稱",
+                                                                                            "fieldKey":  "form_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "form_name"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "生產品名",
+                                                                                            "fieldKey":  "product_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "product"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "生產批號",
+                                                                                            "fieldKey":  "production_batch_no",
+                                                                                            "type":  "String",
+                                                                                            "role":  "lot"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "原料重量",
+                                                                                            "fieldKey":  "material_weight",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "weight"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "熔解溫度",
+                                                                                            "fieldKey":  "melting_temperature",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "measurement"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "產出數量",
+                                                                                            "fieldKey":  "output_quantity",
+                                                                                            "type":  "Decimal",
+                                                                                            "role":  "quantity"
+                                                                                        }
+                                                                                    ],
+                                                                         "mappings":  {
+                                                                                          "dateColumn":  null,
+                                                                                          "lotColumn":  "生產批號",
+                                                                                          "materialColumn":  null,
+                                                                                          "productColumn":  "生產品名",
+                                                                                          "quantityColumn":  "產出數量",
+                                                                                          "weightColumn":  "原料重量",
+                                                                                          "qualityColumn":  null
+                                                                                      }
+                                                                     }
+                                                  },
+                                                  {
+                                                      "formCode":  "daihui_quality",
+                                                      "displayName":  "成品品質檢驗表",
+                                                      "version":  1,
+                                                      "schemaHash":  "8e4b8f03155b396b524c09db369055837de3c1d312fb83c2a6601af108cc3608",
+                                                      "headerFingerprint":  "e5c7e000de7b61eb69a868d3d35f80723d6ef8a17a44e0b733febe8d7bc4826c",
+                                                      "schemaJson":  {
+                                                                         "formCode":  "daihui_quality",
+                                                                         "displayName":  "成品品質檢驗表",
+                                                                         "strategy":  "hybrid-generic",
+                                                                         "sampleScope":  "partial",
+                                                                         "fields":  [
+                                                                                        {
+                                                                                            "sourceName":  "表單名稱",
+                                                                                            "fieldKey":  "form_name",
+                                                                                            "type":  "String",
+                                                                                            "role":  "form_name"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "產品類型",
+                                                                                            "fieldKey":  "product_type",
+                                                                                            "type":  "String",
+                                                                                            "role":  "product"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "檢驗日期",
+                                                                                            "fieldKey":  "inspection_date",
+                                                                                            "type":  "Date",
+                                                                                            "role":  "date"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "外觀判定",
+                                                                                            "fieldKey":  "appearance_result",
+                                                                                            "type":  "String",
+                                                                                            "role":  "quality_result"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "成份分析",
+                                                                                            "fieldKey":  "composition_analysis",
+                                                                                            "type":  "String",
+                                                                                            "role":  "quality_detail"
+                                                                                        },
+                                                                                        {
+                                                                                            "sourceName":  "不良數",
+                                                                                            "fieldKey":  "defect_count",
+                                                                                            "type":  "Integer",
+                                                                                            "role":  "quantity"
+                                                                                        }
+                                                                                    ],
+                                                                         "mappings":  {
+                                                                                          "dateColumn":  "檢驗日期",
+                                                                                          "lotColumn":  null,
+                                                                                          "materialColumn":  null,
+                                                                                          "productColumn":  "產品類型",
+                                                                                          "quantityColumn":  "不良數",
+                                                                                          "weightColumn":  null,
+                                                                                          "qualityColumn":  "外觀判定"
+                                                                                      }
+                                                                     }
+                                                  }
+                                              ],
+                           "seedData":  {
+                                            "formDefinitions":  [
+                                                                    {
+                                                                        "tableCode":  "daihui_entry",
+                                                                        "displayName":  "入庫單",
+                                                                        "source":  "domainSchemaPack"
+                                                                    },
+                                                                    {
+                                                                        "tableCode":  "daihui_inspection",
+                                                                        "displayName":  "錫棒製程檢查表",
+                                                                        "source":  "domainSchemaPack"
+                                                                    },
+                                                                    {
+                                                                        "tableCode":  "daihui_material",
+                                                                        "displayName":  "領料退料單",
+                                                                        "source":  "domainSchemaPack"
+                                                                    },
+                                                                    {
+                                                                        "tableCode":  "daihui_production",
+                                                                        "displayName":  "生產紀錄卡",
+                                                                        "source":  "domainSchemaPack"
+                                                                    },
+                                                                    {
+                                                                        "tableCode":  "daihui_quality",
+                                                                        "displayName":  "成品品質檢驗表",
+                                                                        "source":  "domainSchemaPack"
+                                                                    }
+                                                                ],
+                                            "schemaVersions":  [
+                                                                   {
+                                                                       "formCode":  "daihui_entry",
+                                                                       "displayName":  "入庫單",
+                                                                       "version":  1,
+                                                                       "schemaHash":  "23aaed15acd97c5888880c49683bd3308decd12fe1ae63e24ce110a2b3c779bf",
+                                                                       "headerFingerprint":  "158c147b072fb296e7253ea1cf06a44217f030c6c03bcbe2b508eaac44ab6b18",
+                                                                       "schemaJson":  {
+                                                                                          "formCode":  "daihui_entry",
+                                                                                          "displayName":  "入庫單",
+                                                                                          "strategy":  "hybrid-generic",
+                                                                                          "sampleScope":  "partial",
+                                                                                          "fields":  [
+                                                                                                         {
+                                                                                                             "sourceName":  "表單名稱",
+                                                                                                             "fieldKey":  "form_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "form_name"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "入庫日期",
+                                                                                                             "fieldKey":  "entry_date",
+                                                                                                             "type":  "Date",
+                                                                                                             "role":  "date"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "規格",
+                                                                                                             "fieldKey":  "specification",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "product"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "批號",
+                                                                                                             "fieldKey":  "lot_no",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "lot"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "數量",
+                                                                                                             "fieldKey":  "quantity",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "quantity"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "總重量",
+                                                                                                             "fieldKey":  "total_weight",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "weight"
+                                                                                                         }
+                                                                                                     ],
+                                                                                          "mappings":  {
+                                                                                                           "dateColumn":  "入庫日期",
+                                                                                                           "lotColumn":  "批號",
+                                                                                                           "materialColumn":  null,
+                                                                                                           "productColumn":  "規格",
+                                                                                                           "quantityColumn":  "數量",
+                                                                                                           "weightColumn":  "總重量",
+                                                                                                           "qualityColumn":  null
+                                                                                                       }
+                                                                                      }
+                                                                   },
+                                                                   {
+                                                                       "formCode":  "daihui_inspection",
+                                                                       "displayName":  "錫棒製程檢查表",
+                                                                       "version":  1,
+                                                                       "schemaHash":  "48fe0b963a268be91169ccb8f5dbfbeb1917c7ce97025aff3e2a75a773c862a1",
+                                                                       "headerFingerprint":  "1c0fcbd2a81bc9e227c4048817db906fdf8f176082593b9cf33994d78abfbdd5",
+                                                                       "schemaJson":  {
+                                                                                          "formCode":  "daihui_inspection",
+                                                                                          "displayName":  "錫棒製程檢查表",
+                                                                                          "strategy":  "hybrid-generic",
+                                                                                          "sampleScope":  "partial",
+                                                                                          "fields":  [
+                                                                                                         {
+                                                                                                             "sourceName":  "表單名稱",
+                                                                                                             "fieldKey":  "form_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "form_name"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "品名",
+                                                                                                             "fieldKey":  "product_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "product"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "製造日期",
+                                                                                                             "fieldKey":  "manufactured_date",
+                                                                                                             "type":  "Date",
+                                                                                                             "role":  "date"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "批號",
+                                                                                                             "fieldKey":  "lot_no",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "lot"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "重量_實測值",
+                                                                                                             "fieldKey":  "measured_weight",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "weight"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "鑄模溫度_實測值",
+                                                                                                             "fieldKey":  "measured_casting_temperature",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "measurement"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "品質判定",
+                                                                                                             "fieldKey":  "quality_result",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "quality_result"
+                                                                                                         }
+                                                                                                     ],
+                                                                                          "mappings":  {
+                                                                                                           "dateColumn":  "製造日期",
+                                                                                                           "lotColumn":  "批號",
+                                                                                                           "materialColumn":  null,
+                                                                                                           "productColumn":  "品名",
+                                                                                                           "quantityColumn":  null,
+                                                                                                           "weightColumn":  "重量_實測值",
+                                                                                                           "qualityColumn":  "品質判定"
+                                                                                                       }
+                                                                                      }
+                                                                   },
+                                                                   {
+                                                                       "formCode":  "daihui_material",
+                                                                       "displayName":  "領料退料單",
+                                                                       "version":  1,
+                                                                       "schemaHash":  "ff4a61f4c822ee16416be574134ffa53bac62f0790b6f436b73619b07f5d53ff",
+                                                                       "headerFingerprint":  "2ae5201d2ea68f13dd0774feeaf3cff2f2533411fc9f9b8093c54a73d3b01b36",
+                                                                       "schemaJson":  {
+                                                                                          "formCode":  "daihui_material",
+                                                                                          "displayName":  "領料退料單",
+                                                                                          "strategy":  "hybrid-generic",
+                                                                                          "sampleScope":  "partial",
+                                                                                          "fields":  [
+                                                                                                         {
+                                                                                                             "sourceName":  "表單名稱",
+                                                                                                             "fieldKey":  "form_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "form_name"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "單據類型",
+                                                                                                             "fieldKey":  "document_type",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "status"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "領料日期",
+                                                                                                             "fieldKey":  "material_issue_date",
+                                                                                                             "type":  "Date",
+                                                                                                             "role":  "date"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "原料卡號",
+                                                                                                             "fieldKey":  "material_code",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "material"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "領料重量",
+                                                                                                             "fieldKey":  "issued_weight",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "weight"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "領料人",
+                                                                                                             "fieldKey":  "issued_by",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "actor"
+                                                                                                         }
+                                                                                                     ],
+                                                                                          "mappings":  {
+                                                                                                           "dateColumn":  "領料日期",
+                                                                                                           "lotColumn":  null,
+                                                                                                           "materialColumn":  "原料卡號",
+                                                                                                           "productColumn":  null,
+                                                                                                           "quantityColumn":  null,
+                                                                                                           "weightColumn":  "領料重量",
+                                                                                                           "qualityColumn":  null
+                                                                                                       }
+                                                                                      }
+                                                                   },
+                                                                   {
+                                                                       "formCode":  "daihui_production",
+                                                                       "displayName":  "生產紀錄卡",
+                                                                       "version":  1,
+                                                                       "schemaHash":  "7369328eb6887025539c156e47194865114fce4ad04e80b6df663a935cd275a9",
+                                                                       "headerFingerprint":  "504a14bd1b7b0be94e95adaf6480926b4d6e1443010ef434c1988e6fe69da75d",
+                                                                       "schemaJson":  {
+                                                                                          "formCode":  "daihui_production",
+                                                                                          "displayName":  "生產紀錄卡",
+                                                                                          "strategy":  "hybrid-generic",
+                                                                                          "sampleScope":  "partial",
+                                                                                          "fields":  [
+                                                                                                         {
+                                                                                                             "sourceName":  "表單名稱",
+                                                                                                             "fieldKey":  "form_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "form_name"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "生產品名",
+                                                                                                             "fieldKey":  "product_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "product"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "生產批號",
+                                                                                                             "fieldKey":  "production_batch_no",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "lot"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "原料重量",
+                                                                                                             "fieldKey":  "material_weight",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "weight"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "熔解溫度",
+                                                                                                             "fieldKey":  "melting_temperature",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "measurement"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "產出數量",
+                                                                                                             "fieldKey":  "output_quantity",
+                                                                                                             "type":  "Decimal",
+                                                                                                             "role":  "quantity"
+                                                                                                         }
+                                                                                                     ],
+                                                                                          "mappings":  {
+                                                                                                           "dateColumn":  null,
+                                                                                                           "lotColumn":  "生產批號",
+                                                                                                           "materialColumn":  null,
+                                                                                                           "productColumn":  "生產品名",
+                                                                                                           "quantityColumn":  "產出數量",
+                                                                                                           "weightColumn":  "原料重量",
+                                                                                                           "qualityColumn":  null
+                                                                                                       }
+                                                                                      }
+                                                                   },
+                                                                   {
+                                                                       "formCode":  "daihui_quality",
+                                                                       "displayName":  "成品品質檢驗表",
+                                                                       "version":  1,
+                                                                       "schemaHash":  "8e4b8f03155b396b524c09db369055837de3c1d312fb83c2a6601af108cc3608",
+                                                                       "headerFingerprint":  "e5c7e000de7b61eb69a868d3d35f80723d6ef8a17a44e0b733febe8d7bc4826c",
+                                                                       "schemaJson":  {
+                                                                                          "formCode":  "daihui_quality",
+                                                                                          "displayName":  "成品品質檢驗表",
+                                                                                          "strategy":  "hybrid-generic",
+                                                                                          "sampleScope":  "partial",
+                                                                                          "fields":  [
+                                                                                                         {
+                                                                                                             "sourceName":  "表單名稱",
+                                                                                                             "fieldKey":  "form_name",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "form_name"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "產品類型",
+                                                                                                             "fieldKey":  "product_type",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "product"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "檢驗日期",
+                                                                                                             "fieldKey":  "inspection_date",
+                                                                                                             "type":  "Date",
+                                                                                                             "role":  "date"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "外觀判定",
+                                                                                                             "fieldKey":  "appearance_result",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "quality_result"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "成份分析",
+                                                                                                             "fieldKey":  "composition_analysis",
+                                                                                                             "type":  "String",
+                                                                                                             "role":  "quality_detail"
+                                                                                                         },
+                                                                                                         {
+                                                                                                             "sourceName":  "不良數",
+                                                                                                             "fieldKey":  "defect_count",
+                                                                                                             "type":  "Integer",
+                                                                                                             "role":  "quantity"
+                                                                                                         }
+                                                                                                     ],
+                                                                                          "mappings":  {
+                                                                                                           "dateColumn":  "檢驗日期",
+                                                                                                           "lotColumn":  null,
+                                                                                                           "materialColumn":  null,
+                                                                                                           "productColumn":  "產品類型",
+                                                                                                           "quantityColumn":  "不良數",
+                                                                                                           "weightColumn":  null,
+                                                                                                           "qualityColumn":  "外觀判定"
+                                                                                                       }
+                                                                                      }
+                                                                   }
+                                                               ]
+                                        },
+                           "sourceSamples":  [
+                                                 {
+                                                     "formCode":  "daihui_entry",
+                                                     "sampleFile":  "entry_horizontal.csv",
+                                                     "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢"
+                                                 },
+                                                 {
+                                                     "formCode":  "daihui_inspection",
+                                                     "sampleFile":  "inspection_horizontal.csv",
+                                                     "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢"
+                                                 },
+                                                 {
+                                                     "formCode":  "daihui_material",
+                                                     "sampleFile":  "material_horizontal.csv",
+                                                     "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢"
+                                                 },
+                                                 {
+                                                     "formCode":  "daihui_production",
+                                                     "sampleFile":  "production_horizontal.csv",
+                                                     "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢"
+                                                 },
+                                                 {
+                                                     "formCode":  "daihui_quality",
+                                                     "sampleFile":  "quality_horizontal.csv",
+                                                     "sourceDirectory":  "C:\\Users\\gslab\\Desktop\\岱暉資料表\\處理完畢"
+                                                 }
+                                             ],
+                           "schemaContracts":  {
+                                                   "defaultBaseline":  {
+                                                                           "path":  "assembly\\baselines\\default-db-schema.baseline.json",
+                                                                           "schemaVersion":  "1.0"
+                                                                       },
+                                                   "domainPacks":  [
+                                                                       {
+                                                                           "path":  "assembly\\baselines\\daihui-form-schema.baseline.json",
+                                                                           "packId":  "daihui-form-schema",
+                                                                           "strategy":  "hybrid-generic",
+                                                                           "sampleScope":  "partial"
+                                                                       }
+                                                                   ]
+                                               }
+                       }
 }

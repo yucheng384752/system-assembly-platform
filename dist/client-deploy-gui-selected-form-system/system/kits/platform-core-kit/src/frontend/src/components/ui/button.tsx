@@ -1,0 +1,2 @@
+import type { ButtonHTMLAttributes } from "react"
+export function Button({ className, ...p }: ButtonHTMLAttributes<HTMLButtonElement>) { return <button style={{ padding:"6px 12px",borderRadius:4,cursor:"pointer" }} className={className} {...p} /> }

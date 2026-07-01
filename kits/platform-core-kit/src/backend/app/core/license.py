@@ -1,20 +1,25 @@
 """
 License verification for Form System Kit Composer generated systems.
-Checks RSA-PSS signature, expiry, and TPM machine binding (PKI challenge-response).
-Failure is logged as a warning; it does NOT block app startup.
+Checks RSA-PSS signature, expiry, and machine binding. Startup code must treat
+invalid results as fatal.
 
-Machine binding (PKI challenge-response, requires TPM 2.0):
-  - license.lic embeds machinePublicKey (RSA-2048 PEM from TPM signing key handle 0x81000001)
+Machine binding:
+  - machineFingerprint accepts only the TPM EK certificate SHA-256.
+  - /etc/machine-id or Windows MachineGuid fallback is diagnostic-only and not accepted for binding.
+  - machinePublicKey remains supported for existing TPM challenge-response licenses.
+  - license.lic may embed machinePublicKey (RSA-2048 PEM from TPM signing key handle 0x81000001)
   - At verification, backend calls tpm2_sign to sign a random nonce with the persisted key
   - Signature is verified against machinePublicKey in the license
   - The TPM private key never leaves the chip — cryptographically non-exportable
-  - No machine-id fallback: licenses without machinePublicKey are floating (unbound)
+  - Install tpm2-tools to activate TPM EK certificate binding on Linux.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
 import os
+import platform
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -46,21 +51,16 @@ class LicenseResult:
 
 
 def _find_license_file() -> Path | None:
-    # license.py 位於 system/backend/app/core/license.py，故：
-    #   parents[3] = system/         parents[4] = 部署包根目錄
-    # Docker 內為 /app/app/core/license.py，cwd=/app
     here = Path(__file__).resolve()
     candidates = [
-        here.parents[3] / "license.lic",   # system/license.lic
-        here.parents[4] / "license.lic",   # 部署包根目錄 (deploy root)
         Path(os.getcwd()) / "license.lic",
         Path(os.getcwd()).parent / "license.lic",
     ]
-    # parents[5] 可能超出範圍（Docker 淺層路徑），故 try-guard
-    try:
-        candidates.append(here.parents[5] / "license.lic")
-    except IndexError:
-        pass
+    for idx in (3, 4, 5):
+        try:
+            candidates.insert(idx - 3, here.parents[idx] / "license.lic")
+        except IndexError:
+            continue
     for p in candidates:
         try:
             if p.exists():
@@ -68,7 +68,6 @@ def _find_license_file() -> Path | None:
         except (OSError, ValueError):
             continue
     return None
-
 
 def verify_license() -> LicenseResult:
     lic_path = _find_license_file()
@@ -93,12 +92,15 @@ def verify_license() -> LicenseResult:
     # Verify RSA-PSS license signature (issuer signs the payload)
     try:
         pub_key = serialization.load_pem_public_key(_PUBLIC_KEY_PEM.encode())
+        # salt_length=32 matches Node.js RSA_PSS_SALTLEN_DIGEST for SHA-256.
+        # PSS.DIGEST_LENGTH is only available in cryptography >= 41; use the
+        # literal value so older deployments (Ubuntu 22.04 default) are supported.
         pub_key.verify(
             base64.b64decode(sig_b64),
             payload_str.encode("utf-8"),
             padding.PSS(
                 mgf=padding.MGF1(hashes.SHA256()),
-                salt_length=padding.PSS.DIGEST_LENGTH,
+                salt_length=32,
             ),
             hashes.SHA256(),
         )
@@ -119,6 +121,19 @@ def verify_license() -> LicenseResult:
         licensee_str = f"{licensee.get('name', '')} <{licensee.get('email', '')}>"
     except Exception as exc:
         return LicenseResult(valid=False, reason=f"payload parse error: {exc}")
+
+    # Machine fingerprint binding requires TPM EK; machine-id fallback is diagnostic-only.
+    # Keep machinePublicKey support below for existing TPM challenge-response licenses.
+    expected_fp = payload.get("machineFingerprint")
+    if expected_fp:
+        current_fp = _tpm_ek_fingerprint()
+        if current_fp is None:
+            return LicenseResult(
+                valid=False,
+                reason="machine-bound license requires a TPM EK fingerprint; machine-id/MachineGuid fallback is not accepted",
+            )
+        if current_fp != expected_fp:
+            return LicenseResult(valid=False, reason="machine fingerprint mismatch - license issued for a different machine")
 
     # TPM machine binding (PKI challenge-response)
     expected_pubkey_pem = payload.get("machinePublicKey")
@@ -238,3 +253,69 @@ def _parse_tpmt_rsassa_sig(data: bytes) -> bytes | None:
     if len(data) < 6 + sig_size or sig_size == 0:
         return None
     return data[6 : 6 + sig_size]
+
+
+def _get_machine_fingerprint() -> str | None:
+    """Return TPM EK SHA-256 when available; otherwise diagnostic-only machine-id/MachineGuid SHA-256."""
+    tpm = _tpm_ek_fingerprint()
+    if tpm:
+        logger.debug("license: fingerprint source=tpm-ek")
+        return tpm
+    fallback = _machine_id_fingerprint()
+    if fallback:
+        logger.warning("license: TPM fingerprint unavailable; falling back to machine-id/MachineGuid")
+    return fallback
+
+
+def _tpm_ek_fingerprint() -> str | None:
+    try:
+        if platform.system() == "Windows":
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    "$ek = Get-TpmEndorsementKeyInfo -HashAlgorithm Sha256; "
+                    "if ($ek -and $ek.PublicKeyHash) "
+                    "{ $ek.PublicKeyHash.Replace('-','').ToLower() } else { exit 1 }",
+                ],
+                capture_output=True, text=True, timeout=15,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                return hashlib.sha256(result.stdout.strip().encode()).hexdigest()
+            return None
+
+        result = subprocess.run(
+            ["tpm2_getekcertificate", "--ek-certificate", "/dev/stdout"],
+            capture_output=True, timeout=5, env=_tpm_subprocess_env(),
+        )
+        if result.returncode == 0 and result.stdout:
+            return hashlib.sha256(result.stdout).hexdigest()
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        return None
+    except Exception as exc:
+        logger.debug("license: TPM EK fingerprint unavailable: %s", exc)
+    return None
+
+
+def _machine_id_fingerprint() -> str | None:
+    if platform.system() == "Windows":
+        try:
+            result = subprocess.run(
+                [
+                    "powershell", "-NoProfile", "-NonInteractive", "-Command",
+                    "(Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\Cryptography' -Name MachineGuid).MachineGuid",
+                ],
+                capture_output=True, text=True, timeout=10,
+            )
+            raw = result.stdout.strip().lower() if result.returncode == 0 else ""
+            return hashlib.sha256(raw.encode()).hexdigest() if raw else None
+        except Exception:
+            return None
+
+    machine_id_path = Path("/etc/machine-id")
+    if not machine_id_path.exists():
+        return None
+    try:
+        raw = machine_id_path.read_text("utf-8").strip().lower()
+        return hashlib.sha256(raw.encode()).hexdigest() if raw else None
+    except (OSError, UnicodeDecodeError):
+        return None

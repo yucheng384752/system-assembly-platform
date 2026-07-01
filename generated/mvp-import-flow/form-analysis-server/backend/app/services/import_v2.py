@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.core.schema_registry import TableRegistry
+from app.models.core.schema_registry import SchemaVersion, TableRegistry
 from app.models.import_job import ImportJob, ImportJobStatus, StagingRow
 from app.services.audit_events import write_audit_event_best_effort
 from app.services.csv_field_mapper import CSVFieldMapper, csv_field_mapper
@@ -23,6 +23,89 @@ logger = logging.getLogger(__name__)
 class ImportService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_schema_version_for_table(self, table_id: uuid.UUID) -> SchemaVersion | None:
+        result = await self.db.execute(
+            select(SchemaVersion)
+            .where(SchemaVersion.table_id == table_id)
+            .order_by(SchemaVersion.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    def _schema_fields(self, schema: SchemaVersion) -> list[dict[str, Any]]:
+        schema_json = schema.schema_json or {}
+        fields = schema_json.get("fields") or schema_json.get("columns") or []
+        return [field for field in fields if isinstance(field, dict)]
+
+    def _schema_column_names(self, schema: SchemaVersion) -> list[str]:
+        columns: list[str] = []
+        for field in self._schema_fields(schema):
+            column = field.get("fieldKey") or field.get("name")
+            if column:
+                column = str(column)
+                if not column.replace("_", "").isalnum():
+                    raise ValueError(f"Unsafe schema column name: {column}")
+                columns.append(column)
+        return columns
+
+    def _schema_row_data(
+        self, schema: SchemaVersion, row: dict[str, Any]
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for field in self._schema_fields(schema):
+            column = field.get("fieldKey") or field.get("name")
+            if not column:
+                continue
+            column = str(column)
+            source = field.get("sourceName") or field.get("name") or column
+            data[column] = row.get(str(source), row.get(column))
+        return data
+
+    async def _commit_schema_target_rows(
+        self,
+        *,
+        table_code: str,
+        table_id: uuid.UUID,
+        rows: list[dict[str, Any]],
+        tenant_id: uuid.UUID,
+        import_job_id: uuid.UUID,
+    ) -> int:
+        if not table_code.replace("_", "").isalnum():
+            raise ValueError(f"Unsafe table_code={table_code}")
+        schema = await self._get_schema_version_for_table(table_id)
+        if schema is None:
+            raise ValueError(f"No schema found for table_code={table_code}")
+
+        columns = self._schema_column_names(schema)
+        if not columns:
+            raise ValueError(f"No schema columns found for table_code={table_code}")
+
+        all_columns = columns + ["_tenant_id", "_import_job_id", "_row_index", "_imported_at"]
+        quoted_columns = ", ".join(f'"{c}"' for c in all_columns)
+        placeholders = ", ".join(f":{c}" for c in all_columns)
+        update_set = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in columns)
+        stmt = text(
+            f'INSERT INTO "{table_code}" ({quoted_columns}) VALUES ({placeholders}) '
+            f'ON CONFLICT ("_tenant_id", "_import_job_id", "_row_index") '
+            f'DO UPDATE SET {update_set}'
+        )
+
+        now = datetime.now(timezone.utc)
+        inserted_count = 0
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            row_data = self._schema_row_data(schema, row)
+            row_data["_tenant_id"] = str(tenant_id)
+            row_data["_import_job_id"] = str(import_job_id)
+            row_data["_row_index"] = row_index
+            row_data["_imported_at"] = now
+            await self.db.execute(stmt, row_data)
+            inserted_count += 1
+
+        await self.db.flush()
+        return inserted_count
 
     def _extract_lot_no_from_row_dict(self, row: dict[str, Any]) -> str | None:
         if not row or not isinstance(row, dict):
@@ -1176,6 +1259,21 @@ class ImportService:
 
                     self.db.add(p2_item)
 
+            if table.table_code.startswith("daihui_"):
+                inserted_count = await self._commit_schema_target_rows(
+                    table_code=table.table_code,
+                    table_id=table.id,
+                    rows=generic_rows_list,
+                    tenant_id=job.tenant_id,
+                    import_job_id=job.id,
+                )
+                if inserted_count == 0:
+                    raise ValueError(
+                        f"Commit wrote zero target rows for table_code={table.table_code}"
+                    )
+                logger.info(
+                    f"Daihui commit: wrote {inserted_count} rows to {table.table_code}"
+                )
             # Generic form commit → GenericRecord (for non-P1/P2/P3 table codes)
             if table.table_code not in ("P1", "P2", "P3") and generic_rows_list:
                 from app.models.generic_record import GenericRecord

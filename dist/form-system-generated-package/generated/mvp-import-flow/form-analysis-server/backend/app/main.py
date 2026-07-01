@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.core.backend_router_registry import register_backend_routers
 from app.core.database import Base, init_db
 from app.core.logging import setup_logging
+from app.core.license import verify_license
 from app.core.middleware import RequestLoggingMiddleware, add_process_time_header
 
 # Import all models to ensure they're registered with Base
@@ -42,8 +43,8 @@ from app.models.core.tenant_user import TenantUser
 # Initialize application settings
 settings = get_settings()
 
-# Setup structured logging
-setup_logging(settings.log_level, settings.log_format)
+# Setup structured logging (pass monitor level so the remote processor is configured)
+setup_logging(settings.log_level, settings.log_format, settings.monitor_log_min_level)
 
 
 @asynccontextmanager
@@ -56,6 +57,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
+    license_result = verify_license()
+    if not license_result.valid:
+        raise RuntimeError(
+            f"License validation failed: {license_result.reason}. "
+            "Startup aborted. Contact your administrator."
+        )
+    app.state.license = license_result
+
     # Startup - 驗證PostgreSQL或SQLite配置
     if not settings.database_url.startswith(
         "postgresql"
@@ -101,10 +110,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         .scalars()
                         .all()
                     )
-                    for code in ("P1", "P2", "P3"):
-                        if code not in existing:
-                            db.add(TableRegistry(table_code=code, display_name=code))
-                    await db.commit()
+                    if not settings.use_generic_schema:
+                        for code in ("P1", "P2", "P3"):
+                            if code not in existing:
+                                db.add(TableRegistry(table_code=code, display_name=code))
+                        await db.commit()
             except Exception as e:
                 # Do not block startup if seeding fails; import routes will still surface the error.
                 print(f" Warning: failed to seed table_registry: {e}")
@@ -178,6 +188,16 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     except Exception as e:
         print(f" Warning: failed to run startup seed: {e}")
 
+    # Start remote monitoring (heartbeat + log forwarding) if configured
+    if settings.monitor_server_url:
+        from app.core.monitoring import init_monitoring, start_heartbeat
+
+        init_monitoring(
+            server_url=settings.monitor_server_url,
+            source=settings.monitor_source,
+        )
+        start_heartbeat(settings.monitor_heartbeat_interval)
+
     print(f" Form Analysis API starting on {settings.api_host}:{settings.api_port}")
     print(
         f" Database: PostgreSQL - {settings.database_url.split('@')[-1]}"
@@ -189,6 +209,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     # Shutdown
+    if settings.monitor_server_url:
+        from app.core.monitoring import stop_heartbeat
+
+        stop_heartbeat()
+
     print(" Form Analysis API shutting down...")
 
 
@@ -530,4 +555,5 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower(),
         access_log=True,
     )
+
 

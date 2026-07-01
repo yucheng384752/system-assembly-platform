@@ -8,7 +8,7 @@ Provides comprehensive health monitoring for the application including:
 - System resources (optional)
 """
 
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -34,7 +34,7 @@ async def health_check() -> dict[str, Any]:
         "status": "healthy",
         "service": "form-analysis-api",
         "version": "1.0.0",
-        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "environment": get_settings().environment,
     }
 
@@ -58,7 +58,7 @@ async def detailed_health_check(db: AsyncSession = Depends(get_db)) -> dict[str,
         "status": "healthy",
         "service": "form-analysis-api",
         "version": "1.0.0",
-        "timestamp": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+        "timestamp": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "environment": settings.environment,
         "checks": {},
     }

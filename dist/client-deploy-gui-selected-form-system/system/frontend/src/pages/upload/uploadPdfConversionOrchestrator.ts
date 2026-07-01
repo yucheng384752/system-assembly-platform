@@ -1,6 +1,6 @@
 ﻿import type { UploadedFile } from "./uploadTypes";
 import { buildUploadedCsvFilesFromPdfOutputs } from "./uploadFileUtils";
-import { showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./uploadPdfConvertToastUtils";
+import { showMissingPdfConvertProcessToast, showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./uploadPdfConvertToastUtils";
 
 type ShowToast = (kind: "success" | "error" | "info" | "warning", message: string, options?: { key?: string; durationMs?: number | null }) => void;
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -79,7 +79,6 @@ export async function runPdfConversion({
 
 interface PdfConvertWorkflowOptions {
   fileId: string;
-  processId: string;
   filesRef: { current: UploadedFile[] };
   triggerPdfConvert: (processId: string) => Promise<{ job_id?: string }>;
   fetchPdfConvertStatus: (processId: string) => Promise<PdfConvertStatusResponse>;
@@ -97,7 +96,6 @@ interface PdfConvertWorkflowOptions {
 
 export async function runPdfConvertWorkflow({
   fileId,
-  processId,
   filesRef,
   triggerPdfConvert,
   fetchPdfConvertStatus,
@@ -112,6 +110,15 @@ export async function runPdfConvertWorkflow({
   showToast,
   t,
 }: PdfConvertWorkflowOptions): Promise<boolean> {
+  const target = filesRef.current.find((file) => file.id === fileId);
+  if (!target) return false;
+  if (target.type !== "PDF") return false;
+  const processId = target.processId;
+  if (!processId) {
+    showMissingPdfConvertProcessToast({ showToast, t });
+    return false;
+  }
+
   beginPdfConvert(fileId);
 
   try {

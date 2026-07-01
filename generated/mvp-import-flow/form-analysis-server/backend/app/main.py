@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.core.backend_router_registry import register_backend_routers
 from app.core.database import Base, init_db
 from app.core.logging import setup_logging
+from app.core.license import verify_license
 from app.core.middleware import RequestLoggingMiddleware, add_process_time_header
 
 # Import all models to ensure they're registered with Base
@@ -56,31 +57,13 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
-    # Security check: reject built-in default SECRET_KEY in production
-    _DEFAULT_SK = "qI5s1RT9GCr8wlqnfh1XxOZBO_47lSqedali3vHGOVk"
-    if getattr(settings, "secret_key", None) == _DEFAULT_SK:
-        _env = (getattr(settings, "environment", "") or "").strip().lower()
-        if _env not in ("development", "dev", "test", "local"):
-            raise RuntimeError(
-                "SECRET_KEY is set to the built-in default value in production. "
-                "Generate a unique key: python -c \"import secrets; print(secrets.token_urlsafe(32))\""
-            )
-
-    # License verification (non-blocking; failure logs warning but does not prevent startup)
-    try:
-        from app.core.license import verify_license as _verify_license
-        _lic = _verify_license()
-        app.state.license = _lic
-        if _lic.valid:
-            print(f" License OK: {_lic.licensee} (expires {_lic.expires_at})")
-        else:
-            print(f" License WARNING: {_lic.reason}")
-            if "fingerprint mismatch" in _lic.reason:
-                print(" This package is not licensed for this machine.")
-                print(" Run: bash deploy.sh --get-machine-id  and provide the Fingerprint to your vendor.")
-    except Exception as _e:
-        app.state.license = None
-        print(f" License check skipped: {_e}")
+    license_result = verify_license()
+    if not license_result.valid:
+        raise RuntimeError(
+            f"License validation failed: {license_result.reason}. "
+            "Startup aborted. Contact your administrator."
+        )
+    app.state.license = license_result
 
     # Startup - 驗證PostgreSQL或SQLite配置
     if not settings.database_url.startswith(
@@ -127,10 +110,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         .scalars()
                         .all()
                     )
-                    for code in ("P1", "P2", "P3"):
-                        if code not in existing:
-                            db.add(TableRegistry(table_code=code, display_name=code))
-                    await db.commit()
+                    if not settings.use_generic_schema:
+                        for code in ("P1", "P2", "P3"):
+                            if code not in existing:
+                                db.add(TableRegistry(table_code=code, display_name=code))
+                        await db.commit()
             except Exception as e:
                 # Do not block startup if seeding fails; import routes will still surface the error.
                 print(f" Warning: failed to seed table_registry: {e}")

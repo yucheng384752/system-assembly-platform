@@ -253,6 +253,74 @@ async def set_schema(
     return _to_station_read(station, schema)
 
 
+async def _list_domain_records(
+    code: str,
+    schema: "StationSchema | None",
+    tenant: Tenant,
+    page: int,
+    page_size: int,
+    db: AsyncSession,
+) -> dict:
+    """Read records directly from a domain physical table (e.g. daihui_entry)."""
+    from sqlalchemy import text as _text
+    fields: list[dict] = schema.record_fields if schema else []
+    field_keys = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("fieldKey") or f.get("name")
+    ]
+    lot_field_key = next(
+        (f.get("fieldKey") or f.get("name") for f in fields if f.get("role") == "lot"),
+        None,
+    )
+    offset = max(0, (page - 1) * page_size)
+    tid = str(tenant.id)
+
+    try:
+        total = (
+            await db.execute(
+                _text(f'SELECT COUNT(*) FROM "{code}" WHERE "_tenant_id" = :tid'),
+                {"tid": tid},
+            )
+        ).scalar() or 0
+    except Exception:
+        total = 0
+
+    safe_keys = [k for k in field_keys if k.replace("_", "").isalnum()]
+    if not safe_keys:
+        return {"total": total, "page": page, "page_size": page_size, "records": []}
+
+    try:
+        col_sql = ", ".join(f'"{k}"' for k in safe_keys)
+        field_keys = safe_keys
+        raw_rows = (
+            await db.execute(
+                _text(
+                    f'SELECT {col_sql}, "_import_job_id", "_row_index", "_imported_at" '
+                    f'FROM "{code}" WHERE "_tenant_id" = :tid '
+                    f'ORDER BY "_imported_at" DESC NULLS LAST OFFSET :offset LIMIT :lim'
+                ),
+                {"tid": tid, "offset": offset, "lim": page_size},
+            )
+        ).mappings().all()
+    except Exception:
+        raw_rows = []
+
+    records = []
+    for r in raw_rows:
+        data = {k: r.get(k) for k in field_keys}
+        lot_raw = str(r[lot_field_key]) if lot_field_key and r.get(lot_field_key) is not None else str(r.get("_row_index", ""))
+        imported_at = r.get("_imported_at")
+        records.append({
+            "id": f'{r.get("_import_job_id", "")}_{r.get("_row_index", "")}',
+            "lot_no_raw": lot_raw,
+            "data": data,
+            "created_at": imported_at.isoformat() if imported_at and hasattr(imported_at, "isoformat") else (str(imported_at) if imported_at else None),
+        })
+
+    return {"total": total, "page": page, "page_size": page_size, "records": records}
+
+
 @router.get("/forms/{code}/records")
 async def list_records(
     code: str,
@@ -263,6 +331,16 @@ async def list_records(
 ):
     """List records for a form type (paginated)."""
     station = await _get_station(code, tenant.id, db)
+    schema = await _active_schema(station.id, db)
+
+    # Domain-backed tables (registered in table_registry) store rows in the physical table,
+    # not GenericRecord. Check table_registry so this works for any client/project name.
+    from app.models.core.schema_registry import TableRegistry
+    is_domain = (
+        await db.execute(select(TableRegistry.id).where(TableRegistry.table_code == code).limit(1))
+    ).scalar_one_or_none() is not None
+    if is_domain:
+        return await _list_domain_records(code, schema, tenant, page, page_size, db)
 
     offset = max(0, (page - 1) * page_size)
     total = (

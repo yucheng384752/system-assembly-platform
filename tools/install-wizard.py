@@ -30,6 +30,15 @@ from pathlib import Path
 # ── Constants ─────────────────────────────────────────────────────────────────
 _DEFAULT_PORT = 9981
 _HERE = Path(__file__).parent.resolve()
+_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1wQ/q3fbmYmd8545NJk
+/qEyMwtmPRaJFpoALjvxEvrfVIe/H58X1UTkGCept4Ata20HUvr1D8LUsr3jxJUi
+48INzbau+HKxwq+fvEaaGPNdgIKZpLOM0TM/g/cdtIvneWsmn4ZEV6q8UTTql7Zp
+5mveUc6KY6QWtqEPOxFwVl7RXWxpF/yBu2S0itRdo5ZNkT/70BbJEuL/PAQbuMlw
+cb9f08cCqoCsARydnO2znpT6f5mMXodZY/5GJIm3UlcXpSFZWOm3T5Gds46SdRUk
+/4X9IffUlLFmHvV0y7sJmQ1WDquDJDuJydls5Y3ByvaokjNdbGhAr9k09QlXy7hy
+EwIDAQAB
+-----END PUBLIC KEY-----"""
 
 # ── Embedded persistent swtpm setup script ────────────────────────────────────
 # 當偵測到沒有硬體 TPM 時，由 _setup_swtpm_linux() 寫入磁碟並執行
@@ -44,7 +53,7 @@ info() { echo -e "${YELLOW}[TPM] ▸ $1${NC}"; }
 skip() { echo -e "${CYAN}[TPM] ↷ $1（已存在，跳過）${NC}"; }
 die()  { err "$1"; exit 1; }
 
-TPM_DIR="/opt/hiba/tpm"
+TPM_DIR="/var/lib/swtpm-hiba"
 TPM_STATE="${TPM_DIR}/swtpm-state"
 HANDLE="0x81000001"
 TCTI_ENV_FILE="/etc/profile.d/hiba-tpm.sh"
@@ -63,20 +72,32 @@ for cmd in swtpm swtpm_setup tpm2_createprimary tpm2_create tpm2_load \
 done
 
 mkdir -p "$TPM_DIR" "$TPM_STATE"
-chown -R "$REAL_USER":"$REAL_USER" "$TPM_DIR"
-chmod 700 "$TPM_STATE"
+chown -R root:root "$TPM_DIR"
+chmod 755 "$TPM_DIR" "$TPM_STATE"
 ok "目錄：$TPM_DIR"
+
+# AppArmor 相容性（Ubuntu 22.04 swtpm 套件附帶 profile）
+if command -v aa-status >/dev/null 2>&1 && aa-status --enabled 2>/dev/null; then
+  for _prof in /etc/apparmor.d/usr.bin.swtpm /etc/apparmor.d/swtpm \
+               /etc/apparmor.d/usr.sbin.swtpm; do
+    if [[ -f "$_prof" ]]; then
+      command -v aa-complain >/dev/null 2>&1 \
+        && aa-complain "$_prof" 2>/dev/null \
+        || apparmor_parser -R "$_prof" 2>/dev/null || true
+      break
+    fi
+  done
+fi
 
 info "STAGE 1：swtpm 狀態初始化（冪等）"
 STATE_MARKER="${TPM_STATE}/.initialized"
 if [[ -f "$STATE_MARKER" ]]; then
   skip "swtpm 狀態已存在，指紋維持不變"
 else
-  swtpm_setup --tpm2 --tpmstate "$TPM_STATE" --allow-signing --createek \
+  swtpm_setup --tpm2 --tpmstate "$TPM_STATE" --allow-signing \
     2>>"$SWTPM_LOG" || die "swtpm_setup 失敗，查看：$SWTPM_LOG"
   touch "$STATE_MARKER"
-  chown "$REAL_USER":"$REAL_USER" "$STATE_MARKER"
-  ok "swtpm 狀態初始化完成（EK 已固定）"
+  ok "swtpm 狀態初始化完成"
 fi
 
 info "STAGE 2：swtpm systemd 服務"
@@ -122,7 +143,9 @@ systemctl restart swtpm.service
 sleep 2
 systemctl is-active --quiet swtpm.service || { journalctl -u swtpm.service -n 10 --no-pager; die "swtpm.service 啟動失敗"; }
 ok "swtpm.service 運行中（開機自啟）"
-ss -tlnp 2>/dev/null | grep -q "2321" || die "swtpm port 2321 未就緒"
+python3 -c "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',2321)); s.close(); sys.exit(0)" 2>/dev/null \
+  || pgrep -x swtpm >/dev/null 2>&1 \
+  || die "swtpm port 2321 未就緒"
 ok "TCP port 2321 就緒"
 
 info "STAGE 3：全域環境變數"
@@ -253,7 +276,26 @@ def _generate_secret() -> str:
 
 
 _TPM_SIGNING_HANDLE  = "0x81000001"
-_TPM_SIGNING_PEM_PATH = Path("/opt/hiba/tpm/signing_public.pem")
+_TPM_SIGNING_PEM_PATH = Path("/var/lib/swtpm-hiba/signing_public.pem")
+_TPM_SIGNING_PEM_PATH_LEGACY = Path("/opt/hiba/tpm/signing_public.pem")  # backward compat
+
+
+def _ensure_swtpm_tcti() -> bool:
+    """
+    If TPM2TOOLS_TCTI is not set but swtpm is listening on 127.0.0.1:2321,
+    auto-set the env var so tpm2-tools can connect without a login shell.
+    Returns True if TCTI is available (pre-existing or auto-detected).
+    """
+    if os.environ.get("TPM2TOOLS_TCTI"):
+        return True
+    try:
+        import socket as _sock
+        s = _sock.create_connection(("127.0.0.1", 2321), timeout=2)
+        s.close()
+        os.environ["TPM2TOOLS_TCTI"] = "swtpm:host=127.0.0.1,port=2321"
+        return True
+    except OSError:
+        return False
 
 
 def _probe_tpm_signing_pubkey() -> dict:
@@ -261,17 +303,20 @@ def _probe_tpm_signing_pubkey() -> dict:
     Returns {'source': 'tpm2-signing-key'|'none', 'pubkey_pem': str|None}
     Reads the TPM signing public key (RSA-2048 PEM). No machine-id fallback.
     Priority:
-      1. /opt/hiba/tpm/signing_public.pem  (pre-built by 01_tpm_full_setup.sh)
-      2. tpm2_readpublic on handle 0x81000001 (on-demand export, Linux only)
+      1. /var/lib/swtpm-hiba/signing_public.pem  (pre-built by 01_tpm_full_setup.sh)
+      2. /opt/hiba/tpm/signing_public.pem  (legacy path, backward compat)
+      3. tpm2_readpublic on handle 0x81000001 (on-demand export, Linux only)
     """
-    # 1. Read pre-built signing_public.pem from swtpm/TPM setup script
-    if _TPM_SIGNING_PEM_PATH.exists():
-        try:
-            pem = _TPM_SIGNING_PEM_PATH.read_text("utf-8").strip()
-            if "BEGIN PUBLIC KEY" in pem:
-                return {"source": "tpm2-signing-key", "pubkey_pem": pem}
-        except Exception:
-            pass
+    _ensure_swtpm_tcti()
+    # 1. Read pre-built signing_public.pem (try new path first, then legacy)
+    for _pem_path in (_TPM_SIGNING_PEM_PATH, _TPM_SIGNING_PEM_PATH_LEGACY):
+        if _pem_path.exists():
+            try:
+                pem = _pem_path.read_text("utf-8").strip()
+                if "BEGIN PUBLIC KEY" in pem:
+                    return {"source": "tpm2-signing-key", "pubkey_pem": pem}
+            except Exception:
+                pass
 
     # 2. Export from TPM handle on-demand (Linux)
     if platform.system() == "Linux":
@@ -298,6 +343,7 @@ def _wizard_tpm_sign_nonce(nonce: bytes) -> bytes | None:
     Ask TPM handle 0x81000001 to sign a nonce (RSASSA-PKCS1v15-SHA256).
     Returns raw RSA signature bytes, or None if TPM is unavailable.
     """
+    _ensure_swtpm_tcti()
     with tempfile.TemporaryDirectory() as tmpdir:
         nonce_path = Path(tmpdir) / "nonce.bin"
         sig_path   = Path(tmpdir) / "sig.bin"
@@ -336,7 +382,7 @@ def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
     """Install tpm2-tools, provision TPM signing key, export machine-pubkey.pem. Best-effort."""
     import shutil
 
-    # 提早偵測 root：TPM 佈建需寫入 /opt/hiba/tpm 與 apt 安裝，皆需 root
+    # 提早偵測 root：TPM 佈建需寫入 /var/lib/swtpm-hiba 與 apt 安裝，皆需 root
     if hasattr(os, "geteuid") and os.geteuid() != 0:
         log_fn("  WARN  未以 root 執行 — 跳過 TPM 機器綁定（授權將為浮動授權）")
         log_fn("  INFO  若需 TPM 機器綁定，請以 sudo 重新執行安裝精靈：")
@@ -404,7 +450,21 @@ def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
     成功後設定 TPM2TOOLS_TCTI 環境變數，使 _probe_tpm_fingerprint() 透過 swtpm 取得指紋。
     回傳 True 表示 swtpm 成功啟動且 TCTI 已設定。
     """
+    import socket as _sock
     import shutil
+
+    # 若 swtpm 已在 port 2321 運行（例如已先跑過 01_tpm_full_setup.sh），直接設 TCTI 返回
+    try:
+        _s = _sock.create_connection(("127.0.0.1", 2321), timeout=2)
+        _s.close()
+        tcti = "swtpm:host=127.0.0.1,port=2321"
+        os.environ["TPM2TOOLS_TCTI"] = tcti
+        _append_env_key(sys_root, "TPM2TOOLS_TCTI", tcti, log_fn)
+        log_fn("  OK   swtpm 已在 port 2321 運行（由 01_tpm_full_setup.sh 建立，跳過初始化）")
+        log_fn(f"  OK   TPM2TOOLS_TCTI={tcti}")
+        return True
+    except OSError:
+        pass
 
     # 安裝 swtpm + swtpm-tools（若未安裝）
     pkgs_needed: list[str] = []
@@ -452,7 +512,7 @@ def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
     # 關鍵：寫入 form-system 後端 .env，使後端啟動時 license 挑戰-回應能連到 swtpm
     # （否則 tpm2_sign 預設找 /dev/tpmrm0 硬體裝置，在 swtpm VM 上會失敗）
     _append_env_key(sys_root, "TPM2TOOLS_TCTI", tcti, log_fn)
-    log_fn("  OK   swtpm vTPM 持久化完成（/opt/hiba/tpm/swtpm-state）")
+    log_fn("  OK   swtpm vTPM 持久化完成（/var/lib/swtpm-hiba/swtpm-state）")
     log_fn("  INFO  重開機後 swtpm 由 systemd 自動啟動，指紋不變")
     return True
 
@@ -726,7 +786,7 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         log("  安裝完成！")
         log("="*60)
         log(f"\n  系統目錄  : {sys_root}")
-        log(f"  啟動指令  : {python} -m uvicorn app.main:app --host 0.0.0.0 --port 8000")
+        log(f"  啟動指令  : {python} -m uvicorn app.main:app --host 127.0.0.1 --port 8000")
         log(f"  工作目錄  : {bd}")
         with _lock:
             _install_state["success"] = True
@@ -837,7 +897,23 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 return
             try:
                 lic_data = _json.loads(lic_path.read_text("utf-8"))
-                payload = _json.loads(lic_data["payload"])
+                payload_str = lic_data["payload"]
+                sig_b64 = lic_data["signature"]
+                try:
+                    import base64 as _base64
+                    from cryptography.hazmat.primitives import hashes, serialization
+                    from cryptography.hazmat.primitives.asymmetric import padding as _pad
+                    pub_key = serialization.load_pem_public_key(_PUBLIC_KEY_PEM.encode())
+                    pub_key.verify(
+                        _base64.b64decode(sig_b64),
+                        payload_str.encode("utf-8"),
+                        _pad.PSS(mgf=_pad.MGF1(hashes.SHA256()), salt_length=32),
+                        hashes.SHA256(),
+                    )
+                except Exception:
+                    self._send_json({"valid": False, "reason": "invalid signature"})
+                    return
+                payload = _json.loads(payload_str)
                 # Expiry check
                 expires_at = payload.get("expiresAt", "")
                 if expires_at:
@@ -866,9 +942,28 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                                          "detail": "challenge-response failed — different TPM"})
                         return
                 licensee = payload.get("licensee", {})
+
+                # Compare license machinePublicKey against local TPM signing_public.pem
+                pem_match = None
+                local_pubkey_source = None
+                if expected_pubkey:
+                    def _norm_pem(pem_str):
+                        return "\n".join(
+                            line.strip() for line in pem_str.strip().splitlines() if line.strip()
+                        )
+                    local_probe = _probe_tpm_signing_pubkey()
+                    local_pem = local_probe.get("pubkey_pem") or ""
+                    local_pubkey_source = local_probe.get("source")
+                    if local_pem:
+                        pem_match = _norm_pem(local_pem) == _norm_pem(expected_pubkey)
+                    else:
+                        pem_match = None  # local key not found, cannot compare
+
                 self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
                                  "machine_bound": machine_bound,
-                                 "binding_method": "tpm2-challenge-response" if machine_bound else "none"})
+                                 "binding_method": "tpm2-challenge-response" if machine_bound else "none",
+                                 "pem_match": pem_match,
+                                 "local_pubkey_source": local_pubkey_source})
             except Exception as exc:
                 self._send_json({"valid": False, "reason": str(exc)})
 
@@ -1867,9 +1962,11 @@ function showDone(success) {
   document.getElementById('done-error').style.display   = success ? 'none'  : 'block';
   if (success && S.sysRoot) {
     const py = S.sysRoot + (navigator.platform.toLowerCase().includes('win') ? '\\.venv\\Scripts\\python.exe' : '/.venv/bin/python');
-    document.getElementById('start-cmd').textContent =
-      'cd ' + S.sysRoot + '/backend\n' +
-      py + ' -m uvicorn app.main:app --host 0.0.0.0 --port 8000';
+    const frontendCmd = '# 首次需建置前端（一次性）\n' +
+      'cd ' + S.sysRoot + '/frontend && npm install && npm run build\n\n' +
+      '# 啟動後端（前端建置完成後即可看到登入頁面）\n' +
+      'cd ' + S.sysRoot + '/backend && ' + py + ' -m uvicorn app.main:app --host 127.0.0.1 --port 8000';
+    document.getElementById('start-cmd').textContent = frontendCmd;
   }
 }
 

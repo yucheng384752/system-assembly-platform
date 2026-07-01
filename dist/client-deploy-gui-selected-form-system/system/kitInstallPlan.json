@@ -1,0 +1,134 @@
+﻿[
+    {
+        "kit":  "platform-core-kit",
+        "order":  10,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/platform-core-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "tenant-auth-kit",
+        "order":  20,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+                    "SECRET_KEY",
+                    "AUTH_MODE"
+                ],
+        "scripts":  [
+                        "kits/tenant-auth-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "station-data-link-kit",
+        "order":  30,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/station-data-link-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "upload-validation-kit",
+        "order":  40,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+                    "VALID_MATERIALS_CSV",
+                    "VALID_SLITTING_MACHINES_CSV"
+                ],
+        "scripts":  [
+                        "kits/upload-validation-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "import-pipeline-kit",
+        "order":  50,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/import-pipeline-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "query-traceability-kit",
+        "order":  60,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/query-traceability-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "analytics-kit",
+        "order":  70,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/analytics-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "station-admin-kit",
+        "order":  80,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/station-admin-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "audit-edit-kit",
+        "order":  85,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/audit-edit-kit/install.ps1"
+                    ]
+    },
+    {
+        "kit":  "logs-ops-kit",
+        "order":  90,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/logs-ops-kit/install.ps1"
+                    ]
+    }
+]

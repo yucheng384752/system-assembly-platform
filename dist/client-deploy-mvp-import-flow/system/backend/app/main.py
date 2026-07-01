@@ -30,6 +30,7 @@ from app.core.config import get_settings
 from app.core.backend_router_registry import register_backend_routers
 from app.core.database import Base, init_db
 from app.core.logging import setup_logging
+from app.core.license import verify_license
 from app.core.middleware import RequestLoggingMiddleware, add_process_time_header
 
 # Import all models to ensure they're registered with Base
@@ -56,6 +57,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     - Connection pool setup
     - Resource cleanup
     """
+    license_result = verify_license()
+    if not license_result.valid:
+        raise RuntimeError(
+            f"License validation failed: {license_result.reason}. "
+            "Startup aborted. Contact your administrator."
+        )
+    app.state.license = license_result
+
     # Startup - 驗證PostgreSQL或SQLite配置
     if not settings.database_url.startswith(
         "postgresql"
@@ -530,4 +539,5 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower(),
         access_log=True,
     )
+
 

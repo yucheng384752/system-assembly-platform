@@ -668,7 +668,9 @@ async def create_import_job_from_upload_job(
                 "Skip background processing: async_session_factory not initialized"
             )
 
-    return job
+    response = ImportJobRead.model_validate(job)
+    response.table_code = table_code
+    return response
 
 
 @router.get("/jobs/{job_id}", response_model=ImportJobRead)
@@ -698,9 +700,8 @@ async def get_import_job(
     tr_result = await db.execute(
         select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
     )
-    table_code_str = tr_result.scalar_one_or_none()
     response = ImportJobRead.model_validate(job)
-    response.table_code = table_code_str
+    response.table_code = tr_result.scalar_one_or_none()
     return response
 
 
@@ -923,7 +924,13 @@ async def cancel_import_job(
     )
     result = await db.execute(stmt)
     job = result.scalar_one()
-    return job
+
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    response = ImportJobRead.model_validate(job)
+    response.table_code = tr_result.scalar_one_or_none()
+    return response
 
 
 async def process_commit_job_background(

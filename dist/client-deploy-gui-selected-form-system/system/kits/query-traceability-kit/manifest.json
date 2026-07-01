@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "query-traceability-kit",
+    "displayName":  "查詢與追溯",
+    "installOrder":  60,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

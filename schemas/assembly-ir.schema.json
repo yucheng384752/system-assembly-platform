@@ -79,6 +79,34 @@
           },
           "additionalProperties": true
         },
+        "dataFlowDefinition": {
+          "type": ["object", "null"],
+          "additionalProperties": true,
+          "properties": {
+            "anchorStep": { "type": "string" },
+            "schemaMatchStrategy": { "type": "object", "additionalProperties": true },
+            "flowRunLookupStrategy": { "type": "object", "additionalProperties": true },
+            "steps": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["stepName", "stepOrder", "isAnchor", "keyMatchStrategy"],
+                "additionalProperties": true,
+                "properties": {
+                  "stepName": { "type": "string" },
+                  "displayName": { "type": "string" },
+                  "stepOrder": { "type": "integer" },
+                  "isAnchor": { "type": "boolean" },
+                  "businessKey": { "type": ["string", "null"] },
+                  "businessKeyColumn": { "type": ["string", "null"] },
+                  "dateColumn": { "type": ["string", "null"] },
+                  "keyMatchStrategy": { "type": "string", "enum": ["anchor", "exact", "alias", "infer"] },
+                  "required": { "type": "boolean" }
+                }
+              }
+            }
+          }
+        },
         "baselines": {
           "type": "object",
           "additionalProperties": true,

@@ -1,0 +1,178 @@
+﻿[
+    {
+        "kit":  "platform-core-kit",
+        "module":  "app.api.routes_health",
+        "symbol":  "router",
+        "prefix":  "/healthz",
+        "tags":  [
+                     "Health Check"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "platform-core-kit",
+        "module":  "app.api.routes_kit_broker",
+        "symbol":  "router",
+        "prefix":  "/api/kit",
+        "tags":  [
+                     "Kit Broker"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "tenant-auth-kit",
+        "module":  "app.api.routes_auth",
+        "symbol":  "router",
+        "prefix":  "/api/auth",
+        "tags":  [
+                     "Authentication"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "tenant-auth-kit",
+        "module":  "app.api.routes_tenants",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Tenants"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "upload-validation-kit",
+        "module":  "app.api.routes_upload",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "檔案上傳"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "upload-validation-kit",
+        "module":  "app.api.routes_validate",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "驗證結果查詢"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "import-pipeline-kit",
+        "module":  "app.api.routes_import",
+        "symbol":  "router",
+        "prefix":  "/api",
+        "tags":  [
+                     "資料匯入"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "import-pipeline-kit",
+        "module":  "app.api.routes_import_v2",
+        "symbol":  "router",
+        "prefix":  "/api/v2/import",
+        "tags":  [
+                     "Import V2"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "query-traceability-kit",
+        "module":  "app.api.routes_query_v2",
+        "symbol":  "router",
+        "prefix":  "/api/v2/query",
+        "tags":  [
+                     "Query V2"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "query-traceability-kit",
+        "module":  "app.api.traceability",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "生產追溯"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "analytics-kit",
+        "module":  "app.api.routes_analytics",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Analytics"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "analytics-kit",
+        "module":  "app.api.routes_ut",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "UT Data"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "station-admin-kit",
+        "module":  "app.api.routes_stations",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Stations (Generic)"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  "USE_GENERIC_SCHEMA"
+    },
+    {
+        "kit":  "audit-edit-kit",
+        "module":  "app.api.routes_edit",
+        "symbol":  "router",
+        "prefix":  "/api/edit",
+        "tags":  [
+                     "Inline Edit"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "audit-edit-kit",
+        "module":  "app.api.routes_audit_events",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Audit Events"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "logs-ops-kit",
+        "module":  "app.api.routes_logs",
+        "symbol":  "router",
+        "prefix":  "/api/logs",
+        "tags":  [
+                     "日誌管理"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    }
+]

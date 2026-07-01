@@ -1,9 +1,9 @@
-﻿{
+{
     "private":  true,
     "type":  "module",
     "scripts":  {
                     "dev":  "vite",
-                    "build":  "tsc -b \u0026\u0026 vite build",
+                    "build":  "vite build",
                     "preview":  "vite preview"
                 },
     "dependencies":  {
@@ -15,7 +15,7 @@
                          "lucide-react":  "0.460.0"
                      },
     "devDependencies":  {
-                            "@vitejs/plugin-react":  "4.3.3",
+                            "@vitejs/plugin-react":  "4.4.1",
                             "vite":  "6.0.5",
                             "typescript":  "5.7.2",
                             "@types/react":  "18.3.12",

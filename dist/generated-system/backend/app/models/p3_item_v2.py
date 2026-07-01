@@ -12,11 +12,10 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.core.db_types import JsonBColumn
 
 
 class P3ItemV2(Base):
@@ -47,7 +46,7 @@ class P3ItemV2(Base):
     bottom_tape_lot = Column(String(50))
 
     # Original row data from CSV
-    row_data = Column(JsonBColumn())
+    row_data = Column(JSONB)
 
     @staticmethod
     def _utcnow():

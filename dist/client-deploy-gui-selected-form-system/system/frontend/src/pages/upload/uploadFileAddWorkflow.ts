@@ -1,4 +1,4 @@
-﻿import type { UploadedFile } from "./uploadTypes";
+import type { UploadedFile } from "./uploadTypes";
 import { buildUploadFilesToAdd } from "./uploadFileAddUtils";
 import { showFileAddResultToasts } from "./uploadFileAddToastUtils";
 
@@ -23,7 +23,7 @@ export function runAddUploadFilesWorkflow({
   confirmLikelyDuplicate,
   showToast,
   t,
-  availableCodes = [],
+  availableCodes,
 }: AddUploadFilesWorkflowOptions): void {
   const result = buildUploadFilesToAdd({
     fileList,

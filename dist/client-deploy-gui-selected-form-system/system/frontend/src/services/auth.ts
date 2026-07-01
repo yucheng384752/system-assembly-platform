@@ -25,8 +25,16 @@ export function getApiKeyHeaderName(): string {
 
 export function getApiKeyValue(): string {
   try {
+    const sessionValue = window.sessionStorage.getItem(API_KEY_STORAGE_KEY) || ''
+    if (sessionValue.trim()) return sessionValue.trim()
+
     const stored = window.localStorage.getItem(API_KEY_STORAGE_KEY) || ''
-    if (stored.trim()) return stored.trim()
+    if (stored.trim()) {
+      const migrated = stored.trim()
+      window.sessionStorage.setItem(API_KEY_STORAGE_KEY, migrated)
+      window.localStorage.removeItem(API_KEY_STORAGE_KEY)
+      return migrated
+    }
   } catch {
     // ignore
   }
@@ -39,10 +47,12 @@ export function setApiKeyValue(rawKey: string): void {
   const value = String(rawKey || '').trim()
   try {
     if (!value) {
+      window.sessionStorage.removeItem(API_KEY_STORAGE_KEY)
       window.localStorage.removeItem(API_KEY_STORAGE_KEY)
       return
     }
-    window.localStorage.setItem(API_KEY_STORAGE_KEY, value)
+    window.sessionStorage.setItem(API_KEY_STORAGE_KEY, value)
+    window.localStorage.removeItem(API_KEY_STORAGE_KEY)
   } catch {
     // ignore
   }
@@ -50,6 +60,7 @@ export function setApiKeyValue(rawKey: string): void {
 
 export function clearApiKeyValue(): void {
   try {
+    window.sessionStorage.removeItem(API_KEY_STORAGE_KEY)
     window.localStorage.removeItem(API_KEY_STORAGE_KEY)
   } catch {
     // ignore

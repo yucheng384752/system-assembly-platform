@@ -1,0 +1,19 @@
+{
+  "kit": "upload-validation-kit",
+  "provides": {
+    "api": [
+      { "capability": "upload.file.create", "method": "POST", "path": "/api/upload" },
+      { "capability": "upload.status.get", "method": "GET", "path": "/api/upload/{process_id}/status" },
+      { "capability": "upload.pdf.status", "method": "GET", "path": "/api/upload/pdf/{process_id}/convert/status" },
+      { "capability": "upload.pdf.convert", "method": "POST", "path": "/api/upload/pdf/{process_id}/convert" },
+      { "capability": "upload.pdf.outputs", "method": "GET", "path": "/api/upload/pdf/{process_id}/convert/outputs" }
+    ],
+    "db": [
+      { "capability": "db.upload.jobs" }
+    ]
+  },
+  "consumes": {
+    "api": ["import.job.create"],
+    "db": ["db.tenants.read"]
+  }
+}

@@ -145,6 +145,80 @@
         { "name": "is_valid",    "type": "Boolean", "nullable": false, "default": true, "index": true }
       ]
     },
+    "flow_runs": {
+      "kitOwner": "import-pipeline-kit",
+      "contractStatus": "canonical",
+      "note": "One row per traceable business process run (e.g. one lot number). Created from the anchor step; other steps attach via flow_key_aliases.",
+      "columns": [
+        { "name": "id",             "type": "UUID",        "nullable": false, "pk": true, "default": "uuid4()" },
+        { "name": "tenant_id",      "type": "UUID",        "nullable": false, "fk": "tenants.id", "index": true },
+        { "name": "upload_batch_id","type": "UUID",        "nullable": true,  "fk": "import_jobs.id", "index": true, "note": "The import_job that created this flow_run" },
+        { "name": "flow_key",       "type": "String(200)", "nullable": false, "note": "Primary key value from the anchor step (e.g. lot_no)" },
+        { "name": "flow_key_type",  "type": "String(100)", "nullable": false, "note": "Column name that provided flow_key (e.g. 批號)" },
+        { "name": "process_date",   "type": "Date",        "nullable": true,  "note": "Canonical process date detected from anchor step date column; used for display/filtering only, not for matching" },
+        { "name": "status",         "type": "String(50)",  "nullable": false, "default": "partial", "note": "partial | completed | waiting_for_mapping" },
+        { "name": "created_at",     "type": "DateTime(tz)","nullable": false, "default": "now()" },
+        { "name": "completed_at",   "type": "DateTime(tz)","nullable": true }
+      ],
+      "constraints": [
+        { "type": "unique", "name": "uq_flow_runs_tenant_key", "columns": ["tenant_id", "flow_key", "flow_key_type"] }
+      ],
+      "indexes": [
+        { "name": "ix_flow_runs_tenant_date", "columns": ["tenant_id", "process_date"] }
+      ]
+    },
+    "flow_key_aliases": {
+      "kitOwner": "import-pipeline-kit",
+      "contractStatus": "canonical",
+      "note": "All known key values for a flow_run across different steps. Solves the cross-table key format mismatch problem.",
+      "columns": [
+        { "name": "id",           "type": "UUID",        "nullable": false, "pk": true, "default": "uuid4()" },
+        { "name": "flow_run_id",  "type": "UUID",        "nullable": false, "fk": "flow_runs.id", "ondelete": "CASCADE", "index": true },
+        { "name": "key_type",     "type": "String(100)", "nullable": false, "note": "Column name (e.g. 原料卡號, 生產批號)" },
+        { "name": "key_value",    "type": "String(200)", "nullable": false, "note": "The actual key value in that step" },
+        { "name": "confirmed_by", "type": "String(100)", "nullable": false, "note": "auto | user_id — auto means system inferred; user_id means manually confirmed" },
+        { "name": "created_at",   "type": "DateTime(tz)","nullable": false, "default": "now()" }
+      ],
+      "constraints": [
+        { "type": "unique", "name": "uq_flow_key_aliases_type_value", "columns": ["key_type", "key_value"] }
+      ],
+      "indexes": [
+        { "name": "ix_flow_key_aliases_lookup", "columns": ["key_type", "key_value"] }
+      ]
+    },
+    "trace_chains": {
+      "kitOwner": "import-pipeline-kit",
+      "contractStatus": "canonical",
+      "note": "Identity and aggregate status of one traceable data chain. Step-level detail is in trace_chain_steps.",
+      "columns": [
+        { "name": "id",          "type": "UUID",        "nullable": false, "pk": true, "default": "uuid4()" },
+        { "name": "flow_run_id", "type": "UUID",        "nullable": false, "fk": "flow_runs.id", "ondelete": "CASCADE", "unique": true },
+        { "name": "trace_uuid",  "type": "UUID",        "nullable": false, "unique": true, "default": "uuid4()", "note": "External-facing stable identifier" },
+        { "name": "chain_hash",  "type": "String(64)",  "nullable": true,  "note": "SHA256 of all completed step_hashes sorted by step_order; recomputed on each step update" },
+        { "name": "status",      "type": "String(50)",  "nullable": false, "default": "partial", "note": "partial | completed | waiting_for_mapping" },
+        { "name": "created_at",  "type": "DateTime(tz)","nullable": false, "default": "now()" },
+        { "name": "updated_at",  "type": "DateTime(tz)","nullable": false, "default": "now()", "onupdate": "now()" }
+      ]
+    },
+    "trace_chain_steps": {
+      "kitOwner": "import-pipeline-kit",
+      "contractStatus": "canonical",
+      "note": "One row per step per trace chain. Dynamic — adding a new step type requires no schema change.",
+      "columns": [
+        { "name": "id",              "type": "UUID",        "nullable": false, "pk": true, "default": "uuid4()" },
+        { "name": "trace_chain_id",  "type": "UUID",        "nullable": false, "fk": "trace_chains.id", "ondelete": "CASCADE", "index": true },
+        { "name": "step_name",       "type": "String(100)", "nullable": false, "note": "e.g. daihui_entry, daihui_material" },
+        { "name": "step_order",      "type": "Integer",     "nullable": false, "note": "Sort order within the chain; used when computing chain_hash" },
+        { "name": "step_hash",       "type": "String(64)",  "nullable": true,  "note": "SHA256 of all row_hashes for this step; NULL if not yet uploaded" },
+        { "name": "row_count",       "type": "Integer",     "nullable": true },
+        { "name": "source_file_id",  "type": "UUID",        "nullable": true,  "fk": "import_files.id" },
+        { "name": "status",          "type": "String(50)",  "nullable": false, "default": "pending", "note": "pending | completed | failed" },
+        { "name": "completed_at",    "type": "DateTime(tz)","nullable": true }
+      ],
+      "constraints": [
+        { "type": "unique", "name": "uq_trace_chain_steps_chain_step", "columns": ["trace_chain_id", "step_name"] }
+      ]
+    },
     "row_edits": {
       "kitOwner": "audit-edit-kit",
       "contractStatus": "canonical",

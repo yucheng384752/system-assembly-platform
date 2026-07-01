@@ -343,6 +343,51 @@ export function showFileAddResultToasts({
 '@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadFileAddToastUtils.ts")
 
 @'
+import type { UploadedFile } from "./uploadTypes";
+import { buildUploadFilesToAdd } from "./uploadFileAddUtils";
+import { showFileAddResultToasts } from "./uploadFileAddToastUtils";
+
+type ToastType = "success" | "error" | "info";
+type ShowToast = (type: ToastType, message: string, options?: { key?: string; durationMs?: number | null }) => void;
+type TranslationFn = (key: string, values?: Record<string, unknown>) => string;
+
+interface AddUploadFilesWorkflowOptions {
+  fileList: FileList | null;
+  existingFiles: UploadedFile[];
+  setFiles: (updater: (files: UploadedFile[]) => UploadedFile[]) => void;
+  confirmLikelyDuplicate: (file: File) => boolean;
+  showToast: ShowToast;
+  t: TranslationFn;
+}
+
+export function runAddUploadFilesWorkflow({
+  fileList,
+  existingFiles,
+  setFiles,
+  confirmLikelyDuplicate,
+  showToast,
+  t,
+}: AddUploadFilesWorkflowOptions): void {
+  const result = buildUploadFilesToAdd({
+    fileList,
+    existingFiles,
+    confirmLikelyDuplicate,
+  });
+
+  showFileAddResultToasts({
+    notices: result.notices,
+    addedCount: result.files.length,
+    showToast,
+    t,
+  });
+
+  if (result.files.length) {
+    setFiles((prev) => [...prev, ...result.files]);
+  }
+}
+'@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadFileAddWorkflow.ts")
+
+@'
 import type { CsvData, UploadedFile } from "./uploadTypes";
 
 export function buildCsvText(csv: CsvData): string {
@@ -460,6 +505,73 @@ export function showCsvChangesAppliedToast({ showToast, t }: CsvEditToastOptions
 '@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadCsvEditToastUtils.ts")
 
 @'
+import { saveCsvChangesInFiles, updateCsvCellInFiles } from "./uploadCsvEditUtils";
+import {
+  showCsvChangesAppliedToast,
+  showCsvEditDisabledToast,
+  showCsvSaveErrorToast,
+} from "./uploadCsvEditToastUtils";
+import type { UploadedFile } from "./uploadTypes";
+
+type ShowToast = (type: "success" | "error" | "info", message: string, options?: { key?: string; durationMs?: number | null }) => void;
+type TranslationFn = (key: string, values?: Record<string, unknown>) => string;
+
+interface SaveCsvChangesWorkflowOptions {
+  editEnabled: boolean;
+  files: UploadedFile[];
+  fileId: string;
+  setFiles: (files: UploadedFile[]) => void;
+  showToast: ShowToast;
+  t: TranslationFn;
+}
+
+interface UpdateCsvCellWorkflowOptions {
+  editEnabled: boolean;
+  fileId: string;
+  rowIndex: number;
+  colIndex: number;
+  value: string;
+  setFiles: (updater: (files: UploadedFile[]) => UploadedFile[]) => void;
+}
+
+export function runUpdateCsvCellWorkflow({
+  editEnabled,
+  fileId,
+  rowIndex,
+  colIndex,
+  value,
+  setFiles,
+}: UpdateCsvCellWorkflowOptions): void {
+  if (!editEnabled) return;
+  setFiles((prev) => updateCsvCellInFiles(prev, fileId, rowIndex, colIndex, value));
+}
+
+export function runSaveCsvChangesWorkflow({
+  editEnabled,
+  files,
+  fileId,
+  setFiles,
+  showToast,
+  t,
+}: SaveCsvChangesWorkflowOptions): void {
+  if (!editEnabled) {
+    showCsvEditDisabledToast({ showToast, t });
+    return;
+  }
+
+  const result = saveCsvChangesInFiles(files, fileId);
+  if (result.outcome === "not-found-or-clean") return;
+  if (result.outcome === "unsupported-backend") {
+    showCsvSaveErrorToast({ showToast, t });
+    return;
+  }
+
+  setFiles(result.files);
+  showCsvChangesAppliedToast({ showToast, t });
+}
+'@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadCsvEditWorkflow.ts")
+
+@'
 import type { UploadedFile } from "./uploadTypes";
 
 export function fileHasValidationErrors(file: UploadedFile): boolean {
@@ -512,7 +624,7 @@ export function fileHasImportJob(file: UploadedFile): boolean {
 @'
 import type { UploadedFile } from "./uploadTypes";
 import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileIsUploadedButUnvalidated } from "./uploadEligibility";
-import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./uploadImportToastUtils";
+import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast, showMissingImportTargetToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./uploadImportToastUtils";
 import { scheduleSinglePostImportCleanup } from "./uploadImportCleanupUtils";
 
 export type ValidateOutcome =
@@ -575,6 +687,12 @@ interface BatchImportWorkflowOptions {
   t: Translate;
 }
 
+interface BatchImportConfirmationOptions {
+  files: UploadedFile[];
+  showToast: ShowToast;
+  t: Translate;
+}
+
 interface SingleImportOptions {
   file: UploadedFile;
   commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
@@ -589,6 +707,23 @@ interface SingleImportOptions {
 interface SingleImportWorkflowOptions {
   id: string;
   target: UploadedFile;
+  commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  sleep: (ms: number) => Promise<void>;
+  filesRef: { current: UploadedFile[] };
+  beginImport: (fileIds: string[], progress: number) => void;
+  setImportProgress: (fileId: string, progress: number) => void;
+  completeImport: (fileId: string) => void;
+  resetImport: (fileIds: string[]) => void;
+  removeImportedFiles: (fileIds: string[]) => void;
+  toImportProgress: (jobStatus: string) => number;
+  showToast: ShowToast;
+  t: Translate;
+}
+
+interface ConfirmedSingleImportWorkflowOptions {
+  id: string | null;
+  files: UploadedFile[];
   commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
   fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
   sleep: (ms: number) => Promise<void>;
@@ -755,6 +890,29 @@ export async function runBatchImport({
   return totalImported;
 }
 
+export function requestBatchImportConfirmation({
+  files,
+  showToast,
+  t,
+}: BatchImportConfirmationOptions): boolean {
+  const validatedFiles = files.filter(fileEligibleForBatchImport);
+
+  if (validatedFiles.length === 0) {
+    const filesWithErrors = files.filter(fileHasBlockingImportErrors);
+    const unvalidatedFiles = files.filter(fileIsUploadedButUnvalidated);
+
+    showBatchImportUnavailableToast({
+      filesWithErrorsCount: filesWithErrors.length,
+      unvalidatedFilesCount: unvalidatedFiles.length,
+      showToast,
+      t,
+    });
+    return false;
+  }
+
+  return true;
+}
+
 export async function runBatchImportWorkflow({
   files,
   commitImportJob,
@@ -918,12 +1076,54 @@ export async function runSingleImportWorkflow({
     resetImport([id]);
   }
 }
+
+export async function runConfirmedSingleImportWorkflow({
+  id,
+  files,
+  commitImportJob,
+  fetchImportJob,
+  sleep,
+  filesRef,
+  beginImport,
+  setImportProgress,
+  completeImport,
+  resetImport,
+  removeImportedFiles,
+  toImportProgress,
+  showToast,
+  t,
+}: ConfirmedSingleImportWorkflowOptions): Promise<void> {
+  if (!id) return;
+
+  const target = files.find((file) => file.id === id);
+  if (!target || !target.processId) {
+    showMissingImportTargetToast({ showToast, t });
+    return;
+  }
+
+  await runSingleImportWorkflow({
+    id,
+    target,
+    commitImportJob,
+    fetchImportJob,
+    sleep,
+    filesRef,
+    beginImport,
+    setImportProgress,
+    completeImport,
+    resetImport,
+    removeImportedFiles,
+    toImportProgress,
+    showToast,
+    t,
+  });
+}
 '@ | Set-Content -Encoding UTF8 (Join-Path $moduleRoot "uploadBatchOrchestrator.ts")
 
 @'
 import type { UploadedFile } from "./uploadTypes";
 import { buildUploadedCsvFilesFromPdfOutputs } from "./uploadFileUtils";
-import { showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./uploadPdfConvertToastUtils";
+import { showMissingPdfConvertProcessToast, showPdfConvertFailedToast, showPdfConvertFetchingCsvToast, showPdfConvertGotCsvToast, showPdfConvertNoCsvToast, showPdfConvertOutputErrorToast, showPdfConvertStillProcessingToast } from "./uploadPdfConvertToastUtils";
 
 type ShowToast = (kind: "success" | "error" | "info" | "warning", message: string, options?: { key?: string; durationMs?: number | null }) => void;
 type Translate = (key: string, options?: Record<string, unknown>) => string;
@@ -1002,7 +1202,6 @@ export async function runPdfConversion({
 
 interface PdfConvertWorkflowOptions {
   fileId: string;
-  processId: string;
   filesRef: { current: UploadedFile[] };
   triggerPdfConvert: (processId: string) => Promise<{ job_id?: string }>;
   fetchPdfConvertStatus: (processId: string) => Promise<PdfConvertStatusResponse>;
@@ -1020,7 +1219,6 @@ interface PdfConvertWorkflowOptions {
 
 export async function runPdfConvertWorkflow({
   fileId,
-  processId,
   filesRef,
   triggerPdfConvert,
   fetchPdfConvertStatus,
@@ -1035,6 +1233,15 @@ export async function runPdfConvertWorkflow({
   showToast,
   t,
 }: PdfConvertWorkflowOptions): Promise<boolean> {
+  const target = filesRef.current.find((file) => file.id === fileId);
+  if (!target) return false;
+  if (target.type !== "PDF") return false;
+  const processId = target.processId;
+  if (!processId) {
+    showMissingPdfConvertProcessToast({ showToast, t });
+    return false;
+  }
+
   beginPdfConvert(fileId);
 
   try {
@@ -2595,7 +2802,7 @@ if ($content -notmatch "uploadFileUtils") {
     )
 }
 
-if ($content -notmatch 'import \{ fileEligibleForBatchImport') {
+if ($content -notmatch 'uploadEligibility') {
     $content = $content.Replace(
         'import { toImportProgress, toPdfConvertProgress, toValidateProgress } from "./upload/uploadProgress";',
         "import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileHasImportJob, fileHasValidationErrors, fileIsUploadedButUnvalidated } from `"./upload/uploadEligibility`";`r`nimport { toImportProgress, toPdfConvertProgress, toValidateProgress } from `"./upload/uploadProgress`";"
@@ -2728,26 +2935,42 @@ if ($content -notmatch 'uploadFileAddToastUtils') {
     )
 }
 
+$content = $content.Replace(
+    'import { buildUploadFilesToAdd } from "./upload/uploadFileAddUtils";' + "`r`n" +
+    'import { showFileAddResultToasts } from "./upload/uploadFileAddToastUtils";',
+    'import { runAddUploadFilesWorkflow } from "./upload/uploadFileAddWorkflow";'
+)
+
+if ($content -notmatch 'uploadFileAddWorkflow') {
+    $content = $content.Replace(
+        'import { showFileAddResultToasts } from "./upload/uploadFileAddToastUtils";',
+        'import { runAddUploadFilesWorkflow } from "./upload/uploadFileAddWorkflow";'
+    )
+}
+
+$content = [regex]::Replace(
+    $content,
+    '(?m)^import \{ runAddUploadFilesWorkflow \} from "\./upload/uploadFileAddWorkflow";\r?\n',
+    ''
+)
+$content = $content.Replace(
+    'import { parseCsv } from "./upload/uploadFileUtils";',
+    'import { runAddUploadFilesWorkflow } from "./upload/uploadFileAddWorkflow";' + "`r`n" +
+    'import { parseCsv } from "./upload/uploadFileUtils";'
+)
+
 $handleFilesPattern = '(?s)  const handleFiles = \(fileList: FileList \| null\) => \{\r?\n    if \(!fileList\) return;\r?\n\r?\n    const newFiles: UploadedFile\[\] = \[\];\r?\n    Array\.from\(fileList\)\.forEach\(\(file\) => \{.*?\r?\n    \}\r?\n  \};'
 $handleFilesReplacement = @'
   const handleFiles = (fileList: FileList | null) => {
-    const result = buildUploadFilesToAdd({
+    runAddUploadFilesWorkflow({
       fileList,
       existingFiles: files,
+      setFiles,
       confirmLikelyDuplicate: (file) =>
         window.confirm("\u5075\u6e2c\u5230\u7591\u4f3c\u91cd\u8907\u6a94\u6848\uff1a" + file.name + "\n\u662f\u5426\u4ecd\u8981\u52a0\u5165\u4e0a\u50b3\u6e05\u55ae\uff1f"),
-    });
-
-    showFileAddResultToasts({
-      notices: result.notices,
-      addedCount: result.files.length,
       showToast,
       t,
     });
-
-    if (result.files.length) {
-      setFiles((prev) => [...prev, ...result.files]);
-    }
   };
 '@
 $content = [regex]::Replace($content, $handleFilesPattern, $handleFilesReplacement, 1)
@@ -2757,6 +2980,9 @@ $content = [regex]::Replace($content, $handleFilesAnyPattern, ($handleFilesRepla
 
 $handleFilesToValidationPattern = '(?s)  const handleFiles = \(fileList: FileList \| null\) => \{.*?\r?\n  \};\r?\n\r?\n(?=  const handleValidate\s*=)'
 $content = [regex]::Replace($content, $handleFilesToValidationPattern, ($handleFilesReplacement + "`r`n`r`n"), 1)
+
+$handleFilesBoundaryPattern = '(?s)  const handleFiles = \(fileList: FileList \| null\) => \{.*?(?=\r?\n  const handleValidate\s*=)'
+$content = [regex]::Replace($content, $handleFilesBoundaryPattern, ($handleFilesReplacement + "`r`n`r`n"), 1)
 
 $content = $content.Replace(
     'import type { CsvData, FileType, UploadedFile } from "./upload/uploadTypes";',
@@ -2771,6 +2997,55 @@ $content = $content.Replace(
 $content = $content.Replace(
     'import { buildCsvText, saveCsvChangesInFiles, updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";',
     'import { saveCsvChangesInFiles, updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";'
+)
+
+$content = $content.Replace(
+    'import { saveCsvChangesInFiles, updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";',
+    'import { updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";'
+)
+
+$content = $content.Replace(
+    'import { showCsvChangesAppliedToast, showCsvEditDisabledToast, showCsvSaveErrorToast } from "./upload/uploadCsvEditToastUtils";',
+    'import { runSaveCsvChangesWorkflow } from "./upload/uploadCsvEditWorkflow";'
+)
+
+$content = $content.Replace(
+    'import { updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";',
+    'import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow } from "./upload/uploadCsvEditWorkflow";'
+)
+
+$content = $content.Replace(
+    'import { runSaveCsvChangesWorkflow } from "./upload/uploadCsvEditWorkflow";',
+    'import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow } from "./upload/uploadCsvEditWorkflow";'
+)
+
+if ($content -notmatch 'uploadCsvEditWorkflow') {
+    $content = $content.Replace(
+        'import { updateCsvCellInFiles } from "./upload/uploadCsvEditUtils";',
+        "import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow } from `"./upload/uploadCsvEditWorkflow`";"
+    )
+}
+
+$content = $content.Replace(
+    'import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow, runUpdateCsvCellWorkflow } from "./upload/uploadCsvEditWorkflow";',
+    'import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow } from "./upload/uploadCsvEditWorkflow";'
+)
+
+$content = [regex]::Replace(
+    $content,
+    '(?m)^(import \{ runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow \} from "\./upload/uploadCsvEditWorkflow";\r?\n)(?:\1)+',
+    '$1'
+)
+
+$content = [regex]::Replace(
+    $content,
+    '(?m)^import \{ runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow \} from "\./upload/uploadCsvEditWorkflow";\r?\n',
+    ''
+)
+$content = $content.Replace(
+    'import { runAddUploadFilesWorkflow } from "./upload/uploadFileAddWorkflow";',
+    'import { runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow } from "./upload/uploadCsvEditWorkflow";' + "`r`n" +
+    'import { runAddUploadFilesWorkflow } from "./upload/uploadFileAddWorkflow";'
 )
 
 $content = $content.Replace(
@@ -2943,32 +3218,38 @@ $updateCellReplacement = @'
     colIndex: number,
     value: string
   ) => {
-    if (!EDIT_ENABLED) return;
-    setFiles((prev) => updateCsvCellInFiles(prev, fileId, rowIndex, colIndex, value));
+    runUpdateCsvCellWorkflow({
+      editEnabled: EDIT_ENABLED,
+      fileId,
+      rowIndex,
+      colIndex,
+      value,
+      setFiles,
+    });
   };
 '@
 $content = [regex]::Replace($content, $updateCellPattern, $updateCellReplacement, 1)
 
+$updateCellBoundaryPattern = '(?s)  const updateCell = \(\r?\n    fileId: string,\r?\n    rowIndex: number,\r?\n    colIndex: number,\r?\n    value: string\r?\n  \) => \{.*?(?=\r?\n\r?\n  const handleSaveChanges)'
+$content = [regex]::Replace($content, $updateCellBoundaryPattern, ($updateCellReplacement + "`r`n"), 1)
+
 $saveChangesPattern = '(?s)  const handleSaveChanges = async \(fileId: string\) => \{\r?\n    if \(!EDIT_ENABLED\) \{.*?\r?\n    showToast\(''success'', t\(''upload\.toast\.changesAppliedRevalidate''\)\);\r?\n  \};'
 $saveChangesReplacement = @'
   const handleSaveChanges = async (fileId: string) => {
-    if (!EDIT_ENABLED) {
-      showCsvEditDisabledToast({ showToast, t });
-      return;
-    }
-
-    const result = saveCsvChangesInFiles(files, fileId);
-    if (result.outcome === "not-found-or-clean") return;
-    if (result.outcome === "unsupported-backend") {
-      showCsvSaveErrorToast({ showToast, t });
-      return;
-    }
-
-    setFiles(result.files);
-    showCsvChangesAppliedToast({ showToast, t });
+    runSaveCsvChangesWorkflow({
+      editEnabled: EDIT_ENABLED,
+      files,
+      fileId,
+      setFiles,
+      showToast,
+      t,
+    });
   };
 '@
 $content = [regex]::Replace($content, $saveChangesPattern, $saveChangesReplacement, 1)
+
+$saveChangesAnyPattern = '(?s)  const handleSaveChanges = async \(fileId: string\) => \{.*?\r?\n  \};\r?\n\r?\n(?=  const handleToggleExpand)'
+$content = [regex]::Replace($content, $saveChangesAnyPattern, ($saveChangesReplacement + "`r`n"), 1)
 
 $content = $content.Replace(
     "      showToast(`"info`", t('upload.editDisabledNotice'));",
@@ -3908,6 +4189,34 @@ $content = $content.Replace(
 )
 
 $content = $content.Replace(
+    'import { showMissingPdfConvertProcessToast } from "./upload/uploadPdfConvertToastUtils";' + "`r`n",
+    ''
+)
+
+$pdfConvertDelegationPattern = '(?s)  const handlePdfConvert = async \(fileId: string\): Promise<boolean> => \{.*?\r?\n  \};\r?\n\r?\n(?=  const updateCell =)'
+$pdfConvertDelegationReplacement = @'
+  const handlePdfConvert = (fileId: string): Promise<boolean> =>
+    runPdfConvertWorkflow({
+      fileId,
+      filesRef,
+      triggerPdfConvert: uploadApi.triggerPdfConvert,
+      fetchPdfConvertStatus: uploadApi.fetchPdfConvertStatus,
+      fetchPdfConvertedCsvOutputs: uploadApi.fetchPdfConvertedCsvOutputs,
+      sleep: delay,
+      attachPdfConvertJob,
+      updatePdfConvertProgress,
+      replacePdfWithCsvFiles,
+      failPdfConvert,
+      beginPdfConvert,
+      toPdfConvertProgress,
+      showToast,
+      t,
+    });
+
+'@
+$content = [regex]::Replace($content, $pdfConvertDelegationPattern, $pdfConvertDelegationReplacement, 1)
+
+$content = $content.Replace(
     'import { buildUploadedCsvFilesFromPdfOutputs, parseCsv } from "./upload/uploadFileUtils";',
     'import { parseCsv } from "./upload/uploadFileUtils";'
 )
@@ -3944,14 +4253,99 @@ $content = $content.Replace(
 )
 
 $content = $content.Replace(
+    'import { runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$content = $content.Replace(
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runConfirmedSingleImportWorkflow, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$content = $content.Replace(
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runConfirmedSingleImportWorkflow, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runConfirmedSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$content = $content.Replace(
     'import { showBatchImportUnavailableToast, showImportErrorToast, showMissingImportTargetToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./upload/uploadImportToastUtils";',
     'import { showBatchImportUnavailableToast, showMissingImportTargetToast } from "./upload/uploadImportToastUtils";'
+)
+
+$content = $content.Replace(
+    'import { showBatchImportUnavailableToast, showMissingImportTargetToast } from "./upload/uploadImportToastUtils";',
+    'import { showMissingImportTargetToast } from "./upload/uploadImportToastUtils";'
+)
+
+$content = [regex]::Replace(
+    $content,
+    '(?m)^import \{ showMissingImportTargetToast \} from "\./upload/uploadImportToastUtils";\r?\n',
+    ''
 )
 
 $content = $content.Replace(
     'import { scheduleBatchPostImportCleanup, scheduleSinglePostImportCleanup } from "./upload/uploadImportCleanupUtils";',
     'import { scheduleBatchPostImportCleanup } from "./upload/uploadImportCleanupUtils";'
 )
+
+$content = $content.Replace(
+    'import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileHasImportJob, fileHasValidationErrors, fileIsUploadedButUnvalidated } from "./upload/uploadEligibility";',
+    'import { fileHasValidationErrors } from "./upload/uploadEligibility";'
+)
+
+$content = [regex]::Replace(
+    $content,
+    '(?m)^import \{ fileHasValidationErrors \} from "\./upload/uploadEligibility";\r?\n',
+    ''
+)
+$content = $content.Replace(
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { fileHasValidationErrors } from "./upload/uploadEligibility";' + "`r`n" +
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$content = $content.Replace(
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runConfirmedSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";',
+    'import { fileHasValidationErrors } from "./upload/uploadEligibility";' + "`r`n" +
+    'import { requestBatchImportConfirmation, runBatchConversion, runBatchImportWorkflow, runBatchImport, runBatchValidation, runConfirmedSingleImportWorkflow, type ValidateOutcome } from "./upload/uploadBatchOrchestrator";'
+)
+
+$batchImportClickPattern = '(?s)  const handleBatchImportClick = \(\) => \{.*?\r?\n  \};\r?\n\r?\n(?=  const performBatchImport = async \(\) => \{)'
+$batchImportClickReplacement = @'
+  const handleBatchImportClick = () => {
+    if (requestBatchImportConfirmation({ files, showToast, t })) {
+      setShowBatchImportConfirm(true);
+    }
+  };
+
+'@
+$content = [regex]::Replace($content, $batchImportClickPattern, $batchImportClickReplacement, 1)
+
+$performImportPattern = '(?s)  const performImport = async \(\) => \{\r?\n    if \(!confirmTargetId\) return;\r?\n    const id = confirmTargetId;\r?\n    setConfirmTargetId\(null\);\r?\n\r?\n    const target = files\.find\(\(f\) => f\.id === id\);\r?\n    if \(!target \|\| !target\.processId\) \{\r?\n      showMissingImportTargetToast\(\{ showToast, t \}\);\r?\n      return;\r?\n    \}\r?\n\r?\n\r?\n    await runSingleImportWorkflow\(\{.*?\r?\n    \}\);\r?\n  \};'
+$performImportReplacement = @'
+  const performImport = async () => {
+    const id = confirmTargetId;
+    setConfirmTargetId(null);
+
+    await runConfirmedSingleImportWorkflow({
+      id,
+      files,
+      commitImportJob: uploadApi.commitImportJob,
+      fetchImportJob: uploadApi.fetchImportJob,
+      sleep: delay,
+      filesRef,
+      beginImport,
+      setImportProgress,
+      completeImport,
+      resetImport,
+      removeImportedFiles,
+      toImportProgress,
+      showToast,
+      t,
+    });
+  };
+'@
+$content = [regex]::Replace($content, $performImportPattern, $performImportReplacement, 1)
 
 Set-Content -Encoding UTF8 $uploadPagePath $content
 

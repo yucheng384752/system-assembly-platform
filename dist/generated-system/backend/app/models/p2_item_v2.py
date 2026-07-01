@@ -12,11 +12,10 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import TIMESTAMP, UUID
+from sqlalchemy.dialects.postgresql import JSONB, TIMESTAMP, UUID
 from sqlalchemy.orm import relationship
 
 from app.core.database import Base
-from app.core.db_types import JsonBColumn
 
 
 class P2ItemV2(Base):
@@ -51,7 +50,7 @@ class P2ItemV2(Base):
     slitting_result = Column(Integer)
 
     # Original row data from CSV
-    row_data = Column(JsonBColumn())
+    row_data = Column(JSONB)
 
     @staticmethod
     def _utcnow():

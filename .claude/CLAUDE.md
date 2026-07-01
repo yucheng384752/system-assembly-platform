@@ -11,3 +11,4 @@
 ## Rule 11 — Match the codebase's conventions, even if you disagreeConformance > taste inside the codebase.If you genuinely think a convention is harmful, surface it. Don't fork silently.
 ## Rule 12 — Fail loud"Completed" is wrong if anything was skipped silently."Tests pass" is wrong if any were skipped.Default to surfacing uncertainty, not hiding it.
 ## Rule 13 - Use traditional Chinese response user's questions
+## Rule 14 - if user use skills: mailbox，create new thread in path: C:\Users\gslab\Documents\New project\form-system-kit-composer\.codex-claude-mailbox and discuss with codex

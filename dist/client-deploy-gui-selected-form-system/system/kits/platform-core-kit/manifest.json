@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "platform-core-kit",
+    "displayName":  "平台核心",
+    "installOrder":  10,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

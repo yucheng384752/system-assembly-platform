@@ -3,10 +3,25 @@ param(
     [string]$ResolvedPlanPath = "assembly\mvp-resolved-plan.json",
     [string]$SourceSystemDirectory = "generated\mvp-import-flow\form-analysis-server",
     [string]$OutputDirectory = "dist\generated-system",
+    [switch]$SkipFrontendBuild,
     [switch]$CreateZip
 )
 
 $ErrorActionPreference = "Stop"
+
+function Assert-WizardFresh([string]$Root) {
+    $wizardPy = Join-Path $Root "tools\install-wizard.py"
+    $wizardExe = Join-Path $Root "tools\install-wizard.exe"
+    if ((Test-Path $wizardPy) -and (Test-Path $wizardExe)) {
+        $pyTime = (Get-Item $wizardPy).LastWriteTime
+        $exeTime = (Get-Item $wizardExe).LastWriteTime
+        if ($pyTime -gt $exeTime) {
+            throw "install-wizard.py is newer than install-wizard.exe. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+    }
+}
+
+Assert-WizardFresh $ProjectRoot
 
 function Read-JsonUtf8([string]$Path) {
     return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
@@ -38,9 +53,22 @@ $plan = Read-JsonUtf8 (Join-Path $ProjectRoot $ResolvedPlanPath)
 $sourcePath = Join-Path $ProjectRoot $SourceSystemDirectory
 $outputPath = Join-Path $ProjectRoot $OutputDirectory
 
+& (Join-Path $ProjectRoot "tools\validate-kit-contracts.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputPath "assembly\kit-contract-report.json"
+
 New-CleanDirectory $outputPath
 Copy-Tree (Join-Path $sourcePath "backend") (Join-Path $outputPath "backend")
 Copy-Tree (Join-Path $sourcePath "frontend") (Join-Path $outputPath "frontend")
+
+# Enforce: logs-ops-kit is mandatory when platform-core-kit is selected,
+# because the generated backend emits report_user_action calls that must be persisted.
+if (($plan.resolvedKitOrder -contains "platform-core-kit") -and
+    -not ($plan.resolvedKitOrder -contains "logs-ops-kit")) {
+    throw "Assembly error: logs-ops-kit is required whenever platform-core-kit is selected. " +
+          "Add 'logs-ops-kit' to enabledKits in your recipe before assembling."
+}
 
 # Overlay kit-specific source files from kits/<id>/src/ into the assembled system.
 # Files are copied file-by-file to merge correctly into existing backend/ and frontend/ trees.
@@ -58,7 +86,7 @@ foreach ($kitId in @($plan.resolvedKitOrder)) {
 
 # Keep generated backend compatible with Python 3.10 deployments.
 Get-ChildItem -LiteralPath (Join-Path $outputPath "backend") -Recurse -File -Filter *.py | ForEach-Object {
-    $content = [string](Get-Content -Raw -Encoding UTF8 $_.FullName)
+    $content = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
     $updated = $content.Replace("from datetime import UTC, datetime", "from datetime import datetime, timezone").Replace("datetime.now(UTC)", "datetime.now(timezone.utc)")
     $updated = $updated.Replace("from enum import StrEnum", "from enum import Enum")
     $updated = [regex]::Replace($updated, "class ([A-Za-z_][A-Za-z0-9_]*)\(StrEnum\):", 'class $1(str, Enum):')
@@ -507,6 +535,13 @@ $assemblyIrPath = Join-Path $OutputDirectory $assemblyIrPackagePath
     -IRPath $assemblyIrPath `
     -OutputDirectory (Join-Path $OutputDirectory "assembly\backend-registry")
 
+$generatedBackendRegistry = Join-Path $outputPath "assembly\backend-registry\backend_router_registry.py"
+$runtimeBackendRegistry = Join-Path $outputPath "backend\app\core\backend_router_registry.py"
+if (-not (Test-Path $generatedBackendRegistry)) {
+    throw "Generated backend router registry not found: $generatedBackendRegistry"
+}
+Copy-Item -LiteralPath $generatedBackendRegistry -Destination $runtimeBackendRegistry -Force
+
 & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
     -ProjectRoot $ProjectRoot `
     -IRPath $assemblyIrPath `
@@ -520,7 +555,9 @@ $assemblyIrPath = Join-Path $OutputDirectory $assemblyIrPackagePath
 # Build frontend production bundle (result: frontend/dist/)
 # Must run after generate-dependency-files.ps1 which creates package.json + tsconfig
 $frontendDir = Join-Path $outputPath "frontend"
-if (Test-Path (Join-Path $frontendDir "package.json")) {
+if ($SkipFrontendBuild) {
+    Write-Host "Skipping frontend production build."
+} elseif (Test-Path (Join-Path $frontendDir "package.json")) {
     Write-Host "Building frontend (npm install + npm run build)..."
     Push-Location $frontendDir
     try {

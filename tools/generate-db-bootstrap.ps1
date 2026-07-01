@@ -45,10 +45,12 @@ from app.core.database import Base, close_db, init_db
 
 
 def load_bootstrap_plan() -> dict[str, object]:
-    plan_path = Path(__file__).resolve().parents[3] / "db-bootstrap-plan.json"
-    if not plan_path.exists():
-        return {}
-    return json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    current = Path(__file__).resolve()
+    for parent in current.parents:
+        plan_path = parent / "db-bootstrap-plan.json"
+        if plan_path.exists():
+            return json.loads(plan_path.read_text(encoding="utf-8-sig"))
+    return {}
 
 
 def import_model_modules() -> list[str]:
@@ -70,6 +72,56 @@ def import_model_modules() -> list[str]:
     return imported
 
 
+def _schema_columns(schema_json: dict[str, object]) -> list[str]:
+    fields = schema_json.get("fields") or schema_json.get("columns") or []
+    columns: list[str] = []
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        column = field.get("fieldKey") or field.get("name")
+        if column:
+            columns.append(str(column))
+    return columns
+
+
+_META_COLS: list[tuple[str, str]] = [
+    ('"_tenant_id"',     "UUID"),
+    ('"_import_job_id"', "UUID"),
+    ('"_row_index"',     "INTEGER"),
+    ('"_imported_at"',   "TIMESTAMPTZ DEFAULT NOW()"),
+]
+
+
+def create_schema_target_tables(connection, schema_versions: list[dict[str, object]]) -> int:
+    created = 0
+    for version in schema_versions:
+        table_code = version.get("formCode") or version.get("tableCode")
+        if not isinstance(table_code, str) or not table_code.startswith("daihui_"):
+            continue
+        schema_json = version.get("schemaJson") or {}
+        if not isinstance(schema_json, dict):
+            continue
+        columns = [c for c in _schema_columns(schema_json) if c.replace("_", "").isalnum()]
+        if not columns:
+            continue
+        biz_sql  = ", ".join(f'"{c}" TEXT' for c in columns)
+        meta_sql = ", ".join(f"{col} {typ}" for col, typ in _META_COLS)
+        connection.execute(text(
+            f'CREATE TABLE IF NOT EXISTS "{table_code}" ({biz_sql}, {meta_sql})'
+        ))
+        for col, typ in _META_COLS:
+            connection.execute(text(
+                f'ALTER TABLE "{table_code}" ADD COLUMN IF NOT EXISTS {col} {typ}'
+            ))
+        safe = table_code.replace('"', '')
+        connection.execute(text(
+            f'CREATE UNIQUE INDEX IF NOT EXISTS "uq_{safe}_job_row" '
+            f'ON "{table_code}" ("_tenant_id", "_import_job_id", "_row_index")'
+        ))
+        created += 1
+    return created
+
+
 def seed_schema_contracts(connection) -> dict[str, int]:
     plan = load_bootstrap_plan()
     schema_contract = plan.get("schemaContract") or {}
@@ -79,11 +131,16 @@ def seed_schema_contracts(connection) -> dict[str, int]:
 
     table_registry = Base.metadata.tables.get("table_registry")
     schema_versions_table = Base.metadata.tables.get("schema_versions")
+    tenants_table = Base.metadata.tables.get("tenants")
+    stations_table = Base.metadata.tables.get("stations")
+    station_schemas_table = Base.metadata.tables.get("station_schemas")
 
     if table_registry is None or schema_versions_table is None:
         return {
             "seededFormDefinitions": 0,
             "seededSchemaVersions": 0,
+            "seededStations": 0,
+            "seededStationSchemas": 0,
         }
 
     table_ids: dict[str, object] = {}
@@ -145,9 +202,87 @@ def seed_schema_contracts(connection) -> dict[str, int]:
         )
         seeded_versions += 1
 
+    seeded_stations = 0
+    seeded_station_schemas = 0
+    if tenants_table is not None and stations_table is not None and station_schemas_table is not None:
+        tenant_ids = connection.execute(select(tenants_table.c.id)).scalars().all()
+        versions_by_code = {
+            version.get("formCode") or version.get("tableCode"): version
+            for version in schema_versions
+            if version.get("formCode") or version.get("tableCode")
+        }
+        for tenant_id in tenant_ids:
+            for sort_order, form in enumerate(form_definitions):
+                table_code = form.get("tableCode") or form.get("formCode")
+                if not table_code:
+                    continue
+                station_id = connection.execute(
+                    select(stations_table.c.id).where(
+                        stations_table.c.tenant_id == tenant_id,
+                        stations_table.c.code == table_code,
+                    )
+                ).scalar_one_or_none()
+                if station_id is None:
+                    result = connection.execute(
+                        stations_table.insert().values(
+                            tenant_id=tenant_id,
+                            code=table_code,
+                            name=form.get("displayName") or table_code,
+                            sort_order=sort_order,
+                            has_items=False,
+                        )
+                    )
+                    station_id = result.inserted_primary_key[0]
+                    seeded_stations += 1
+
+                version = versions_by_code.get(table_code) or {}
+                schema_json = version.get("schemaJson") or {}
+                fields = schema_json.get("fields") or []
+                unique_key_fields = [
+                    field.get("fieldKey")
+                    for field in fields
+                    if field.get("fieldKey") and field.get("role") in {"lot", "material", "quality_result"}
+                ]
+                if not unique_key_fields:
+                    unique_key_fields = [
+                        field.get("fieldKey")
+                        for field in fields
+                        if field.get("fieldKey") and bool(field.get("is_key"))
+                    ]
+                existing_schema_id = connection.execute(
+                    select(station_schemas_table.c.id).where(
+                        station_schemas_table.c.station_id == station_id,
+                        station_schemas_table.c.version == int(version.get("version") or 1),
+                    )
+                ).scalar_one_or_none()
+                if existing_schema_id is None:
+                    connection.execute(
+                        station_schemas_table.insert().values(
+                            station_id=station_id,
+                            version=int(version.get("version") or 1),
+                            is_active=True,
+                            record_fields=fields,
+                            item_fields=None,
+                            unique_key_fields=unique_key_fields,
+                            csv_signature_columns=[
+                                field.get("sourceName")
+                                for field in fields
+                                if field.get("sourceName")
+                            ],
+                            csv_filename_pattern=None,
+                            csv_field_mapping=schema_json,
+                        )
+                    )
+                    seeded_station_schemas += 1
+
+    created_schema_tables = create_schema_target_tables(connection, schema_versions)
+
     return {
         "seededFormDefinitions": seeded_forms,
         "seededSchemaVersions": seeded_versions,
+        "seededStations": seeded_stations,
+        "seededStationSchemas": seeded_station_schemas,
+        "createdSchemaTargetTables": created_schema_tables,
     }
 
 

@@ -34,6 +34,121 @@ function resolveSystemDir() {
 const BUNDLE_SKIP_DIRS = new Set(["node_modules", "__pycache__", ".venv", "logs", ".git"]);
 const BUNDLE_SKIP_EXT = new Set([".pyc", ".pyo", ".log"]);
 const BUNDLE_SKIP_FILES = new Set([".env"]);
+const REQUIRED_ARTIFACTS = ["install-wizard.exe", "install-wizard.py"];
+
+function packageManifest() {
+  const artifacts = REQUIRED_ARTIFACTS.map((name) => {
+    const filePath = path.join(__dirname, name);
+    return { name, path: filePath, present: fs.existsSync(filePath) };
+  });
+  const missing = artifacts.filter((a) => !a.present).map((a) => a.name);
+  return { ok: missing.length === 0, artifacts, missing };
+}
+
+function handlePackageManifest(res) {
+  json(res, 200, packageManifest());
+}
+
+function readJsonRelative(relPath) {
+  const filePath = path.join(root, relPath);
+  const result = { path: relPath.replace(/\\/g, "/"), exists: fs.existsSync(filePath), data: null };
+  if (!result.exists) return result;
+  try {
+    const bytes = fs.readFileSync(filePath);
+    const isUtf16Le = (bytes[0] === 0xff && bytes[1] === 0xfe) || bytes.slice(0, 80).some((byte, index) => index % 2 === 1 && byte === 0);
+    const text = bytes.toString(isUtf16Le ? "utf16le" : "utf8").replace(/^\uFEFF/, "");
+    result.data = JSON.parse(text);
+  } catch (err) {
+    result.error = err.message;
+  }
+  return result;
+}
+
+function asArray(value) {
+  return Array.isArray(value) ? value : [];
+}
+
+function deriveKitEdges(kits) {
+  const ids = new Set(kits.map((kit) => kit.id || kit.kit || kit));
+  const edges = [];
+  for (const kit of kits) {
+    const target = kit.id || kit.kit || kit;
+    const deps = asArray(kit.dependencies || kit.dependsOn || kit.requires);
+    for (const dep of deps) {
+      if (ids.has(dep)) edges.push({ from: dep, to: target });
+    }
+  }
+  return edges;
+}
+
+function normalizeDbTables(dbPlan) {
+  const tables = dbPlan?.tables;
+  if (!tables) return [];
+  if (Array.isArray(tables)) return tables;
+  return Object.entries(tables).map(([name, value]) => ({ name, ...(value || {}) }));
+}
+
+function handleAssemblyReasoning(res) {
+  const sources = {
+    resolvedPlan: readJsonRelative("assembly/resolved-plan.json"),
+    assemblyIr: readJsonRelative("assembly/assembly-ir.json"),
+    backendRegistry: readJsonRelative("assembly/backend-registry/backend-router-registry.json"),
+    frontendRegistry: readJsonRelative("assembly/frontend-registry/frontend-tab-registry.json"),
+    dbPlan: readJsonRelative("assembly/db-plan/db-assembly-plan.json"),
+    entitlementPlan: readJsonRelative("assembly/entitlement-plan/entitlement-plan.json"),
+  };
+  const warnings = Object.entries(sources)
+    .filter(([, source]) => !source.exists || source.error)
+    .map(([key, source]) => `${key}: ${source.error || "missing"}`);
+  const plan = sources.resolvedPlan.data || {};
+  const ir = sources.assemblyIr.data || {};
+  const backendRouters = asArray(sources.backendRegistry.data || plan.backendRouterRegistrations);
+  const frontendRoutes = asArray(sources.frontendRegistry.data || ir.frontendNavigation || plan.frontendNavigation);
+  const dbTables = normalizeDbTables(sources.dbPlan.data || {});
+  const selectedKits = asArray(ir.selectedKits).length
+    ? asArray(ir.selectedKits)
+    : asArray(plan.resolvedKitOrder).map((id) => ({ id }));
+  const runtimeNodes = asArray(ir.runtimeNodes);
+  const runtimeEdges = asArray(ir.runtimeEdges);
+  const steps = [
+    { id: "recipe", label: "Recipe", input: "GUI selection", output: plan.recipe || ir.sourceRecipe || "resolved recipe", status: sources.resolvedPlan.exists ? "ok" : "warn" },
+    { id: "resolve", label: "Resolve kits", input: "recipe + kit manifests", output: `${selectedKits.length} kits`, status: selectedKits.length ? "ok" : "warn" },
+    { id: "assembly-ir", label: "Assembly IR", input: "resolved-plan + baselines", output: "assembly/assembly-ir.json", status: sources.assemblyIr.exists ? "ok" : "warn" },
+    { id: "backend", label: "Backend registry", input: "selected backend sources", output: `${backendRouters.length} routers`, status: backendRouters.length ? "ok" : "warn" },
+    { id: "frontend", label: "Frontend registry", input: "selected frontend sources", output: `${frontendRoutes.length} tabs`, status: frontendRoutes.length ? "ok" : "warn" },
+    { id: "database", label: "DB plan", input: "schema contracts", output: `${dbTables.length} tables`, status: dbTables.length ? "ok" : "warn" },
+    { id: "package", label: "Deploy package", input: "assembled system", output: "dist/client-deploy-*.zip", status: "ok" },
+  ];
+  json(res, 200, {
+    generatedAt: new Date().toISOString(),
+    files: Object.entries(sources).map(([key, source]) => ({
+      key,
+      path: source.path,
+      exists: source.exists,
+      error: source.error || "",
+    })),
+    pipelineSteps: steps,
+    kitGraph: { kits: selectedKits, edges: deriveKitEdges(selectedKits) },
+    runtimeGraph: { nodes: runtimeNodes, edges: runtimeEdges },
+    frontendRoutes,
+    backendRouters,
+    storageDecisions: asArray(ir.storageDecisions),
+    dbTables,
+    entitlement: sources.entitlementPlan.data || null,
+    warnings,
+  });
+}
+
+function ensurePackageArtifacts(res) {
+  const manifest = packageManifest();
+  if (manifest.ok) return true;
+  json(res, 422, {
+    error: "Package incomplete",
+    missing: manifest.missing,
+    message: `Required files missing: ${manifest.missing.join(", ")}. Run build-wizard-exe.ps1 before packaging.`,
+  });
+  return false;
+}
 
 function walkSystemDir(baseDir, relDir = "") {
   const out = [];
@@ -59,6 +174,7 @@ function walkSystemDir(baseDir, relDir = "") {
 }
 
 function handleSystemBundle(res) {
+  if (!ensurePackageArtifacts(res)) return;
   const sysDir = resolveSystemDir();
   if (!sysDir) {
     json(res, 404, { error: "system dir not found (set SYSTEM_DIR or assemble a deploy package first)", available: false });
@@ -99,8 +215,9 @@ function handleIssueLicense(req, res) {
     catch { json(res, 400, { error: "invalid JSON" }); return; }
 
     const pubkey = String(body.pubkey || "").trim();
-    if (!pubkey.includes("-----BEGIN PUBLIC KEY-----")) {
-      json(res, 400, { error: "machinePublicKey required (RSA PEM)" });
+    const validationError = validatePublicKeyPem(pubkey);
+    if (validationError) {
+      json(res, 400, { error: validationError });
       return;
     }
 
@@ -148,6 +265,19 @@ function json(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+function validatePublicKeyPem(pubkey) {
+  if (!pubkey.includes("-----BEGIN PUBLIC KEY-----") || !pubkey.includes("-----END PUBLIC KEY-----")) {
+    return "invalid pubkey (must use BEGIN/END PUBLIC KEY PEM format)";
+  }
+  try {
+    const key = crypto.createPublicKey(pubkey);
+    if (key.asymmetricKeyType !== "rsa") return "invalid pubkey (RSA public key required)";
+    return "";
+  } catch (err) {
+    return `invalid pubkey (${err.message})`;
+  }
+}
+
 function handleApiLog(req, res) {
   let raw = "";
   req.on("data", (chunk) => { raw += chunk; });
@@ -187,8 +317,9 @@ function handleRegisterMachine(req, res) {
     try {
       const body = JSON.parse(raw || "{}");
       const pubkey = String(body.pubkey || "").trim();
-      if (!pubkey.includes("-----BEGIN PUBLIC KEY-----") || !pubkey.includes("-----END PUBLIC KEY-----")) {
-        json(res, 400, { error: "invalid pubkey (must be RSA PEM format with BEGIN PUBLIC KEY header)" });
+      const validationError = validatePublicKeyPem(pubkey);
+      if (validationError) {
+        json(res, 400, { error: validationError });
         return;
       }
       fs.readFile(machinesFile, "utf8", (err, data) => {
@@ -269,6 +400,14 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/api/system-bundle" && req.method === "GET") {
     handleSystemBundle(res);
+    return;
+  }
+  if (pathname === "/api/package-manifest" && req.method === "GET") {
+    handlePackageManifest(res);
+    return;
+  }
+  if (pathname === "/api/assembly/reasoning" && req.method === "GET") {
+    handleAssemblyReasoning(res);
     return;
   }
   if (pathname === "/api/license-status" && req.method === "GET") {

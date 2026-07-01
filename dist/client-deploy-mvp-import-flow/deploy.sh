@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+﻿#!/usr/bin/env bash
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
 #  Recipe : mvp-import-flow
@@ -102,7 +102,7 @@ echo ""
 echo "=== Deploy complete ==="
 if [ "${BACKGROUND}" -eq 1 ]; then
     mkdir -p "${SYS_ROOT}/logs"
-    (cd "${SYS_ROOT}/backend" ; nohup python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
+    (cd "${SYS_ROOT}/backend" ; nohup python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
     echo "$!" >"${SYS_ROOT}/logs/backend.pid")
     ok "Backend running in background on port 8000"
     info "Log: ${SYS_ROOT}/logs/backend.log"
@@ -111,7 +111,7 @@ if [ "${BACKGROUND}" -eq 1 ]; then
     fi
 else
     info "Start backend:"
-    info "  cd ${SYS_ROOT}/backend && python3 -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    info "  cd ${SYS_ROOT}/backend && python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
     if [ -f "${SYS_ROOT}/frontend/package.json" ]; then
         info "Start frontend (separate terminal):"
         info "  cd ${SYS_ROOT}/frontend && npm run dev"

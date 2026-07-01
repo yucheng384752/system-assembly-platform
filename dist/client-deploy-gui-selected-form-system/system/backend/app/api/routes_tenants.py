@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.database import get_db
+from app.core.monitoring import report_user_action
 from app.models.core.tenant import Tenant
 
 router = APIRouter(tags=["Tenants"])
@@ -119,6 +120,14 @@ async def create_tenant(
         )
 
     await db.refresh(tenant)
+
+    _ip = request.client.host if request and request.client else "unknown"
+    report_user_action(
+        action="create_tenant",
+        state="success",
+        describe=f"tenant={tenant.code} ip={_ip}",
+    )
+
     return tenant
 
 
@@ -180,6 +189,14 @@ async def admin_create_tenant(
         )
 
     await db.refresh(tenant)
+
+    _ip = request.client.host if request and request.client else "unknown"
+    report_user_action(
+        action="admin_create_tenant",
+        state="success",
+        describe=f"tenant={tenant.code} ip={_ip}",
+    )
+
     return tenant
 
 
@@ -254,6 +271,14 @@ async def update_tenant(
 
     await db.commit()
     await db.refresh(tenant)
+
+    _ip = request.client.host if request and request.client else "unknown"
+    report_user_action(
+        action="update_tenant",
+        state="success",
+        describe=f"tenant_id={tenant_id} ip={_ip}",
+    )
+
     return tenant
 
 
@@ -298,4 +323,12 @@ async def delete_tenant(
 
     await db.commit()
     await db.refresh(tenant)
+
+    _ip = request.client.host if request and request.client else "unknown"
+    report_user_action(
+        action="delete_tenant",
+        state="success",
+        describe=f"tenant_id={tenant_id} code={tenant.code} ip={_ip}",
+    )
+
     return tenant

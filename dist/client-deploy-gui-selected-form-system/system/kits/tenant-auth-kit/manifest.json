@@ -1,0 +1,16 @@
+﻿{
+    "kit":  "tenant-auth-kit",
+    "displayName":  "租戶與登入權限",
+    "installOrder":  20,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+                       "SECRET_KEY",
+                       "AUTH_MODE"
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

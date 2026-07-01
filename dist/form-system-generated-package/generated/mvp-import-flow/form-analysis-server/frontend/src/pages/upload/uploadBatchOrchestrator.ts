@@ -1,6 +1,7 @@
 ﻿import type { UploadedFile } from "./uploadTypes";
 import { fileEligibleForBatchImport, fileEligibleForConvert, fileEligibleForValidate, fileHasBlockingImportErrors, fileIsUploadedButUnvalidated } from "./uploadEligibility";
-import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast } from "./uploadImportToastUtils";
+import { showBatchImportCompletedToast, showBatchImportSkipErrorsToast, showBatchImportStartToast, showBatchImportUnavailableToast, showImportErrorToast, showMissingImportTargetToast, showSingleImportCompletedToast, showSingleImportStartToast } from "./uploadImportToastUtils";
+import { scheduleSinglePostImportCleanup } from "./uploadImportCleanupUtils";
 
 export type ValidateOutcome =
   | { outcome: "passed"; totalRows: number }
@@ -62,6 +63,12 @@ interface BatchImportWorkflowOptions {
   t: Translate;
 }
 
+interface BatchImportConfirmationOptions {
+  files: UploadedFile[];
+  showToast: ShowToast;
+  t: Translate;
+}
+
 interface SingleImportOptions {
   file: UploadedFile;
   commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
@@ -70,6 +77,40 @@ interface SingleImportOptions {
   setImportProgress: (fileId: string, progress: number) => void;
   completeImport: (fileId: string) => void;
   toImportProgress: (jobStatus: string) => number;
+  t: Translate;
+}
+
+interface SingleImportWorkflowOptions {
+  id: string;
+  target: UploadedFile;
+  commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  sleep: (ms: number) => Promise<void>;
+  filesRef: { current: UploadedFile[] };
+  beginImport: (fileIds: string[], progress: number) => void;
+  setImportProgress: (fileId: string, progress: number) => void;
+  completeImport: (fileId: string) => void;
+  resetImport: (fileIds: string[]) => void;
+  removeImportedFiles: (fileIds: string[]) => void;
+  toImportProgress: (jobStatus: string) => number;
+  showToast: ShowToast;
+  t: Translate;
+}
+
+interface ConfirmedSingleImportWorkflowOptions {
+  id: string | null;
+  files: UploadedFile[];
+  commitImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  fetchImportJob: (jobId: string) => Promise<ImportJobStatus>;
+  sleep: (ms: number) => Promise<void>;
+  filesRef: { current: UploadedFile[] };
+  beginImport: (fileIds: string[], progress: number) => void;
+  setImportProgress: (fileId: string, progress: number) => void;
+  completeImport: (fileId: string) => void;
+  resetImport: (fileIds: string[]) => void;
+  removeImportedFiles: (fileIds: string[]) => void;
+  toImportProgress: (jobStatus: string) => number;
+  showToast: ShowToast;
   t: Translate;
 }
 
@@ -96,19 +137,10 @@ export async function runBatchValidation({
   let errorCount = 0;
   let failCount = 0;
 
-  for (let index = 0; index < targets.length; index++) {
-    const file = targets[index];
-    showToast(
-      "info",
-      t("upload.batchValidate.toast.progress", {
-        current: index + 1,
-        total: targets.length,
-        fileName: file.name,
-      }),
-      { key: "validateAll", durationMs: null }
-    );
-
-    const result = await handleValidate(file.id, { silentToast: true });
+  const results = await Promise.all(targets.map((file) =>
+    handleValidate(file.id, { silentToast: true })
+  ));
+  for (const result of results) {
     if (result.outcome === "passed") okCount += 1;
     else if (result.outcome === "errors") errorCount += 1;
     else failCount += 1;
@@ -146,19 +178,8 @@ export async function runBatchConversion({
   let okCount = 0;
   let failCount = 0;
 
-  for (let index = 0; index < targets.length; index++) {
-    const file = targets[index];
-    showToast(
-      "info",
-      t("upload.batchConvert.toast.progress", {
-        current: index + 1,
-        total: targets.length,
-        fileName: file.name,
-      }),
-      { key: "convertAll", durationMs: null }
-    );
-
-    const ok = await handlePdfConvert(file.id);
+  const convertResults = await Promise.all(targets.map((file) => handlePdfConvert(file.id)));
+  for (const ok of convertResults) {
     if (ok) okCount += 1; else failCount += 1;
   }
 
@@ -223,6 +244,29 @@ export async function runBatchImport({
   }
 
   return totalImported;
+}
+
+export function requestBatchImportConfirmation({
+  files,
+  showToast,
+  t,
+}: BatchImportConfirmationOptions): boolean {
+  const validatedFiles = files.filter(fileEligibleForBatchImport);
+
+  if (validatedFiles.length === 0) {
+    const filesWithErrors = files.filter(fileHasBlockingImportErrors);
+    const unvalidatedFiles = files.filter(fileIsUploadedButUnvalidated);
+
+    showBatchImportUnavailableToast({
+      filesWithErrorsCount: filesWithErrors.length,
+      unvalidatedFilesCount: unvalidatedFiles.length,
+      showToast,
+      t,
+    });
+    return false;
+  }
+
+  return true;
 }
 
 export async function runBatchImportWorkflow({
@@ -339,4 +383,94 @@ export async function runSingleImport({
   }
 
   completeImport(file.id);
+}
+
+export async function runSingleImportWorkflow({
+  id,
+  target,
+  commitImportJob,
+  fetchImportJob,
+  sleep,
+  filesRef,
+  beginImport,
+  setImportProgress,
+  completeImport,
+  resetImport,
+  removeImportedFiles,
+  toImportProgress,
+  showToast,
+  t,
+}: SingleImportWorkflowOptions): Promise<void> {
+  showSingleImportStartToast({ fileName: target.name, showToast, t });
+  beginImport([id], 20);
+
+  try {
+    await runSingleImport({
+      file: target,
+      commitImportJob,
+      fetchImportJob,
+      sleep,
+      setImportProgress,
+      completeImport,
+      toImportProgress,
+      t,
+    });
+
+    showSingleImportCompletedToast({ fileName: target.name, showToast, t });
+
+    scheduleSinglePostImportCleanup({
+      id,
+      filesRef,
+      removeImportedFiles,
+      showToast,
+      t,
+    });
+  } catch (err) {
+    console.error("Single import error:", err);
+    const errorMessage = err instanceof Error ? err.message : t("upload.errors.importError");
+    showImportErrorToast({ message: errorMessage, showToast, t });
+    resetImport([id]);
+  }
+}
+
+export async function runConfirmedSingleImportWorkflow({
+  id,
+  files,
+  commitImportJob,
+  fetchImportJob,
+  sleep,
+  filesRef,
+  beginImport,
+  setImportProgress,
+  completeImport,
+  resetImport,
+  removeImportedFiles,
+  toImportProgress,
+  showToast,
+  t,
+}: ConfirmedSingleImportWorkflowOptions): Promise<void> {
+  if (!id) return;
+
+  const target = files.find((file) => file.id === id);
+  if (!target || !target.processId) {
+    showMissingImportTargetToast({ showToast, t });
+    return;
+  }
+
+  await runSingleImportWorkflow({
+    id,
+    target,
+    commitImportJob,
+    fetchImportJob,
+    sleep,
+    filesRef,
+    beginImport,
+    setImportProgress,
+    completeImport,
+    resetImport,
+    removeImportedFiles,
+    toImportProgress,
+    showToast,
+    t,
+  });
 }

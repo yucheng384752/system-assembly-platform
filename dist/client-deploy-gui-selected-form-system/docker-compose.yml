@@ -35,11 +35,6 @@ services:
       ENVIRONMENT: ${ENVIRONMENT:-production}
     ports:
       - "8000:8000"
-    # TPM device passthrough omitted — host is Windows/Docker Desktop (no /dev/tpmrm0).
-    # license.py falls back to /etc/machine-id automatically.
-    # For Linux bare-metal deployment with TPM, restore:
-    #   devices: [/dev/tpmrm0:/dev/tpmrm0]
-    #   group_add: [tss]
     depends_on:
       db:
         condition: service_healthy

@@ -17,10 +17,12 @@ $requiredPaths = @(
     "uploadTypes.ts",
     "uploadFileAddUtils.ts",
     "uploadFileAddToastUtils.ts",
+    "uploadFileAddWorkflow.ts",
     "uploadAsyncUtils.ts",
     "uploadFileUtils.ts",
     "uploadCsvEditUtils.ts",
     "uploadCsvEditToastUtils.ts",
+    "uploadCsvEditWorkflow.ts",
     "uploadEligibility.ts",
     "uploadProgress.ts",
     "uploadApiClient.ts",
@@ -50,10 +52,12 @@ $uploadPage = Get-Content -Raw -Encoding UTF8 $uploadPagePath
 $types = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadTypes.ts")
 $fileAddUtils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadFileAddUtils.ts")
 $fileAddToastUtils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadFileAddToastUtils.ts")
+$fileAddWorkflow = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadFileAddWorkflow.ts")
 $asyncUtils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadAsyncUtils.ts")
 $utils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadFileUtils.ts")
 $csvEditUtils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadCsvEditUtils.ts")
 $csvEditToastUtils = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadCsvEditToastUtils.ts")
+$csvEditWorkflow = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadCsvEditWorkflow.ts")
 $eligibility = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadEligibility.ts")
 $progress = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadProgress.ts")
 $apiClient = Get-Content -Raw -Encoding UTF8 (Join-Path $moduleRoot "uploadApiClient.ts")
@@ -76,12 +80,20 @@ if ($uploadPage -notmatch "uploadFileUtils" -or $uploadPage -notmatch "uploadTyp
     throw "UploadPage does not import extracted upload modules."
 }
 
-if ($uploadPage -notmatch "uploadFileAddUtils") {
-    throw "UploadPage does not import extracted file-add helper."
+if ($uploadPage -match "uploadFileAddUtils") {
+    throw "UploadPage still imports file-add utility; expected in file-add workflow."
 }
 
-if ($uploadPage -notmatch "uploadFileAddToastUtils") {
-    throw "UploadPage does not import extracted file-add toast helper."
+if ($uploadPage -match "uploadFileAddToastUtils") {
+    throw "UploadPage still imports file-add toast helper; expected in file-add workflow."
+}
+
+if ($uploadPage -notmatch "uploadFileAddWorkflow") {
+    throw "UploadPage does not import extracted file-add workflow helper."
+}
+
+if ($fileAddWorkflow -notmatch "uploadFileAddUtils" -or $fileAddWorkflow -notmatch "uploadFileAddToastUtils") {
+    throw "uploadFileAddWorkflow does not delegate to file-add utility and toast helpers."
 }
 
 if ($uploadPage -notmatch "uploadAsyncUtils") {
@@ -112,16 +124,33 @@ if ($uploadPage -notmatch "uploadPdfConversionOrchestrator") {
     throw "UploadPage does not import extracted PDF conversion orchestration helper."
 }
 
-if ($uploadPage -notmatch "uploadPdfConvertToastUtils") {
-    throw "UploadPage does not import extracted PDF conversion toast helper."
+if ($uploadPage -match "uploadPdfConvertToastUtils") {
+    throw "UploadPage still imports PDF conversion toast helper; expected in orchestrator."
 }
 
-if ($uploadPage -notmatch "uploadCsvEditUtils") {
-    throw "UploadPage does not import extracted CSV edit helpers."
+if ($pdfConversionOrchestrator -notmatch "uploadPdfConvertToastUtils") {
+    throw "PDF conversion orchestrator does not import extracted PDF conversion toast helper."
 }
 
-if ($uploadPage -notmatch "uploadCsvEditToastUtils") {
-    throw "UploadPage does not import extracted CSV edit toast helper."
+if ($uploadPage -match "uploadCsvEditUtils") {
+    throw "UploadPage still imports CSV edit utility; expected in CSV edit workflow."
+}
+
+if ($uploadPage -notmatch "uploadCsvEditWorkflow") {
+    throw "UploadPage does not import extracted CSV edit workflow helper."
+}
+
+$csvEditWorkflowImportCount = ([regex]::Matches($uploadPage, 'import \{ runSaveCsvChangesWorkflow, runUpdateCsvCellWorkflow \} from "\./upload/uploadCsvEditWorkflow";')).Count
+if ($csvEditWorkflowImportCount -ne 1) {
+    throw "UploadPage should import uploadCsvEditWorkflow exactly once."
+}
+
+if ($uploadPage -match "uploadCsvEditToastUtils") {
+    throw "UploadPage still imports CSV edit toast helper; expected in CSV edit workflow."
+}
+
+if ($csvEditWorkflow -notmatch "uploadCsvEditToastUtils") {
+    throw "CSV edit workflow does not import extracted CSV edit toast helper."
 }
 
 if ($uploadPage -notmatch "uploadValidationOrchestrator") {
@@ -132,8 +161,12 @@ if ($validationOrchestrator -notmatch "uploadValidationToastUtils") {
     throw "uploadValidationOrchestrator does not import uploadValidationToastUtils."
 }
 
-if ($uploadPage -notmatch "uploadImportToastUtils") {
-    throw "UploadPage does not import extracted import toast helper."
+if ($uploadPage -match "uploadImportToastUtils") {
+    throw "UploadPage still imports import toast helper; expected in import orchestrator."
+}
+
+if ($batchOrchestrator -notmatch "uploadImportToastUtils") {
+    throw "uploadBatchOrchestrator does not import extracted import toast helper."
 }
 
 if ($uploadPage -notmatch "useUploadApi") {
@@ -184,12 +217,19 @@ if ($uploadPage -notmatch "runBatchImportWorkflow\(\{" -or $uploadPage -match "f
     throw "UploadPage does not delegate batch import commit/poll orchestration."
 }
 
-if ($uploadPage -notmatch "runSingleImportWorkflow\(\{") {
-    throw "UploadPage does not delegate single import orchestration to runSingleImportWorkflow."
+if ($uploadPage -notmatch "runConfirmedSingleImportWorkflow\(\{") {
+    throw "UploadPage does not delegate confirmed single import orchestration to runConfirmedSingleImportWorkflow."
 }
 
-if ($uploadPage -match "runSingleImport\(\{" -or $uploadPage -match "setImportProgress\(id, 60\)" -or $uploadPage -match "setImportProgress\(id, toImportProgress\(committedJob\.status\)\)" -or $uploadPage -match "completeImport\(id\)") {
+if ($uploadPage -match "runSingleImportWorkflow\(\{" -or $uploadPage -match "runSingleImport\(\{" -or $uploadPage -match "setImportProgress\(id, 60\)" -or $uploadPage -match "setImportProgress\(id, toImportProgress\(committedJob\.status\)\)" -or $uploadPage -match "completeImport\(id\)") {
     throw "UploadPage still owns single import commit/poll details; expected in orchestrator."
+}
+
+if ($uploadPage -match "showMissingImportTargetToast" `
+    -or $uploadPage -match "const target = files\.find" `
+    -or $uploadPage -match "!target \|\| !target\.processId" `
+    -or $uploadPage -match "uploadImportToastUtils") {
+    throw "UploadPage still owns single import target/process preflight."
 }
 
 if ($uploadPage -notmatch "runPdfConvertWorkflow\(\{") {
@@ -200,6 +240,12 @@ if ($uploadPage -match "runPdfConversion\(\{" -or $uploadPage -match "const maxT
     throw "UploadPage still owns PDF conversion polling details; expected in orchestrator."
 }
 
+if ($uploadPage -match "showMissingPdfConvertProcessToast" `
+    -or $uploadPage -match "target\.type !== 'PDF'" `
+    -or $uploadPage -match "processId: target\.processId") {
+    throw "UploadPage still owns PDF conversion target/process preflight."
+}
+
 if ($pdfConversionOrchestrator -notmatch "export async function runPdfConvertWorkflow") {
     throw "uploadPdfConversionOrchestrator is missing runPdfConvertWorkflow."
 }
@@ -208,24 +254,54 @@ if ($pdfConversionOrchestrator -notmatch "buildUploadedCsvFilesFromPdfOutputs" -
     throw "uploadPdfConversionOrchestrator is missing expected runPdfConvertWorkflow internals."
 }
 
+if ($pdfConversionOrchestrator -notmatch "showMissingPdfConvertProcessToast" `
+    -or $pdfConversionOrchestrator -notmatch "filesRef\.current\.find" `
+    -or $pdfConversionOrchestrator -notmatch "target\.type !== `"PDF`"" `
+    -or $pdfConversionOrchestrator -notmatch "const processId = target\.processId") {
+    throw "uploadPdfConversionOrchestrator is missing PDF conversion target/process preflight."
+}
+
 if ($uploadPage -match "const buildCsvText =" -or $uploadPage -match "const shouldResetV2Job =" -or $uploadPage -match "csvData: \{ \.\.\.f\.csvData, rows \}" -or $uploadPage -match "new File\(\[csv_text\]" -or $uploadPage -match "const updatedFile = new File") {
     throw "UploadPage still owns CSV edit/save helper details."
 }
 
-if ($uploadPage -notmatch "buildUploadFilesToAdd\(\{" -or $uploadPage -match "const newFiles: UploadedFile\[\]" -or $uploadPage -match "lowerName\.endsWith" -or $uploadPage -match "isLikelyDuplicate" -or $uploadPage -match "file\.size > MAX_SIZE_BYTES" -or $uploadPage -match "detectFileType\(file\.name\)" -or $uploadPage -match "jobBackend: type === `"PDF`"") {
+if ($uploadPage -notmatch "runAddUploadFilesWorkflow\(\{" -or $uploadPage -match "buildUploadFilesToAdd\(\{" -or $uploadPage -match "const newFiles: UploadedFile\[\]" -or $uploadPage -match "lowerName\.endsWith" -or $uploadPage -match "isLikelyDuplicate" -or $uploadPage -match "file\.size > MAX_SIZE_BYTES" -or $uploadPage -match "detectFileType\(file\.name\)" -or $uploadPage -match "jobBackend: type === `"PDF`"") {
     throw "UploadPage does not delegate file-add workflow."
 }
 
-if ($uploadPage -notmatch "showFileAddResultToasts\(\{" -or $uploadPage -match "upload\.toast\.onlyCsvOrPdf" -or $uploadPage -match "upload\.toast\.fileAlreadyExists" -or $uploadPage -match "upload\.toast\.fileTooLarge" -or $uploadPage -match "upload\.toast\.filesAdded") {
+if ($uploadPage -match "showFileAddResultToasts\(\{" -or $uploadPage -match "upload\.toast\.onlyCsvOrPdf" -or $uploadPage -match "upload\.toast\.fileAlreadyExists" -or $uploadPage -match "upload\.toast\.fileTooLarge" -or $uploadPage -match "upload\.toast\.filesAdded") {
     throw "UploadPage does not delegate file-add toast handling."
 }
 
-if ($uploadPage -notmatch "updateCsvCellInFiles\(prev, fileId, rowIndex, colIndex, value\)" -or $uploadPage -notmatch "saveCsvChangesInFiles\(files, fileId\)") {
+if ($fileAddWorkflow -notmatch "export function runAddUploadFilesWorkflow" `
+    -or $fileAddWorkflow -notmatch "buildUploadFilesToAdd\(\{" `
+    -or $fileAddWorkflow -notmatch "showFileAddResultToasts\(\{" `
+    -or $fileAddWorkflow -notmatch "setFiles\(\(prev\) => \[\.\.\.prev, \.\.\.result\.files\]\)") {
+    throw "uploadFileAddWorkflow is missing add-file orchestration."
+}
+
+if ($uploadPage -notmatch "runUpdateCsvCellWorkflow\(\{" -or $uploadPage -notmatch "runSaveCsvChangesWorkflow\(\{") {
     throw "UploadPage does not delegate CSV edit/save helper logic."
 }
 
-if ($uploadPage -notmatch "showCsvEditDisabledToast\(\{" -or $uploadPage -notmatch "showCsvSaveErrorToast\(\{" -or $uploadPage -notmatch "showCsvChangesAppliedToast\(\{" -or $uploadPage -match "upload\.toast\.changesAppliedRevalidate" -or $uploadPage -match "upload\.errors\.saveError") {
+if ($uploadPage -match "saveCsvChangesInFiles\(files, fileId\)" `
+    -or $uploadPage -match "updateCsvCellInFiles\(prev, fileId, rowIndex, colIndex, value\)" `
+    -or $uploadPage -match "showCsvEditDisabledToast\(\{" `
+    -or $uploadPage -match "showCsvSaveErrorToast\(\{" `
+    -or $uploadPage -match "showCsvChangesAppliedToast\(\{" `
+    -or $uploadPage -match "upload\.toast\.changesAppliedRevalidate" `
+    -or $uploadPage -match "upload\.errors\.saveError") {
     throw "UploadPage does not delegate CSV edit/save toast handling."
+}
+
+if ($csvEditWorkflow -notmatch "export function runUpdateCsvCellWorkflow" `
+    -or $csvEditWorkflow -notmatch "updateCsvCellInFiles\(prev, fileId, rowIndex, colIndex, value\)" `
+    -or $csvEditWorkflow -notmatch "export function runSaveCsvChangesWorkflow" `
+    -or $csvEditWorkflow -notmatch "saveCsvChangesInFiles\(files, fileId\)" `
+    -or $csvEditWorkflow -notmatch "showCsvEditDisabledToast\(\{" `
+    -or $csvEditWorkflow -notmatch "showCsvSaveErrorToast\(\{" `
+    -or $csvEditWorkflow -notmatch "showCsvChangesAppliedToast\(\{") {
+    throw "CSV edit workflow is missing save result/toast orchestration."
 }
 
 if ($uploadPage -notmatch "runValidateWorkflow\(\{") {
@@ -272,6 +348,14 @@ if ($batchOrchestrator -notmatch "export async function runSingleImportWorkflow"
     throw "uploadBatchOrchestrator is missing runSingleImportWorkflow."
 }
 
+if ($batchOrchestrator -notmatch "export async function runConfirmedSingleImportWorkflow" `
+    -or $batchOrchestrator -notmatch "showMissingImportTargetToast\(\{" `
+    -or $batchOrchestrator -notmatch "const target = files\.find" `
+    -or $batchOrchestrator -notmatch "!target \|\| !target\.processId" `
+    -or $batchOrchestrator -notmatch "runSingleImportWorkflow\(\{") {
+    throw "uploadBatchOrchestrator is missing confirmed single import target/process preflight."
+}
+
 if ($batchOrchestrator -notmatch "showSingleImportStartToast" -or $batchOrchestrator -notmatch "showSingleImportCompletedToast") {
     throw "uploadBatchOrchestrator is missing single import toast helpers."
 }
@@ -314,15 +398,20 @@ foreach ($localPredicate in @(
 }
 
 foreach ($predicateUsage in @(
-    "fileEligibleForValidate",
-    "fileEligibleForConvert",
-    "fileEligibleForBatchImport",
-    "fileHasBlockingImportErrors",
-    "fileIsUploadedButUnvalidated",
-    "fileHasImportJob"
+    "fileHasValidationErrors"
 )) {
     if ($uploadPage -notmatch $predicateUsage) {
         throw "UploadPage is missing extracted eligibility predicate usage: $predicateUsage"
+    }
+}
+
+foreach ($batchPredicate in @(
+    "fileEligibleForBatchImport",
+    "fileHasBlockingImportErrors",
+    "fileIsUploadedButUnvalidated"
+)) {
+    if ($uploadPage -match $batchPredicate) {
+        throw "UploadPage still owns batch import eligibility predicate usage: $batchPredicate"
     }
 }
 
@@ -380,11 +469,12 @@ if ($uploadPage -match "beginPdfConvert\(fileId\)" `
 
 if ($uploadPage -notmatch "beginImport," `
     -or $uploadPage -notmatch "runBatchImportWorkflow\(\{" `
-    -or $uploadPage -notmatch "runSingleImportWorkflow\(\{") {
+    -or $uploadPage -notmatch "runConfirmedSingleImportWorkflow\(\{") {
     throw "UploadPage does not delegate import state transitions to workflow hook actions."
 }
 
 if ($uploadPage -match "beginImport\(\[id\], 20\)" `
+    -or $uploadPage -match "runSingleImportWorkflow\(\{" `
     -or $uploadPage -match "runSingleImport\(\{" `
     -or $uploadPage -match "resetImport\(\[id\]\)") {
     throw "UploadPage still owns single import orchestration detail; expected in runSingleImportWorkflow."
@@ -646,12 +736,18 @@ if ($uploadApiHook -notmatch "export function useUploadApi" -or $uploadApiHook -
     throw "Upload API hook is missing expected tenant/client setup behavior."
 }
 
-if ($batchOrchestrator -notmatch "export type ValidateOutcome" -or $batchOrchestrator -notmatch "export async function runBatchValidation" -or $batchOrchestrator -notmatch "export async function runBatchConversion" -or $batchOrchestrator -notmatch "export async function runBatchImport" -or $batchOrchestrator -notmatch "export async function runBatchImportWorkflow" -or $batchOrchestrator -notmatch "export async function runSingleImport" -or $batchOrchestrator -notmatch "commitImportJob" -or $batchOrchestrator -notmatch "fetchImportJob" -or $batchOrchestrator -notmatch "fileEligibleForValidate" -or $batchOrchestrator -notmatch "fileEligibleForConvert") {
+if ($batchOrchestrator -notmatch "export type ValidateOutcome" -or $batchOrchestrator -notmatch "export async function runBatchValidation" -or $batchOrchestrator -notmatch "export async function runBatchConversion" -or $batchOrchestrator -notmatch "export async function runBatchImport" -or $batchOrchestrator -notmatch "export function requestBatchImportConfirmation" -or $batchOrchestrator -notmatch "export async function runBatchImportWorkflow" -or $batchOrchestrator -notmatch "export async function runSingleImport" -or $batchOrchestrator -notmatch "commitImportJob" -or $batchOrchestrator -notmatch "fetchImportJob" -or $batchOrchestrator -notmatch "fileEligibleForValidate" -or $batchOrchestrator -notmatch "fileEligibleForConvert") {
     throw "Upload batch orchestration module is missing expected exports."
 }
 
 if ($uploadPage -match "const totalFiles = files\.length" -or $uploadPage -match "showBatchImportStartToast" -or $uploadPage -match "resetImport\(validatedFiles") {
     throw "UploadPage still owns batch import workflow orchestration."
+}
+
+if ($uploadPage -notmatch "requestBatchImportConfirmation\(\{" `
+    -or $uploadPage -match "const validatedFiles = files\.filter\(fileEligibleForBatchImport\)" `
+    -or $uploadPage -match "showBatchImportUnavailableToast\(\{") {
+    throw "UploadPage still owns batch import confirmation eligibility."
 }
 
 if ($pdfConversionOrchestrator -notmatch "export async function runPdfConversion" -or $pdfConversionOrchestrator -notmatch "maxConsecutiveErrors" -or $pdfConversionOrchestrator -notmatch "fetchPdfConvertStatus" -or $pdfConversionOrchestrator -notmatch "updatePdfConvertProgress" -or $pdfConversionOrchestrator -notmatch 'outcome: "completed"') {

@@ -52,6 +52,84 @@
     { "from": "material.material_code", "to": "production.material_code", "type": "traceability", "enforcement": "logical" },
     { "from": "production.production_batch_no", "to": "quality.production_batch_no", "type": "traceability", "enforcement": "logical" }
   ],
+  "dataFlowDefinition": {
+    "anchorStep": "daihui_entry",
+    "note": "Linear 5-step chain. anchor provides flow_key (批號); other steps attach via exact match or flow_key_aliases.",
+    "schemaMatchStrategy": {
+      "sortColumnsBeforeHash": true,
+      "levels": ["col_set_hash", "schema_hash"],
+      "colSetHashField": "header_fingerprint",
+      "note": "col_set_hash = SHA256(sorted column names). schema_hash = SHA256(sorted name+type pairs). Both stored in schema_versions."
+    },
+    "flowRunLookupStrategy": {
+      "stages": [
+        { "stage": 1, "method": "exact",  "matchOn": ["flow_key", "flow_key_type", "tenant_id"] },
+        { "stage": 2, "method": "alias",  "source": "flow_key_aliases", "matchOn": ["key_type", "key_value"] },
+        { "stage": 3, "method": "manual", "status": "waiting_for_mapping", "action": "prompt_user_confirmation", "onConfirmed": "write_to_flow_key_aliases" }
+      ]
+    },
+    "steps": [
+      {
+        "stepName": "daihui_entry",
+        "displayName": "入庫單",
+        "stepOrder": 1,
+        "isAnchor": true,
+        "businessKey": "批號",
+        "businessKeyColumn": "lotColumn",
+        "dateColumn": "入庫日期",
+        "keyMatchStrategy": "anchor",
+        "required": true
+      },
+      {
+        "stepName": "daihui_inspection",
+        "displayName": "錫棒製程檢查表",
+        "stepOrder": 2,
+        "isAnchor": false,
+        "businessKey": "批號",
+        "businessKeyColumn": "lotColumn",
+        "dateColumn": "製造日期",
+        "keyMatchStrategy": "exact",
+        "note": "批號 column name matches anchor; stage-1 lookup sufficient.",
+        "required": false
+      },
+      {
+        "stepName": "daihui_material",
+        "displayName": "領料退料單",
+        "stepOrder": 3,
+        "isAnchor": false,
+        "businessKey": "原料卡號",
+        "businessKeyColumn": "materialColumn",
+        "dateColumn": "領料日期",
+        "keyMatchStrategy": "alias",
+        "note": "原料卡號 ≠ 批號; requires flow_key_aliases entry confirmed by user or auto-inferred.",
+        "required": false
+      },
+      {
+        "stepName": "daihui_production",
+        "displayName": "生產紀錄卡",
+        "stepOrder": 4,
+        "isAnchor": false,
+        "businessKey": "生產批號",
+        "businessKeyColumn": "lotColumn",
+        "dateColumn": null,
+        "keyMatchStrategy": "alias",
+        "note": "No dateColumn. Linked via 原料卡號 alias from step 3.",
+        "required": false
+      },
+      {
+        "stepName": "daihui_quality",
+        "displayName": "成品品質檢驗表",
+        "stepOrder": 5,
+        "isAnchor": false,
+        "businessKey": null,
+        "businessKeyColumn": null,
+        "dateColumn": "檢驗日期",
+        "keyMatchStrategy": "alias",
+        "note": "No dedicated key column. Links via production_batch_no alias from step 4. process_date = 檢驗日期 for display only.",
+        "required": false
+      }
+    ]
+  },
   "forms": [
     {
       "formCode": "daihui_entry",
