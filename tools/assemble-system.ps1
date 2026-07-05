@@ -103,6 +103,22 @@ Get-ChildItem -LiteralPath (Join-Path $outputPath "backend") -Recurse -File -Fil
     }
 }
 
+# Inject current signing public key into assembled license.py to prevent drift.
+$pubKeyPath = Join-Path $ProjectRoot "tools\keys\signing-public-key.pem"
+$assembledLicensePath = Join-Path $outputPath "backend\app\core\license.py"
+if ((Test-Path $pubKeyPath) -and (Test-Path $assembledLicensePath)) {
+    $pubKeyPem = (Get-Content -Raw -Encoding UTF8 $pubKeyPath).Trim()
+    $licContent = [System.IO.File]::ReadAllText($assembledLicensePath, [System.Text.Encoding]::UTF8)
+    $newBlock = "_PUBLIC_KEY_PEM = `"`"`"`n$pubKeyPem`n`"`"`""
+    $licUpdated = [regex]::Replace($licContent, '_PUBLIC_KEY_PEM\s*=\s*"""[\s\S]*?"""', $newBlock)
+    if ($licUpdated -ne $licContent) {
+        [System.IO.File]::WriteAllText($assembledLicensePath, $licUpdated, (New-Object System.Text.UTF8Encoding $false))
+        Write-Host "OK  Injected signing public key into assembled license.py"
+    }
+} elseif (-not (Test-Path $pubKeyPath)) {
+    Write-Warning "tools\keys\signing-public-key.pem not found — run tools\generate-license-keys.ps1 to create key pair"
+}
+
 $auditServicePath = Join-Path $outputPath "backend\app\services\audit_events.py"
 if (-not (Test-Path $auditServicePath)) {
     @'
