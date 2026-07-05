@@ -89,6 +89,19 @@ function Test-RunningPid([string]$PidPath) {
     }
 }
 
+# Returns the PID of the process listening on the given port, or $null.
+# Uses netstat so it catches any process regardless of whether the PID file knows about it.
+function Get-PortOwnerPid([int]$PortNumber) {
+    $match = netstat -ano 2>$null |
+        Select-String "LISTENING" |
+        Where-Object { $_.Line -match ":$PortNumber\s" } |
+        Select-Object -First 1
+    if (-not $match) { return $null }
+    $parts = $match.Line.Trim() -split '\s+'
+    $ownerPid = [int]$parts[-1]
+    return if ($ownerPid -gt 0) { $ownerPid } else { $null }
+}
+
 # P3: Poll TCP until the server accepts connections or timeout expires.
 function Wait-TcpReady([string]$Address, [int]$PortNum, [int]$TimeoutSecs = 10) {
     $deadline = (Get-Date).AddSeconds($TimeoutSecs)
@@ -118,6 +131,34 @@ if (-not (Get-Command $Node -ErrorAction SilentlyContinue)) {
 $runtimeRoot = Join-Path $resolvedProjectRoot "runtime"
 $logsRoot = Join-Path $resolvedProjectRoot "logs"
 $pidPath = Join-Path $runtimeRoot "platform.pid"
+
+# Clean up stale PID file (process dead but file still exists).
+if ((Test-Path -LiteralPath $pidPath) -and -not (Test-RunningPid $pidPath)) {
+    Remove-Item -LiteralPath $pidPath -Force -ErrorAction SilentlyContinue
+}
+
+# Detect orphan: any process listening on the preferred port that is NOT tracked
+# by the PID file (e.g. started manually with `node tools/serve-gui.cjs`).
+$orphanPid = Get-PortOwnerPid $Port
+if ($orphanPid) {
+    $pidFileEntry = if (Test-Path -LiteralPath $pidPath) {
+        (Get-Content -LiteralPath $pidPath -Raw -Encoding UTF8).Trim()
+    } else { "" }
+
+    if ($pidFileEntry -ne [string]$orphanPid) {
+        if ($Restart) {
+            Write-Host "Port $Port is occupied by untracked PID $orphanPid — stopping orphan..."
+            Stop-Process -Id $orphanPid -Force -ErrorAction SilentlyContinue
+            Start-Sleep -Milliseconds 600
+            Write-Host "Orphan stopped."
+        } else {
+            Write-Warning "Port $Port is occupied by PID $orphanPid which is not tracked by the PID file."
+            Write-Warning "This orphan will remain running alongside the new server on a different port."
+            Write-Warning "Use -Restart to stop it automatically before starting."
+        }
+    }
+}
+
 $actualPort = Get-AvailablePort $HostAddress $Port
 $url = "http://$HostAddress`:$actualPort/"
 
