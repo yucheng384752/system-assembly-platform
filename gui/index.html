@@ -21,7 +21,6 @@
           <button class="nav-item is-active" data-view="configure"><span>01</span>選擇業務流程</button>
           <button class="nav-item" data-view="database"><span>02</span>資料保存方式</button>
           <button class="nav-item" data-view="generate"><span>03</span>輸出部署套件</button>
-          <button class="nav-item" data-view="reasoning"><span>04</span>組裝推理</button>
         </nav>
 
         <div class="sidebar-foot">
@@ -169,6 +168,31 @@
               <div id="generation-summary" class="summary-list"></div>
             </section>
 
+            <div class="deploy-mode-card">
+              <h3>套件類型</h3>
+              <p style="font-size:13px;color:var(--ink-2,#243244);margin:0 0 12px;">選擇交付給客戶的安裝方式：</p>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <label class="deploy-mode-option" id="mode-online-label">
+                  <input type="radio" name="deploy-mode" value="online" id="deploy-mode-online" checked />
+                  <div>
+                    <strong>聯網版</strong>
+                    <p>安裝時自動從網路取得 Python 套件（pip）與系統依賴（apt-get）。<br>部署機器需要網路連線。</p>
+                  </div>
+                </label>
+                <label class="deploy-mode-option" id="mode-offline-label">
+                  <input type="radio" name="deploy-mode" value="offline" id="deploy-mode-offline" />
+                  <div>
+                    <strong>離線版</strong>
+                    <p>安裝時使用套件內預先打包的 wheels 與離線依賴，無需網路連線。<br>需在部署前執行 <code>prepare-offline.ps1</code> 預先下載。</p>
+                  </div>
+                </label>
+              </div>
+              <div id="offline-prepare-hint" hidden style="margin-top:12px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;font-size:12px;color:#1e40af;">
+                ⚙ 離線版需要在下載前執行 <code>node tools/serve-gui.cjs</code> 並確認 system/ 目錄存在，<br>
+                並且預先執行 <code>tools/prepare-offline.ps1</code> 下載 pip wheels 到 <code>system/backend/wheels/</code>。
+              </div>
+            </div>
+
             <div class="deploy-cta-card">
               <div class="deploy-cta-icon">⬇</div>
               <h3>開發者組裝包</h3>
@@ -185,21 +209,6 @@
               </div>
               <button class="deploy-btn" id="download-package" type="button">下載 .zip</button>
             </div>
-          </div>
-        </section>
-        <section class="view" id="view-reasoning">
-          <header class="page-head">
-            <p class="eyebrow">Assembly Engine</p>
-            <h2>組裝推理可視化</h2>
-            <p>檢視 recipe 如何被解析成 kit、API router、前端頁籤、資料表與部署輸出。</p>
-          </header>
-
-          <div class="reasoning-toolbar">
-            <button class="ghost-action" id="reload-reasoning" type="button">重新載入</button>
-            <span id="reasoning-status" class="reasoning-status">尚未載入</span>
-          </div>
-          <div id="reasoning-view" class="reasoning-view">
-            <div class="empty-state">點擊「重新載入」或切換到此頁後載入 assembly 推理資料。</div>
           </div>
         </section>
 

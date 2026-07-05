@@ -88,57 +88,6 @@ function normalizeDbTables(dbPlan) {
   return Object.entries(tables).map(([name, value]) => ({ name, ...(value || {}) }));
 }
 
-function handleAssemblyReasoning(res) {
-  const sources = {
-    resolvedPlan: readJsonRelative("assembly/resolved-plan.json"),
-    assemblyIr: readJsonRelative("assembly/assembly-ir.json"),
-    backendRegistry: readJsonRelative("assembly/backend-registry/backend-router-registry.json"),
-    frontendRegistry: readJsonRelative("assembly/frontend-registry/frontend-tab-registry.json"),
-    dbPlan: readJsonRelative("assembly/db-plan/db-assembly-plan.json"),
-    entitlementPlan: readJsonRelative("assembly/entitlement-plan/entitlement-plan.json"),
-  };
-  const warnings = Object.entries(sources)
-    .filter(([, source]) => !source.exists || source.error)
-    .map(([key, source]) => `${key}: ${source.error || "missing"}`);
-  const plan = sources.resolvedPlan.data || {};
-  const ir = sources.assemblyIr.data || {};
-  const backendRouters = asArray(sources.backendRegistry.data || plan.backendRouterRegistrations);
-  const frontendRoutes = asArray(sources.frontendRegistry.data || ir.frontendNavigation || plan.frontendNavigation);
-  const dbTables = normalizeDbTables(sources.dbPlan.data || {});
-  const selectedKits = asArray(ir.selectedKits).length
-    ? asArray(ir.selectedKits)
-    : asArray(plan.resolvedKitOrder).map((id) => ({ id }));
-  const runtimeNodes = asArray(ir.runtimeNodes);
-  const runtimeEdges = asArray(ir.runtimeEdges);
-  const steps = [
-    { id: "recipe", label: "Recipe", input: "GUI selection", output: plan.recipe || ir.sourceRecipe || "resolved recipe", status: sources.resolvedPlan.exists ? "ok" : "warn" },
-    { id: "resolve", label: "Resolve kits", input: "recipe + kit manifests", output: `${selectedKits.length} kits`, status: selectedKits.length ? "ok" : "warn" },
-    { id: "assembly-ir", label: "Assembly IR", input: "resolved-plan + baselines", output: "assembly/assembly-ir.json", status: sources.assemblyIr.exists ? "ok" : "warn" },
-    { id: "backend", label: "Backend registry", input: "selected backend sources", output: `${backendRouters.length} routers`, status: backendRouters.length ? "ok" : "warn" },
-    { id: "frontend", label: "Frontend registry", input: "selected frontend sources", output: `${frontendRoutes.length} tabs`, status: frontendRoutes.length ? "ok" : "warn" },
-    { id: "database", label: "DB plan", input: "schema contracts", output: `${dbTables.length} tables`, status: dbTables.length ? "ok" : "warn" },
-    { id: "package", label: "Deploy package", input: "assembled system", output: "dist/client-deploy-*.zip", status: "ok" },
-  ];
-  json(res, 200, {
-    generatedAt: new Date().toISOString(),
-    files: Object.entries(sources).map(([key, source]) => ({
-      key,
-      path: source.path,
-      exists: source.exists,
-      error: source.error || "",
-    })),
-    pipelineSteps: steps,
-    kitGraph: { kits: selectedKits, edges: deriveKitEdges(selectedKits) },
-    runtimeGraph: { nodes: runtimeNodes, edges: runtimeEdges },
-    frontendRoutes,
-    backendRouters,
-    storageDecisions: asArray(ir.storageDecisions),
-    dbTables,
-    entitlement: sources.entitlementPlan.data || null,
-    warnings,
-  });
-}
-
 function ensurePackageArtifacts(res) {
   const manifest = packageManifest();
   if (manifest.ok) return true;
@@ -404,10 +353,6 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/api/package-manifest" && req.method === "GET") {
     handlePackageManifest(res);
-    return;
-  }
-  if (pathname === "/api/assembly/reasoning" && req.method === "GET") {
-    handleAssemblyReasoning(res);
     return;
   }
   if (pathname === "/api/license-status" && req.method === "GET") {

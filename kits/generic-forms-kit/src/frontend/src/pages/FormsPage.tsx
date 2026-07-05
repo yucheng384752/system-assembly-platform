@@ -61,6 +61,7 @@ export function FormsPage() {
   // schema editor
   const [editFields, setEditFields] = useState<FieldDef[]>([]);
   const [schemaSaving, setSchemaSaving] = useState(false);
+  const [schemaErrors, setSchemaErrors] = useState<string[]>([]);
 
   // upload
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -122,8 +123,26 @@ export function FormsPage() {
     loadForms();
   }
 
+  function validateSchema(fields: FieldDef[]): string[] {
+    const errs: string[] = [];
+    if (fields.length === 0) errs.push("Schema 至少需要一個欄位");
+    const names = fields.map(f => f.name.trim());
+    names.forEach((n, i) => {
+      if (!n) errs.push(`第 ${i + 1} 個欄位名稱不可為空`);
+      else if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(n)) errs.push(`欄位名稱 "${n}" 只能包含英文字母、數字與底線，且不可以數字開頭`);
+    });
+    const dupes = names.filter((n, i) => n && names.indexOf(n) !== i);
+    if (dupes.length > 0) errs.push(`欄位名稱重複：${[...new Set(dupes)].join("、")}`);
+    const keyFields = fields.filter(f => f.is_key);
+    if (keyFields.length === 0) errs.push("至少需要一個識別鍵欄位（is_key）");
+    return errs;
+  }
+
   async function saveSchema() {
     if (!selected) return;
+    const errs = validateSchema(editFields);
+    if (errs.length > 0) { setSchemaErrors(errs); return; }
+    setSchemaErrors([]);
     setSchemaSaving(true);
     try {
       const res = await fetch(`/api/forms/${selected.code}/schema`, {
@@ -136,6 +155,9 @@ export function FormsPage() {
         setForms(prev => prev.map(f => f.code === updated.code ? updated : f));
         setSelected(updated);
         setEditFields(updated.fields ? updated.fields.map(fd => ({ ...fd })) : []);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setSchemaErrors([err.detail || `儲存失敗 ${res.status}`]);
       }
     } finally {
       setSchemaSaving(false);
@@ -265,47 +287,64 @@ export function FormsPage() {
             {/* Schema tab */}
             {subTab === "schema" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {schemaErrors.length > 0 && (
+                  <div style={{ background: "#fef2f2", border: "1px solid #fca5a5", borderRadius: 6, padding: "10px 14px" }}>
+                    {schemaErrors.map((e, i) => (
+                      <div key={i} style={{ color: "#dc2626", fontSize: 13 }}>✕ {e}</div>
+                    ))}
+                  </div>
+                )}
                 <table style={{ borderCollapse: "collapse", width: "100%", fontSize: 13 }}>
                   <thead>
                     <tr style={{ background: "#f9fafb" }}>
-                      <th style={cell}>欄位名稱</th>
+                      <th style={cell}>欄位名稱 <span style={{ color: "#6b7280", fontWeight: 400, fontSize: 11 }}>(英文/底線)</span></th>
                       <th style={cell}>型別</th>
-                      <th style={cell}>必填</th>
-                      <th style={cell}>識別鍵</th>
+                      <th style={{ ...cell, textAlign: "center" }}>必填 *</th>
+                      <th style={{ ...cell, textAlign: "center" }}>識別鍵 🔑</th>
                       <th style={cell}></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {editFields.map((f, i) => (
-                      <tr key={i}>
-                        <td style={cell}>
-                          <input value={f.name} onChange={e => updateField(i, "name", e.target.value)}
-                            style={{ width: "100%", padding: "3px 6px", border: "1px solid #d1d5db", borderRadius: 4 }} />
-                        </td>
-                        <td style={cell}>
-                          <select value={f.type} onChange={e => updateField(i, "type", e.target.value)}
-                            style={{ padding: "3px 6px", border: "1px solid #d1d5db", borderRadius: 4 }}>
-                            {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                          </select>
-                        </td>
-                        <td style={{ ...cell, textAlign: "center" }}>
-                          <input type="checkbox" checked={f.required} onChange={e => updateField(i, "required", e.target.checked)} />
-                        </td>
-                        <td style={{ ...cell, textAlign: "center" }}>
-                          <input type="checkbox" checked={f.is_key} onChange={e => updateField(i, "is_key", e.target.checked)} />
-                        </td>
-                        <td style={cell}>
-                          <button style={btn("#ef4444")} onClick={() => setEditFields(prev => prev.filter((_, j) => j !== i))}>移除</button>
-                        </td>
-                      </tr>
-                    ))}
+                    {editFields.map((f, i) => {
+                      const nameInvalid = !f.name.trim() || !/^[A-Za-z_][A-Za-z0-9_]*$/.test(f.name.trim());
+                      const nameDupe = editFields.some((o, j) => j !== i && o.name.trim() === f.name.trim() && f.name.trim());
+                      const inputBorder = (nameInvalid || nameDupe) ? "1px solid #f87171" : "1px solid #d1d5db";
+                      return (
+                        <tr key={i} style={{ background: (nameInvalid || nameDupe) ? "#fff5f5" : undefined }}>
+                          <td style={cell}>
+                            <input value={f.name} onChange={e => { updateField(i, "name", e.target.value); setSchemaErrors([]); }}
+                              style={{ width: "100%", padding: "3px 6px", border: inputBorder, borderRadius: 4 }}
+                              placeholder="field_name" />
+                          </td>
+                          <td style={cell}>
+                            <select value={f.type} onChange={e => updateField(i, "type", e.target.value)}
+                              style={{ padding: "3px 6px", border: "1px solid #d1d5db", borderRadius: 4 }}>
+                              {FIELD_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </td>
+                          <td style={{ ...cell, textAlign: "center" }}>
+                            <input type="checkbox" checked={f.required} onChange={e => updateField(i, "required", e.target.checked)} />
+                          </td>
+                          <td style={{ ...cell, textAlign: "center" }}>
+                            <input type="checkbox" checked={f.is_key} onChange={e => updateField(i, "is_key", e.target.checked)} />
+                          </td>
+                          <td style={cell}>
+                            <button style={btn("#ef4444")} onClick={() => setEditFields(prev => prev.filter((_, j) => j !== i))}>移除</button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {editFields.length === 0 && (
+                      <tr><td colSpan={5} style={{ ...cell, textAlign: "center", color: "#9ca3af" }}>尚未定義欄位，請點擊「新增欄位」</td></tr>
+                    )}
                   </tbody>
                 </table>
-                <div style={{ display: "flex", gap: 8 }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button style={btn("#6b7280")} onClick={addField}>＋ 新增欄位</button>
                   <button style={btn()} onClick={saveSchema} disabled={schemaSaving}>
                     {schemaSaving ? "儲存中…" : "儲存 Schema"}
                   </button>
+                  <span style={{ fontSize: 12, color: "#6b7280" }}>* 必填欄位在 CSV 上傳時若缺少值將報錯；🔑 識別鍵用於去重</span>
                 </div>
               </div>
             )}
@@ -313,13 +352,36 @@ export function FormsPage() {
             {/* Upload tab */}
             {subTab === "upload" && (
               <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-                {selected.fields && selected.fields.length > 0 && (
-                  <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                    {selected.fields.map(f => (
-                      <span key={f.name} style={{ padding: "2px 8px", background: f.is_key ? "#dbeafe" : "#f3f4f6", border: `1px solid ${f.is_key ? "#93c5fd" : "#d1d5db"}`, borderRadius: 12, fontSize: 12 }}>
-                        {f.name}{f.is_key ? " 🔑" : ""}
-                      </span>
-                    ))}
+                {(!selected.fields || selected.fields.length === 0) ? (
+                  <div style={{ background: "#fffbeb", border: "1px solid #fbbf24", borderRadius: 6, padding: "10px 14px", fontSize: 13, color: "#92400e" }}>
+                    ⚠ 尚未定義欄位 Schema。請先至「欄位定義」tab 建立 Schema 再上傳 CSV。
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{ fontSize: 12, color: "#6b7280", marginBottom: 6 }}>
+                      CSV 欄位對應（<span style={{ color: "#dc2626" }}>*</span> 必填，🔑 識別鍵）：
+                    </div>
+                    <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                      {selected.fields.map(f => {
+                        const isRequired = f.required;
+                        const isKey = f.is_key;
+                        const bg = isKey ? "#dbeafe" : isRequired ? "#fef2f2" : "#f3f4f6";
+                        const border = isKey ? "#93c5fd" : isRequired ? "#fca5a5" : "#d1d5db";
+                        return (
+                          <span key={f.name} style={{ padding: "2px 8px", background: bg, border: `1px solid ${border}`, borderRadius: 12, fontSize: 12 }}>
+                            {isRequired && <span style={{ color: "#dc2626", marginRight: 2 }}>*</span>}
+                            {f.name}
+                            {isKey ? " 🔑" : ""}
+                            <span style={{ marginLeft: 4, color: "#9ca3af", fontSize: 10 }}>{f.type}</span>
+                          </span>
+                        );
+                      })}
+                    </div>
+                    {selected.fields.some(f => f.required) && (
+                      <div style={{ marginTop: 6, fontSize: 12, color: "#dc2626" }}>
+                        <span style={{ color: "#dc2626" }}>*</span> 標示欄位為必填，CSV 中對應欄若為空值將計為錯誤
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -341,7 +403,8 @@ export function FormsPage() {
                   允許重複匯入（相同識別鍵）
                 </label>
 
-                <button style={btn()} onClick={uploadCsv} disabled={!uploadFile || uploading}>
+                <button style={btn()} onClick={uploadCsv}
+                  disabled={!uploadFile || uploading || !selected.fields || selected.fields.length === 0}>
                   {uploading ? "上傳中…" : "開始上傳"}
                 </button>
 

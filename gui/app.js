@@ -189,9 +189,7 @@ const state = {
   pkFkApplied: null,
   fkHighlights: new Set(),
   machinePubkey: '',
-  assemblyReasoning: null,
-  assemblyReasoningLoaded: false,
-  assemblyReasoningLoading: false,
+  deploymentMode: 'online',
 };
 
 const elements = {};
@@ -211,6 +209,7 @@ async function start() {
   bindFlows();
   bindCsvUpload();
   bindNodeEditor();
+  bindDeploymentMode();
   renderAll();
   await initMachineGate();
 }
@@ -231,9 +230,7 @@ function cacheElements() {
     "recipe-output",
     "uploaded-tables-list",
     "node-editor-summary",
-    "reasoning-view",
-    "reasoning-status",
-    "reload-reasoning",
+
   ].forEach((id) => {
     elements[toCamel(id)] = document.querySelector(`#${id}`);
   });
@@ -320,7 +317,7 @@ function bindNavigation() {
       const view = document.querySelector(`#view-${button.dataset.view}`);
       if (!view) return;
       view.classList.add("is-visible");
-      if (button.dataset.view === "reasoning") loadAssemblyReasoning();
+
     });
   });
 }
@@ -346,7 +343,7 @@ function bindToolbarActions() {
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
   document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
-  document.querySelector("#reload-reasoning")?.addEventListener("click", () => loadAssemblyReasoning({ force: true }));
+
   document.querySelector("#package-machine-pubkey-file")?.addEventListener("change", (event) => {
     handleMachinePubkeyFile(event.target.files?.[0], {
       statusEl: document.querySelector("#package-pem-status"),
@@ -951,6 +948,16 @@ function renderNodeEditorSummary() {
     `;
   }).join("");
   el.innerHTML = `<div class="node-summary-flow">${chips}</div>`;
+}
+
+function bindDeploymentMode() {
+  document.querySelectorAll("input[name='deploy-mode']").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      state.deploymentMode = radio.value;
+      const hint = document.getElementById("offline-prepare-hint");
+      if (hint) hint.hidden = state.deploymentMode !== "offline";
+    });
+  });
 }
 
 function bindNodeEditor() {
@@ -1673,6 +1680,7 @@ function buildRecipe() {
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
     },
+    deploymentMode: state.deploymentMode || "online",
     ...(state.machinePubkey ? { machinePublicKey: state.machinePubkey } : {}),
   };
 }
@@ -2326,169 +2334,6 @@ async function downloadPackage() {
     btn.textContent = "下載失敗";
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   }
-}
-
-async function loadAssemblyReasoning({ force = false } = {}) {
-  if (state.assemblyReasoningLoading) return;
-  if (state.assemblyReasoningLoaded && !force) return;
-  state.assemblyReasoningLoading = true;
-  if (elements.reasoningStatus) elements.reasoningStatus.textContent = "載入中...";
-  if (elements.reasoningView && !state.assemblyReasoningLoaded) {
-    elements.reasoningView.innerHTML = sanitizeHtml(`<div class="empty-state">正在讀取 assembly 推理資料...</div>`);
-  }
-  try {
-    const response = await fetch("/api/assembly/reasoning", { cache: "no-store" });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    const data = await response.json();
-    state.assemblyReasoning = data;
-    state.assemblyReasoningLoaded = true;
-    renderAssemblyReasoning(data);
-    if (elements.reasoningStatus) {
-      elements.reasoningStatus.textContent = `已載入 ${new Date(data.generatedAt || Date.now()).toLocaleString()}`;
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    if (elements.reasoningStatus) elements.reasoningStatus.textContent = "載入失敗";
-    if (elements.reasoningView) {
-      elements.reasoningView.innerHTML = sanitizeHtml(`<div class="empty-state">無法讀取 assembly 推理資料：${escapeHtml(message)}</div>`);
-    }
-  } finally {
-    state.assemblyReasoningLoading = false;
-  }
-}
-
-function renderAssemblyReasoning(data) {
-  if (!elements.reasoningView) return;
-  const kitCount = data.kitGraph?.kits?.length || 0;
-  const apiCount = data.backendRouters?.length || 0;
-  const tabCount = data.frontendRoutes?.length || 0;
-  const tableCount = data.dbTables?.length || 0;
-  elements.reasoningView.innerHTML = sanitizeHtml(`
-    <div class="reasoning-grid">
-      <section class="reasoning-panel reasoning-span-2">
-        <div class="reasoning-metrics">
-          ${reasoningMetric("Kits", kitCount)}
-          ${reasoningMetric("API Routers", apiCount)}
-          ${reasoningMetric("Frontend Tabs", tabCount)}
-          ${reasoningMetric("DB Tables", tableCount)}
-        </div>
-        ${renderReasoningWarnings(data.warnings || [], data.files || [])}
-      </section>
-      <section class="reasoning-panel reasoning-span-2">
-        <h3>組裝 pipeline</h3>
-        ${renderPipelineSteps(data.pipelineSteps || [])}
-      </section>
-      <section class="reasoning-panel">
-        <h3>Kit 依賴</h3>
-        ${renderKitGraph(data.kitGraph || {})}
-      </section>
-      <section class="reasoning-panel">
-        <h3>Runtime graph</h3>
-        ${renderRuntimeGraph(data.runtimeGraph || {})}
-      </section>
-      <section class="reasoning-panel">
-        <h3>前端頁籤</h3>
-        ${renderFrontendRoutes(data.frontendRoutes || [])}
-      </section>
-      <section class="reasoning-panel">
-        <h3>Backend routers</h3>
-        ${renderBackendRouters(data.backendRouters || [])}
-      </section>
-      <section class="reasoning-panel reasoning-span-2">
-        <h3>資料保存與權限</h3>
-        ${renderStorageDecisions(data.storageDecisions || [], data.dbTables || [], data.entitlement)}
-      </section>
-    </div>
-  `);
-}
-
-function reasoningMetric(label, value) {
-  return `<div class="reasoning-metric"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value)}</strong></div>`;
-}
-
-function renderPipelineSteps(steps) {
-  if (!steps.length) return `<div class="empty-state">沒有 pipeline 資料。</div>`;
-  return `<div class="reasoning-pipeline">${steps.map((step, index) => `
-    <div class="reasoning-step is-${escapeHtml(step.status || "warn")}">
-      <span>${String(index + 1).padStart(2, "0")}</span>
-      <div>
-        <strong>${escapeHtml(step.label || step.id)}</strong>
-        <p>${escapeHtml(step.input || "-")} → ${escapeHtml(step.output || "-")}</p>
-      </div>
-    </div>
-  `).join("")}</div>`;
-}
-
-function renderKitGraph(graph) {
-  const kits = graph.kits || [];
-  const edges = graph.edges || [];
-  if (!kits.length) return `<div class="empty-state">沒有 kit 資料。</div>`;
-  const tags = kits.map((kit) => {
-    const id = kit.id || kit.kit || kit;
-    const name = kit.displayName || kit.name || id;
-    return `<span class="reasoning-tag">${escapeHtml(name)}</span>`;
-  }).join("");
-  const edgeList = edges.length ? edges.map((edge) => `
-    <li class="reasoning-edge"><code>${escapeHtml(edge.from)}</code><span>→</span><code>${escapeHtml(edge.to)}</code></li>
-  `).join("") : `<li class="reasoning-edge">目前資料未標示 kit 間依賴。</li>`;
-  return `<div class="reasoning-tags">${tags}</div><ul class="reasoning-list">${edgeList}</ul>`;
-}
-
-function renderRuntimeGraph(graph) {
-  const nodes = graph.nodes || [];
-  const edges = graph.edges || [];
-  if (!nodes.length && !edges.length) return `<div class="empty-state">assembly-ir 未輸出 runtime graph。</div>`;
-  const nodeRows = nodes.slice(0, 12).map((node) => `<li><code>${escapeHtml(node.id || node.name || node)}</code> ${escapeHtml(node.type || "")}</li>`).join("");
-  const edgeRows = edges.slice(0, 12).map((edge) => `<li><code>${escapeHtml(edge.from || edge.source)}</code> → <code>${escapeHtml(edge.to || edge.target)}</code></li>`).join("");
-  return `<div class="reasoning-columns"><ul class="reasoning-list">${nodeRows || "<li>無節點</li>"}</ul><ul class="reasoning-list">${edgeRows || "<li>無邊</li>"}</ul></div>`;
-}
-
-function renderFrontendRoutes(routes) {
-  if (!routes.length) return `<div class="empty-state">沒有前端頁籤資料。</div>`;
-  return `<ul class="reasoning-list">${routes.map((route) => `
-    <li><code>${escapeHtml(route.tab || route.path || route.id)}</code> ${escapeHtml(route.kit || "")}</li>
-  `).join("")}</ul>`;
-}
-
-function renderBackendRouters(routers) {
-  if (!routers.length) return `<div class="empty-state">沒有 backend router 資料。</div>`;
-  return `<ul class="reasoning-list">${routers.map((router) => `
-    <li><code>${escapeHtml(router.prefix || "/")}</code> ${escapeHtml(router.module || "")}<span>${escapeHtml(router.kit || "")}</span></li>
-  `).join("")}</ul>`;
-}
-
-function renderStorageDecisions(storageDecisions, dbTables, entitlement) {
-  const tableRows = dbTables.slice(0, 12).map((table) => `
-    <tr>
-      <td><code>${escapeHtml(table.name || table.tableName || table.id)}</code></td>
-      <td>${escapeHtml(table.kitOwner || table.owner || "-")}</td>
-      <td>${escapeHtml((table.columns || []).length)}</td>
-    </tr>
-  `).join("");
-  const decisionRows = storageDecisions.map((item) => `<li>${escapeHtml(item.kit || item.id || "storage")}：${escapeHtml(item.decision || item.engine || item.target || "")}</li>`).join("");
-  const checks = entitlement?.checks || [];
-  return `
-    <div class="reasoning-columns">
-      <div>
-        <h4>DB tables</h4>
-        <table class="reasoning-table"><thead><tr><th>Table</th><th>Owner</th><th>Columns</th></tr></thead><tbody>${tableRows || "<tr><td colspan=\"3\">無資料</td></tr>"}</tbody></table>
-      </div>
-      <div>
-        <h4>Storage / Entitlement</h4>
-        <ul class="reasoning-list">${decisionRows || `<li>DB engine：${escapeHtml(entitlement?.sourceRecipe || "未標示")}</li>`}</ul>
-        <div class="reasoning-tags">${checks.slice(0, 8).map((check) => `<span class="reasoning-tag">${escapeHtml(check.featureKey || check.subfeature)}</span>`).join("") || "<span class=\"reasoning-tag\">無權限檢查</span>"}</div>
-      </div>
-    </div>
-  `;
-}
-
-function renderReasoningWarnings(warnings, files) {
-  const badFiles = files.filter((file) => !file.exists || file.error);
-  if (!warnings.length && !badFiles.length) {
-    return `<div class="reasoning-warning is-ok">所有主要 assembly 產物可讀取。</div>`;
-  }
-  const items = [...warnings, ...badFiles.map((file) => `${file.path}: ${file.error || "missing"}`)];
-  return `<div class="reasoning-warning">${items.map((item) => `<div>${escapeHtml(item)}</div>`).join("")}</div>`;
 }
 
 function recordOperation(action, extra = {}) {

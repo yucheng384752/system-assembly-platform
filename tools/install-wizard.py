@@ -637,9 +637,15 @@ def _provision_postgres_linux(env: dict, log_fn) -> bool:
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
 
     # 1. 確認 psql 存在，否則安裝 postgresql（需 root）
+    offline_mode = _read_recipe().get("deploymentMode") == "offline"
     if not shutil.which("psql"):
         if not is_root:
             log_fn("  WARN  未安裝 PostgreSQL 且非 root，無法自動安裝")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        if offline_mode:
+            log_fn("  WARN  離線模式：未安裝 PostgreSQL，請手動安裝後重試")
+            log_fn("  INFO  離線安裝：sudo dpkg -i system/backend/apt-packages/postgresql*.deb")
             _print_manual_pg_sql(log_fn, name, user, pw)
             return False
         log_fn("  INFO  安裝 PostgreSQL（apt-get）...")
@@ -751,11 +757,26 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         log("  OK  .venv 建立完成")
 
         # Step 2: pip install
-        step(2, "安裝後端相依套件 (可能需要數分鐘)")
+        recipe = _read_recipe()
+        offline_mode = recipe.get("deploymentMode") == "offline"
+        step(2, "安裝後端相依套件" + (" (離線模式)" if offline_mode else " (可能需要數分鐘)"))
         pip = _venv_bin(sys_root, "pip")
         _run_cmd([str(pip), "install", "-q", "--upgrade", "pip"], sys_root)
         req = sys_root / "backend" / "requirements.txt"
-        rc = _run_cmd([str(pip), "install", "-r", str(req)], sys_root)
+        wheels_dir = sys_root / "backend" / "wheels"
+        if offline_mode and wheels_dir.is_dir():
+            log(f"  INFO  離線模式：使用本地 wheels 目錄 {wheels_dir}")
+            pip_cmd = [str(pip), "install",
+                       "--find-links", str(wheels_dir),
+                       "--no-index",
+                       "-r", str(req)]
+        elif offline_mode:
+            log("  WARN  離線模式但 wheels/ 目錄不存在，回退至聯網安裝")
+            log("  INFO  請先執行 tools/prepare-offline.ps1 預先下載依賴套件")
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        else:
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        rc = _run_cmd(pip_cmd, sys_root)
         if rc != 0:
             raise RuntimeError(f"pip install 失敗 (exit {rc})")
         log("  OK  相依套件安裝完成")
