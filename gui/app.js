@@ -1624,8 +1624,8 @@ const kitMockups = {
 function renderGeneration() {
   const recipe = buildRecipe();
   if (elements.generationSummary) elements.generationSummary.innerHTML = [
-    ["流程", recipe.selectedFlows.join("、") || "（未選擇）"],
-    ["Kit", recipe.enabledKits.join("、")],
+    ["流程", recipe.selectedFlows.map((id) => findFlow(id)?.name || id).join("、") || "（未選擇）"],
+    ["Kit", recipe.enabledKits.map((id) => findKit(id)?.name || id).join("、")],
     ["Database", recipe.database.engine],
     ["資料表", recipe.tableSchemas.length ? `${recipe.tableSchemas.length} 個（含欄位定義）` : "未上傳"],
   ].map(([title, body]) => `<div class="summary-item"><strong>${title}</strong><span>${body}</span></div>`).join("");
@@ -2125,7 +2125,7 @@ function buildDeploySh(recipe, dateStr) {
 }
 
 function buildDeployReadme(recipe, dateStr) {
-  const flows = recipe.selectedFlows.join("、") || "（未選擇）";
+  const flows = recipe.selectedFlows.map((id) => findFlow(id)?.name || id).join("、") || "（未選擇）";
   const kits = recipe.enabledKits;
   const db = recipe.database.engine;
   const name = recipe.name;
@@ -2133,7 +2133,7 @@ function buildDeployReadme(recipe, dateStr) {
     ? recipe.tableSchemas.map((t) => `- \`${t.tableName}\`（${t.columns.length} 欄）`).join("\n")
     : "（未上傳）";
 
-  const kitLines = kits.map((k) => `- \`${k}\``).join("\n");
+  const kitLines = kits.map((k) => `- ${findKit(k)?.name || k}`).join("\n");
 
   return `# Form System 部署套件
 
@@ -2377,6 +2377,10 @@ function parseSubfeatureKey(key) {
 
 function findKit(id) {
   return state.kits.find((item) => item.id === id);
+}
+
+function findFlow(id) {
+  return flows.find((item) => item.id === id);
 }
 
 function keepActivePreviewSelected() {
