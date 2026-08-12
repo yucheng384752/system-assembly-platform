@@ -212,35 +212,24 @@ button {
 
 .database-layout {
   align-items: start;
+  grid-template-columns: 1fr;
 }
 
 .database-card-stage {
   display: grid;
 }
 
-.db-requirements-card,
-.upload-source-card {
+.upload-source-card,
+.form-schema-card {
   grid-area: 1 / 1;
-  transition: transform 280ms ease, opacity 220ms ease, max-height 280ms ease, padding 220ms ease, border-width 220ms ease;
-}
-
-.upload-source-card {
   opacity: 0;
   transform: translateX(18px);
   pointer-events: none;
+  transition: transform 280ms ease, opacity 220ms ease;
 }
 
-.database-layout.is-ready .db-requirements-card {
-  max-height: 0;
-  padding-top: 0;
-  padding-bottom: 0;
-  border-width: 0;
-  opacity: 0;
-  overflow: hidden;
-  transform: translateX(-36px);
-}
-
-.database-layout.is-ready .upload-source-card {
+.upload-source-card.is-active,
+.form-schema-card.is-active {
   opacity: 1;
   transform: translateX(0);
   pointer-events: auto;
@@ -254,15 +243,17 @@ button {
 }
 
 .card-dot {
-  width: 7px;
-  height: 7px;
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
   border-radius: 50%;
   background: var(--line-2);
+  cursor: pointer;
   transition: background 280ms ease, transform 280ms ease;
 }
 
-.database-layout:not(.is-ready) .card-dot:first-child,
-.database-layout.is-ready .card-dot:last-child {
+.card-dot.is-active {
   background: var(--teal);
   transform: scale(1.25);
 }
@@ -331,6 +322,8 @@ button {
 }
 
 input[type="search"],
+input[type="text"],
+input[type="number"],
 select {
   width: 100%;
   min-height: 40px;
@@ -342,6 +335,8 @@ select {
 }
 
 input[type="search"]:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
 select:focus {
   outline: 3px solid rgba(20, 184, 166, 0.18);
   border-color: var(--teal);
@@ -2277,6 +2272,142 @@ select:focus {
   max-width: 160px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM DEFINITION LIST & FIELD EDITOR（表單 Schema 設定）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.form-defs-list {
+  display: grid;
+  gap: 8px;
+}
+
+.form-def-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  transition: border-color 0.12s;
+}
+
+.form-def-row:hover {
+  border-color: var(--line-2);
+}
+
+.form-def-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-def-info strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.form-def-info code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+.form-def-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.ghost-action.danger-action {
+  border-color: var(--line-2);
+  color: var(--red);
+}
+
+.ghost-action.danger-action:hover {
+  border-color: var(--red);
+  background: #fef2f2;
+  color: var(--red);
+}
+
+.form-field-editor-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 28px;
+  overflow-y: auto;
+}
+
+.form-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-meta-label {
+  display: grid;
+  gap: 6px;
+}
+
+.field-def-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.field-def-table th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--ink-3);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.field-def-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.field-def-table tr:last-child td {
+  border-bottom: none;
+}
+
+.field-def-table tr:hover td {
+  background: var(--surface-2);
+}
+
+.field-cell-check {
+  text-align: center;
+}
+
+.field-def-table input[type="text"],
+.field-def-table select {
+  width: 100%;
+  min-height: auto;
+  padding: 4px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-1);
+  font-size: 12px;
+}
+
+.field-def-table input[type="text"]:focus,
+.field-def-table select:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
+.field-def-table select {
+  max-width: 110px;
+}
+
 /* hint-text */
 .hint-text {
   font-size: 12px;
@@ -2629,6 +2760,23 @@ select:focus {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
 }
 
+.node-flow-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--line);
+  background: white;
+}
+
+.node-flow-toolbar select {
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: white;
+}
+
 .node-canvas-wrap {
   flex: 1;
   overflow-x: auto;
@@ -2711,6 +2859,23 @@ select:focus {
   font-size: 14px;
   cursor: grab;
   flex-shrink: 0;
+}
+
+.node-standalone-btn {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-4);
+  font-size: 11px;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.node-standalone-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
 }
 
 .node-card-body {

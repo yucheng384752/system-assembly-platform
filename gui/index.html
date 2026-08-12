@@ -72,54 +72,13 @@
         <section class="view" id="view-database">
           <header class="page-head">
             <p class="eyebrow">Step 2</p>
-            <h2>資料來源與保存方式</h2>
-            <p>上傳表單資料後，系統會依使用人數、資料重要性與追溯需求，協助選擇適合的資料保存方式。</p>
+            <h2>資料來源與表單設計</h2>
+            <p>上傳 CSV 資料來源，並為通用表格設計欄位 Schema。可點下方圓點在卡片間切換。</p>
           </header>
 
           <div class="layout-two database-layout" id="database-layout">
             <div class="database-card-stage">
-              <section class="panel form-panel db-requirements-card">
-                <h3>正式資料保存需求</h3>
-
-              <label>
-                <span class="lbl">會有多少人一起使用？</span>
-                <select id="usage-scale">
-                  <option value="" selected disabled>請選擇</option>
-                  <option value="single">單人 Demo / 驗證</option>
-                  <option value="team">2 到 20 人團隊</option>
-                  <option value="company">跨部門或正式營運</option>
-                </select>
-              </label>
-              <label>
-                <span class="lbl">這些資料是否會成為正式紀錄？</span>
-                <select id="data-criticality">
-                  <option value="" selected disabled>請選擇</option>
-                  <option value="demo">可重建測試資料</option>
-                  <option value="ops">日常營運資料</option>
-                  <option value="critical">稽核、追溯、正式紀錄</option>
-                </select>
-              </label>
-              <label>
-                <span class="lbl">是否需要查詢、追溯或報表？</span>
-                <select id="analytics-need">
-                  <option value="" selected disabled>請選擇</option>
-                  <option value="low">低，只需要查詢</option>
-                  <option value="medium">中，需要摘要與報表</option>
-                  <option value="high">高，需要圖表、異常與分析</option>
-                </select>
-              </label>
-              <label>
-                <span class="lbl">系統會安裝在哪裡？</span>
-                <select id="deployment-mode">
-                  <option value="" selected disabled>請選擇</option>
-                  <option value="local">本機 Demo</option>
-                  <option value="intranet">內網部署</option>
-                  <option value="cloud">正式雲端/主機部署</option>
-                </select>
-              </label>
-              </section>
-
-              <section class="panel form-panel upload-source-card">
+              <section class="panel form-panel upload-source-card is-active">
                 <h3>上傳資料來源 <span class="hint-text">（選填）</span></h3>
                 <div class="csv-upload-zone" id="csv-upload-zone">
                   <input type="file" id="csv-file-input" multiple accept=".csv,.tsv" hidden />
@@ -128,29 +87,31 @@
                   <small>支援多檔上傳，暫存於此次工作階段</small>
                 </div>
                 <div id="uploaded-tables-list" class="uploaded-tables-list"></div>
+
+                <div class="divider"></div>
+                <div class="panel-head">
+                  <h3>資料表前後關係</h3>
+                  <div class="panel-head-actions">
+                    <button class="ghost-action" id="find-fk" type="button" disabled>自動偵測主鍵／外鍵</button>
+                    <button class="ghost-action" id="open-node-editor" type="button" disabled>開啟關聯編輯器</button>
+                  </div>
+                </div>
+                <div id="node-editor-summary" class="node-editor-summary">
+                  <div class="empty-state">上傳 CSV 後開啟欄位關係編輯器</div>
+                </div>
               </section>
-              <div class="card-indicators">
-                <span class="card-dot"></span>
-                <span class="card-dot"></span>
-              </div>
+              <section class="panel form-panel form-schema-panel form-schema-card" id="form-schema-section">
+                <div class="panel-head">
+                  <h3>表單 Schema 設定</h3>
+                  <button class="ghost-action" id="import-csv-forms-btn" type="button" hidden>從 CSV 匯入欄位</button>
+                  <button class="ghost-action" id="add-form-btn" type="button">＋ 新增表單</button>
+                </div>
+                <div id="form-defs-list" class="form-defs-list">
+                  <div class="empty-state">尚未定義任何表單，點「＋ 新增表單」開始設定</div>
+                </div>
+              </section>
+              <div class="card-indicators" id="card-indicators"></div>
             </div>
-
-            <section class="panel">
-              <div class="panel-head">
-                <h3>欄位關係編輯</h3>
-                <button class="ghost-action" id="find-fk" type="button" disabled>尋找FK</button>
-                <button class="ghost-action" id="open-node-editor" type="button" disabled>開啟編輯器</button>
-              </div>
-              <div id="node-editor-summary" class="node-editor-summary">
-                <div class="empty-state">上傳 CSV 後開啟欄位關係編輯器</div>
-              </div>
-
-              <div class="divider"></div>
-              <p class="eyebrow">建議保存方式</p>
-              <div class="db-name" id="db-engine">PostgreSQL</div>
-              <p class="db-reason" id="db-reason"></p>
-              <div class="db-meter"><div id="db-meter-fill"></div></div>
-            </section>
           </div>
         </section>
 
@@ -165,33 +126,12 @@
           <div class="generate-layout">
             <section class="panel generate-info-panel">
               <h3>此次選擇</h3>
+              <label class="search-field" style="margin-bottom:12px;">
+                <span class="lbl">客戶名稱</span>
+                <input id="client-name" type="text" placeholder="例如 acme 或客戶公司名稱" autocomplete="organization" />
+              </label>
               <div id="generation-summary" class="summary-list"></div>
             </section>
-
-            <div class="deploy-mode-card">
-              <h3>套件類型</h3>
-              <p style="font-size:13px;color:var(--ink-2,#243244);margin:0 0 12px;">選擇交付給客戶的安裝方式：</p>
-              <div style="display:flex;flex-direction:column;gap:10px;">
-                <label class="deploy-mode-option" id="mode-online-label">
-                  <input type="radio" name="deploy-mode" value="online" id="deploy-mode-online" checked />
-                  <div>
-                    <strong>聯網版</strong>
-                    <p>安裝時自動從網路取得 Python 套件（pip）與系統依賴（apt-get）。<br>部署機器需要網路連線。</p>
-                  </div>
-                </label>
-                <label class="deploy-mode-option" id="mode-offline-label">
-                  <input type="radio" name="deploy-mode" value="offline" id="deploy-mode-offline" />
-                  <div>
-                    <strong>離線版</strong>
-                    <p>安裝時使用套件內預先打包的 wheels 與離線依賴，無需網路連線。<br>需在部署前執行 <code>prepare-offline.ps1</code> 預先下載。</p>
-                  </div>
-                </label>
-              </div>
-              <div id="offline-prepare-hint" hidden style="margin-top:12px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;font-size:12px;color:#1e40af;">
-                ⚙ 離線版需要在下載前執行 <code>node tools/serve-gui.cjs</code> 並確認 system/ 目錄存在，<br>
-                並且預先執行 <code>tools/prepare-offline.ps1</code> 下載 pip wheels 到 <code>system/backend/wheels/</code>。
-              </div>
-            </div>
 
             <div class="deploy-cta-card">
               <div class="deploy-cta-icon">⬇</div>
@@ -202,17 +142,53 @@
                 <li>將客戶 ZIP 交給部署人員解壓執行</li>
               </ol>
               <p class="deploy-cta-files">包含：recipe.json · deploy.ps1 · phases/ · deploy.sh · README.md · install-wizard.py</p>
-              <div class="pem-verify-row">
-                <label class="ghost-action" for="package-machine-pubkey-file">上傳 PEM 驗證</label>
-                <input type="file" id="package-machine-pubkey-file" accept=".pem,.txt" hidden />
-                <span id="package-pem-status"></span>
-              </div>
               <button class="deploy-btn" id="download-package" type="button">下載 .zip</button>
             </div>
           </div>
         </section>
 
       </main>
+
+      <!-- ── 套件類型選擇（點下載時彈出） ── -->
+      <div class="guide-overlay deploy-mode-overlay" id="deploy-mode-overlay" hidden
+           style="align-items:center;justify-content:center;">
+        <div class="guide-overlay-panel" style="max-width:520px;height:auto;margin:24px auto;">
+          <div class="guide-overlay-head">
+            <div class="guide-overlay-head-text">
+              <p class="eyebrow">Step 3</p>
+              <h2>選擇套件類型</h2>
+            </div>
+            <button class="guide-overlay-close" id="deploy-mode-close" type="button" aria-label="關閉">✕</button>
+          </div>
+          <div style="padding:20px 24px;">
+            <p style="font-size:13px;color:var(--ink-2,#243244);margin:0 0 12px;">選擇交付給客戶的安裝方式：</p>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <label class="deploy-mode-option" id="mode-online-label">
+                <input type="radio" name="deploy-mode" value="online" id="deploy-mode-online" checked />
+                <div>
+                  <strong>聯網版</strong>
+                  <p>安裝時自動從網路取得 Python 套件（pip）與系統依賴（apt-get）。<br>部署機器需要網路連線。</p>
+                </div>
+              </label>
+              <label class="deploy-mode-option" id="mode-offline-label">
+                <input type="radio" name="deploy-mode" value="offline" id="deploy-mode-offline" />
+                <div>
+                  <strong>離線版</strong>
+                  <p>安裝時使用套件內預先打包的 wheels 與離線依賴，無需網路連線。<br>需在部署前執行 <code>prepare-offline.ps1</code> 預先下載。</p>
+                </div>
+              </label>
+            </div>
+            <div id="offline-prepare-hint" hidden style="margin-top:12px;padding:10px 14px;background:#eff6ff;border:1px solid #93c5fd;border-radius:6px;font-size:12px;color:#1e40af;">
+              ⚙ 離線版需要在下載前執行 <code>node tools/serve-gui.cjs</code> 並確認 system/ 目錄存在，<br>
+              並且預先執行 <code>tools/prepare-offline.ps1</code> 下載 pip wheels 到 <code>system/backend/wheels/</code>。
+            </div>
+          </div>
+          <div class="guide-overlay-actions" style="padding:0 24px 20px;">
+            <button class="ghost-action" id="deploy-mode-cancel" type="button">取消</button>
+            <button class="primary-action" id="deploy-mode-confirm" type="button">確認並下載</button>
+          </div>
+        </div>
+      </div>
 
       <!-- ── TPM 公鑰登錄關卡（必須完成才能使用 Composer） ── -->
       <div class="guide-overlay machine-gate-overlay" id="machine-gate-overlay" hidden
@@ -273,15 +249,44 @@
       </div>
 
       <!-- ── 欄位關係編輯覆蓋層 ── -->
+      <!-- ── 表單欄位編輯 Overlay ── -->
+      <div class="guide-overlay form-field-overlay" id="form-field-overlay" hidden>
+        <div class="node-editor-panel">
+          <div class="guide-overlay-head">
+            <div class="guide-overlay-head-text">
+              <p class="eyebrow">Step 2 — 表單 Schema</p>
+              <h2 id="form-overlay-title">編輯表格欄位</h2>
+            </div>
+            <button class="guide-overlay-close" id="form-field-overlay-close" type="button" aria-label="關閉">✕</button>
+          </div>
+          <div class="form-field-editor-wrap">
+            <div id="form-field-editor-meta" class="form-field-editor-meta"></div>
+            <div id="form-field-editor-fields" class="form-field-editor-fields"></div>
+            <button class="ghost-action" id="add-field-btn" type="button">＋ 新增欄位</button>
+          </div>
+          <div class="guide-overlay-actions">
+            <button class="ghost-action" id="form-field-cancel" type="button">取消</button>
+            <button class="primary-action" id="form-field-save" type="button">儲存</button>
+          </div>
+        </div>
+      </div>
+
       <div class="guide-overlay node-editor-overlay" id="node-editor-overlay" hidden>
         <div class="node-editor-panel">
           <div class="guide-overlay-head">
             <div class="guide-overlay-head-text">
               <p class="eyebrow">Step 2 — 欄位關係</p>
               <h2>欄位關係編輯器</h2>
-              <p>拖曳卡片調整資料流程順序（左→右為 Step 1→N）；點擊 ↓ 設定子表格與串接 Key。</p>
+              <p>拖曳卡片調整畫面排列順序（左→右為 Step 1→N，僅影響顯示）；點擊 ↓ 設定追溯連結與比對欄位——同一張表可新增多筆連結，形成分支而非單一鏈路。</p>
             </div>
             <button class="guide-overlay-close" id="node-editor-close" type="button" aria-label="關閉">✕</button>
+          </div>
+          <div class="node-flow-toolbar">
+            <label for="dataflow-select">資料流</label>
+            <select id="dataflow-select" aria-label="選擇資料流"></select>
+            <button class="ghost-action" id="dataflow-add" type="button">新增</button>
+            <button class="ghost-action" id="dataflow-rename" type="button">重新命名</button>
+            <button class="ghost-action" id="dataflow-delete" type="button">刪除</button>
           </div>
           <div class="node-canvas-wrap">
             <div class="node-canvas" id="node-canvas"></div>

@@ -181,8 +181,8 @@ const state = {
   uploadedTables: [],
   tableSchema: new Map(),
   activeSchemaTable: null,
-  nodeOrder: [],
-  nodeRelations: new Map(),
+  dataflows: [{ id: "flow-1", name: "產線 1", nodeOrder: [], edges: [] }],
+  activeDataflowId: "flow-1",
   nodeConfirmed: false,
   tableData: new Map(),
   pkFkSuggestions: null,
@@ -190,7 +190,40 @@ const state = {
   fkHighlights: new Set(),
   machinePubkey: '',
   deploymentMode: 'online',
+  formDefs: [],
+  dbCard: 0,
+  _editDraft: null,
 };
+
+function activeDataflow() {
+  let flow = state.dataflows.find((item) => item.id === state.activeDataflowId);
+  if (!flow) {
+    flow = { id: `flow-${Date.now()}`, name: `產線 ${state.dataflows.length + 1}`, nodeOrder: [], edges: [] };
+    state.dataflows.push(flow);
+    state.activeDataflowId = flow.id;
+  }
+  return flow;
+}
+
+function edgeCreatesCycle(edges, fromTableId, toTableId, ignoredEdgeId = "") {
+  if (fromTableId === toTableId) return true;
+  const adjacency = new Map();
+  edges.forEach((edge) => {
+    if (edge.id === ignoredEdgeId) return;
+    if (!adjacency.has(edge.parentTableId)) adjacency.set(edge.parentTableId, []);
+    adjacency.get(edge.parentTableId).push(edge.childTableId);
+  });
+  const pending = [toTableId];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.pop();
+    if (current === fromTableId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(adjacency.get(current) || []));
+  }
+  return false;
+}
 
 const elements = {};
 
@@ -203,13 +236,14 @@ async function start() {
   document.querySelector("#manifest-warning").hidden = state.manifestSource !== "fallback";
   resetToRequiredKits();
   bindNavigation();
-  bindDatabaseInputs();
   bindToolbarActions();
   bindSearch();
   bindFlows();
   bindCsvUpload();
   bindNodeEditor();
+  bindFormSchemaEditor();
   bindDeploymentMode();
+  document.querySelector("#client-name")?.addEventListener("input", renderGeneration);
   renderAll();
   await initMachineGate();
 }
@@ -230,7 +264,7 @@ function cacheElements() {
     "recipe-output",
     "uploaded-tables-list",
     "node-editor-summary",
-
+    "form-defs-list",
   ].forEach((id) => {
     elements[toCamel(id)] = document.querySelector(`#${id}`);
   });
@@ -322,12 +356,6 @@ function bindNavigation() {
   });
 }
 
-function bindDatabaseInputs() {
-  ["usage-scale", "data-criticality", "analytics-need", "deployment-mode"].forEach((id) => {
-    document.querySelector(`#${id}`).addEventListener("change", renderAll);
-  });
-}
-
 function bindToolbarActions() {
   document.querySelector("#clear-optional").addEventListener("click", () => {
     resetToRequiredKits();
@@ -342,15 +370,23 @@ function bindToolbarActions() {
   document.querySelector("#copy-generation-command")?.addEventListener("click", copyGenerationCommand);
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
-  document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
-
-  document.querySelector("#package-machine-pubkey-file")?.addEventListener("change", (event) => {
-    handleMachinePubkeyFile(event.target.files?.[0], {
-      statusEl: document.querySelector("#package-pem-status"),
-      showGate: false,
-    });
+  document.querySelector("#download-package")?.addEventListener("click", openDeployModeModal);
+  document.querySelector("#deploy-mode-confirm")?.addEventListener("click", () => {
+    closeDeployModeModal();
+    downloadPackage();
   });
+  document.querySelector("#deploy-mode-cancel")?.addEventListener("click", closeDeployModeModal);
+  document.querySelector("#deploy-mode-close")?.addEventListener("click", closeDeployModeModal);
+}
 
+function openDeployModeModal() {
+  const btn = document.querySelector("#download-package");
+  if (btn?.disabled) return;
+  document.querySelector("#deploy-mode-overlay")?.removeAttribute("hidden");
+}
+
+function closeDeployModeModal() {
+  document.querySelector("#deploy-mode-overlay")?.setAttribute("hidden", "");
 }
 
 // ── TPM 公鑰綁定關卡 ────────────────────────────────────────────────────────
@@ -630,18 +666,11 @@ function bindCsvUpload() {
     elements.uploadedTablesList.addEventListener("click", (e) => {
       const removeBtn = e.target.closest("[data-remove-table]");
       if (removeBtn) {
-        const tableId = removeBtn.dataset.removeTable;
-        state.uploadedTables = state.uploadedTables.filter((t) => t.id !== tableId);
-        state.tableSchema.delete(tableId);
-        state.nodeOrder = state.nodeOrder.filter((id) => id !== tableId);
-        state.nodeRelations.delete(tableId);
-        state.nodeRelations.forEach((rel, key) => { if (rel.childTableId === tableId) state.nodeRelations.delete(key); });
-        state.tableData.delete(tableId);
-        state.pkFkSuggestions = null;
-        if (state.activeSchemaTable === tableId) state.activeSchemaTable = state.uploadedTables[0]?.id || null;
-        if (!state.uploadedTables.length) { const btn = document.querySelector("#open-node-editor"); if (btn) btn.disabled = true; }
+        removeUploadedTable(removeBtn.dataset.removeTable);
         renderUploadedTables();
         renderNodeEditorSummary();
+        renderFormSchemaSection();
+        renderDatabaseCarousel();
         renderGeneration();
       }
       const tabBtn = e.target.closest("[data-schema-select]");
@@ -653,12 +682,38 @@ function bindCsvUpload() {
   }
 }
 
+// 把表格從「已上傳表格」與所有資料流（nodeOrder + 引用它的 edges）中移除。
+// 供「刪除表格」按鈕與「轉為獨立表格」動作共用。
+function removeUploadedTable(tableId) {
+  state.uploadedTables = state.uploadedTables.filter((t) => t.id !== tableId);
+  state.tableSchema.delete(tableId);
+  state.dataflows.forEach((flow) => {
+    flow.nodeOrder = flow.nodeOrder.filter((id) => id !== tableId);
+    flow.edges = flow.edges.filter((edge) => edge.parentTableId !== tableId && edge.childTableId !== tableId);
+  });
+  state.tableData.delete(tableId);
+  state.pkFkSuggestions = null;
+  if (state.activeSchemaTable === tableId) state.activeSchemaTable = state.uploadedTables[0]?.id || null;
+  if (!state.uploadedTables.length) { const btn = document.querySelector("#open-node-editor"); if (btn) btn.disabled = true; }
+}
+
 function handleCsvFiles(files) {
+  if (!files.length) return;
+  let processedCount = 0;
+  let validCount = 0;
+  const maybeOpenNodeEditor = () => {
+    if (processedCount === files.length && validCount > 0) openNodeEditor();
+  };
   files.forEach((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const { headers, rows } = parseCsv(e.target.result);
-      if (!headers.length) return;
+      if (!headers.length) {
+        processedCount++;
+        maybeOpenNodeEditor();
+        return;
+      }
+      validCount++;
       const tableId = `tbl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const tableName = file.name.replace(/\.(csv|tsv)$/i, "");
       const sampleRows = rows.slice(0, 20);
@@ -677,9 +732,13 @@ function handleCsvFiles(files) {
       if (!state.activeSchemaTable) state.activeSchemaTable = tableId;
       renderUploadedTables();
       renderNodeEditorSummary();
+      renderFormSchemaSection();
+      renderDatabaseCarousel();
       renderGeneration();
       const btn = document.querySelector("#open-node-editor");
       if (btn) btn.disabled = false;
+      processedCount++;
+      maybeOpenNodeEditor();
     };
     reader.readAsText(file);
   });
@@ -725,6 +784,8 @@ function inferColumnType(samples) {
 
 function renderUploadedTables() {
   if (!elements.uploadedTablesList) return;
+  const importBtn = document.getElementById("import-csv-forms-btn");
+  if (importBtn) importBtn.hidden = !state.uploadedTables.length;
   if (!state.uploadedTables.length) {
     elements.uploadedTablesList.innerHTML = "";
     return;
@@ -828,17 +889,19 @@ function pkValuePatternScore(vals) {
 function detectPkFk() {
   const pks = [];
   const fks = [];
+  const profiles = [];
 
   state.uploadedTables.forEach((table) => {
     const rows = state.tableData.get(table.id) || [];
     const schema = state.tableSchema.get(table.id) || [];
     schema.forEach((col, colIdx) => {
-      const allVals = rows.map((r) => (r[colIdx] ?? "").trim());
+      const allVals = rows.map((r) => String(r[colIdx] ?? "").normalize("NFKC").trim().toLocaleLowerCase());
       const nonEmpty = allVals.filter(Boolean);
       const ns = pkNameScore(col.name);
       const us = pkUniquenessScore(nonEmpty, allVals.length);
       const vs = pkValuePatternScore(nonEmpty.slice(0, 50));
       const total = ns + us + vs;
+      profiles.push({ table, col, values: new Set(nonEmpty), pkScore: total });
       if ((ns < 1 && vs < 2) || total < 3) return; // 無明確訊號則略過
       pks.push({
         tableId: table.id, tableName: table.tableName, colName: col.name,
@@ -848,47 +911,52 @@ function detectPkFk() {
     });
   });
 
-  const pkColsByTable = new Map();
-  pks.forEach(({ tableId, colName }) => {
-    if (!pkColsByTable.has(tableId)) pkColsByTable.set(tableId, new Set());
-    pkColsByTable.get(tableId).add(colName);
-  });
+  const flow = activeDataflow();
+  const orderedIds = [...flow.nodeOrder, ...state.uploadedTables.map((t) => t.id).filter((id) => !flow.nodeOrder.includes(id))];
+  const order = new Map(orderedIds.map((id, i) => [id, i]));
+  const pkProfiles = profiles.filter(({ table, col, pkScore }) =>
+    col.isPK || pks.some((pk) => pk.tableId === table.id && pk.colName === col.name) || pkScore >= 5
+  );
+  const valueToPk = new Map();
+  pkProfiles.forEach((profile) => profile.values.forEach((value) => {
+    if (!valueToPk.has(value)) valueToPk.set(value, []);
+    valueToPk.get(value).push(profile);
+  }));
 
-  state.uploadedTables.forEach((tableA) => {
-    const schemaA = state.tableSchema.get(tableA.id) || [];
-    const rowsA = state.tableData.get(tableA.id) || [];
-    state.uploadedTables.forEach((tableB) => {
-      if (tableA.id === tableB.id) return;
-      const schemaB = state.tableSchema.get(tableB.id) || [];
-      const rowsB = state.tableData.get(tableB.id) || [];
-      const pkColsB = pkColsByTable.get(tableB.id) || new Set();
-      schemaA.forEach((colA, colAIdx) => {
-        schemaB.forEach((colB, colBIdx) => {
-          // B 的欄位是 PK 候選：已偵測到，或有強命名訊號(≥2)
-          const bIsPkCandidate = colB.isPK || pkColsB.has(colB.name) || pkNameScore(colB.name) >= 2;
-          if (!bIsPkCandidate) return;
-          const aN = colA.name.toLowerCase();
-          const bN = colB.name.toLowerCase();
-          const tBN = tableB.tableName.toLowerCase();
-          const nameMatch =
-            aN === `${tBN}_${bN}` ||
-            aN === `${tBN}_id` ||
-            aN === `${tBN}_no` ||
-            aN === bN; // 同名跨表（語言無關）
-          if (!nameMatch) return;
-          let confidence = "medium";
-          if (rowsA.length && rowsB.length) {
-            const valsA = new Set(rowsA.map((r) => (r[colAIdx] ?? "").trim()).filter(Boolean));
-            const valsB = new Set(rowsB.map((r) => (r[colBIdx] ?? "").trim()).filter(Boolean));
-            if (valsA.size && valsB.size) {
-              let overlap = 0;
-              valsA.forEach((v) => { if (valsB.has(v)) overlap++; });
-              confidence = overlap / valsA.size >= 0.5 ? "high" : "medium";
-            }
-          }
-          fks.push({ tableId: tableA.id, tableName: tableA.tableName, colName: colA.name, targetTableId: tableB.id, targetTableName: tableB.tableName, targetColName: colB.name, confidence });
-        });
-      });
+  profiles.forEach((child) => {
+    if (!child.values.size) return;
+    const overlaps = new Map();
+    child.values.forEach((value) => (valueToPk.get(value) || []).forEach((parent) => {
+      if (parent.table.id === child.table.id) return;
+      if ((order.get(parent.table.id) ?? 0) >= (order.get(child.table.id) ?? 0)) return;
+      overlaps.set(parent, (overlaps.get(parent) || 0) + 1);
+    }));
+
+    const matches = Array.from(overlaps, ([parent, overlap]) => {
+      const coverage = overlap / child.values.size;
+      const childName = child.col.name.toLocaleLowerCase();
+      const parentName = parent.col.name.toLocaleLowerCase();
+      const parentTable = parent.table.tableName.toLocaleLowerCase();
+      const nameMatch = childName === parentName || childName === `${parentTable}_${parentName}` ||
+        childName === `${parentTable}_id` || childName === `${parentTable}_no`;
+      return { parent, coverage, nameMatch, explicitPk: Boolean(parent.col.isPK) };
+    }).filter(({ coverage, nameMatch }) => coverage >= 0.8 || (nameMatch && coverage >= 0.5));
+
+    matches.sort((a, b) =>
+      b.coverage - a.coverage || Number(b.explicitPk) - Number(a.explicitPk) ||
+      Number(b.nameMatch) - Number(a.nameMatch) || b.parent.pkScore - a.parent.pkScore ||
+      (order.get(a.parent.table.id) ?? 0) - (order.get(b.parent.table.id) ?? 0)
+    );
+    const best = matches[0];
+    if (!best) return;
+    fks.push({
+      tableId: child.table.id,
+      tableName: child.table.tableName,
+      colName: child.col.name,
+      targetTableId: best.parent.table.id,
+      targetTableName: best.parent.table.tableName,
+      targetColName: best.parent.col.name,
+      confidence: best.coverage >= 0.95 ? "high" : "medium",
     });
   });
 
@@ -908,15 +976,20 @@ function applyPkFkSuggestions({ pks, fks }) {
     if (col) col.fkTarget = `${targetTableId}::${targetColName}`;
   });
 
-  // 同步欄位關係編輯器：以 FK 自動建立 parent→child 關係
-  if (!state.nodeOrder.length) state.nodeOrder = state.uploadedTables.map((t) => t.id);
+  // 同步目前資料流：同一表可分支到多個下游，也可由多個上游匯流。
+  const flow = activeDataflow();
+  if (!flow.nodeOrder.length) flow.nodeOrder = state.uploadedTables.map((t) => t.id);
   fks.forEach(({ tableId, colName, targetTableId, targetColName }) => {
-    // tableId 持有 FK 指向 targetTableId → targetTableId 為父，tableId 為子
-    if (state.nodeRelations.has(targetTableId)) return; // 已有關係，不覆蓋
-    const alreadyChild = Array.from(state.nodeRelations.values()).some((r) => r.childTableId === tableId);
-    if (alreadyChild) return;
-    state.nodeRelations.set(targetTableId, { childTableId: tableId, parentCol: targetColName, childCol: colName });
-    state.nodeOrder = state.nodeOrder.filter((id) => id !== tableId);
+    const duplicate = flow.edges.some((edge) => edge.parentTableId === targetTableId
+      && edge.childTableId === tableId && edge.parentCol === targetColName && edge.childCol === colName);
+    if (duplicate || edgeCreatesCycle(flow.edges, targetTableId, tableId)) return;
+    flow.edges.push({
+      id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      parentTableId: targetTableId,
+      childTableId: tableId,
+      parentCol: targetColName,
+      childCol: colName,
+    });
   });
 }
 
@@ -934,20 +1007,13 @@ function renderNodeEditorSummary() {
   }
   if (openBtn) openBtn.disabled = false;
   if (findBtn) findBtn.disabled = false;
-  const order = state.nodeOrder.length ? state.nodeOrder : state.uploadedTables.map((t) => t.id);
-  const chips = order.map((id, i) => {
-    const t = state.uploadedTables.find((x) => x.id === id);
-    if (!t) return "";
-    const rel = state.nodeRelations.get(id);
-    const childName = rel ? (state.uploadedTables.find((x) => x.id === rel.childTableId)?.tableName || "") : "";
-    return `
-      <span class="node-summary-chip">
-        <strong>Step ${i + 1}</strong>${escapeHtml(t.tableName)}${childName ? ` ↓${escapeHtml(childName)}` : ""}
-      </span>
-      ${i < order.length - 1 ? '<span class="node-summary-arrow">→</span>' : ""}
-    `;
+  const flow = activeDataflow();
+  const labels = flow.edges.map((edge) => {
+    const parent = state.uploadedTables.find((table) => table.id === edge.parentTableId)?.tableName || "?";
+    const child = state.uploadedTables.find((table) => table.id === edge.childTableId)?.tableName || "?";
+    return `<span class="node-summary-chip">${escapeHtml(parent)}.${escapeHtml(edge.parentCol || "*")} → ${escapeHtml(child)}.${escapeHtml(edge.childCol || "*")}</span>`;
   }).join("");
-  el.innerHTML = `<div class="node-summary-flow">${chips}</div>`;
+  el.innerHTML = `<div class="node-summary-flow"><strong>${escapeHtml(flow.name)}</strong>${labels || '<span class="muted">尚未設定關聯</span>'}</div>`;
 }
 
 function bindDeploymentMode() {
@@ -966,11 +1032,55 @@ function bindNodeEditor() {
   document.querySelector("#node-editor-close")?.addEventListener("click", closeNodeEditor);
   document.querySelector("#node-editor-cancel")?.addEventListener("click", closeNodeEditor);
   document.querySelector("#node-editor-confirm")?.addEventListener("click", confirmNodeEditor);
+  document.querySelector("#dataflow-select")?.addEventListener("change", (event) => {
+    state.activeDataflowId = event.target.value;
+    renderNodeCanvas();
+    renderNodeEditorSummary();
+  });
+  document.querySelector("#dataflow-add")?.addEventListener("click", addDataflow);
+  document.querySelector("#dataflow-rename")?.addEventListener("click", renameDataflow);
+  document.querySelector("#dataflow-delete")?.addEventListener("click", deleteDataflow);
+}
+
+function renderDataflowControls() {
+  const select = document.querySelector("#dataflow-select");
+  if (!select) return;
+  select.innerHTML = state.dataflows.map((flow) => `<option value="${escapeHtml(flow.id)}" ${flow.id === state.activeDataflowId ? "selected" : ""}>${escapeHtml(flow.name)}</option>`).join("");
+  const deleteButton = document.querySelector("#dataflow-delete");
+  if (deleteButton) deleteButton.disabled = state.dataflows.length <= 1;
+}
+
+function addDataflow() {
+  const name = window.prompt("資料流名稱", `產線 ${state.dataflows.length + 1}`)?.trim();
+  if (!name) return;
+  const flow = { id: `flow-${Date.now()}`, name, nodeOrder: state.uploadedTables.map((table) => table.id), edges: [] };
+  state.dataflows.push(flow);
+  state.activeDataflowId = flow.id;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
+}
+
+function renameDataflow() {
+  const flow = activeDataflow();
+  const name = window.prompt("資料流名稱", flow.name)?.trim();
+  if (!name) return;
+  flow.name = name;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
+}
+
+function deleteDataflow() {
+  if (state.dataflows.length <= 1) return;
+  state.dataflows = state.dataflows.filter((flow) => flow.id !== state.activeDataflowId);
+  state.activeDataflowId = state.dataflows[0].id;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
 }
 
 function openNodeEditor() {
   if (!state.uploadedTables.length) return;
-  if (!state.nodeOrder.length) state.nodeOrder = state.uploadedTables.map((t) => t.id);
+  const flow = activeDataflow();
+  if (!flow.nodeOrder.length) flow.nodeOrder = state.uploadedTables.map((t) => t.id);
   const overlay = document.querySelector("#node-editor-overlay");
   overlay.hidden = false;
   renderNodeCanvas();
@@ -992,12 +1102,15 @@ function confirmNodeEditor() {
 function renderNodeCanvas() {
   const canvas = document.querySelector("#node-canvas");
   if (!canvas) return;
-  const order = state.nodeOrder;
+  const flow = activeDataflow();
+  flow.nodeOrder = [...flow.nodeOrder.filter((id) => state.uploadedTables.some((table) => table.id === id)),
+    ...state.uploadedTables.map((table) => table.id).filter((id) => !flow.nodeOrder.includes(id))];
+  const order = flow.nodeOrder;
   const rowHtml = order.map((tableId, i) => {
     const t = state.uploadedTables.find((x) => x.id === tableId);
     if (!t) return "";
     const schema = state.tableSchema.get(tableId) || [];
-    const rel = state.nodeRelations.get(tableId);
+    const relations = flow.edges.filter((edge) => edge.parentTableId === tableId);
     const connector = i < order.length - 1
       ? `<div class="node-connector">→<span>Step ${i + 1}→${i + 2}</span></div>`
       : "";
@@ -1005,15 +1118,16 @@ function renderNodeCanvas() {
       const isFk = state.fkHighlights.has(`${tableId}::${col.name}`) || Boolean(col.fkTarget);
       return `<div class="node-col-item ${isFk ? "is-fk" : ""}"><span class="col-type">${col.type[0].toUpperCase()}</span><span class="node-col-name">${escapeHtml(col.displayName || col.name)}</span>${isFk ? '<span class="fk-badge">FK</span>' : ""}</div>`;
     }).join("");
-    const childBtnClass = rel ? "node-child-btn has-child" : "node-child-btn";
-    const childBtnLabel = rel ? `↓ 子表格：${escapeHtml(state.uploadedTables.find((x) => x.id === rel.childTableId)?.tableName || "")}` : "↓ 設定子表格";
-    const childConfigHtml = rel ? buildChildConfigHtml(tableId, rel) : "";
+    const childBtnClass = relations.length ? "node-child-btn has-child" : "node-child-btn";
+    const childBtnLabel = relations.length ? `＋ 下游關聯（${relations.length}）` : "＋ 下游關聯";
+    const childConfigHtml = relations.map((relation) => buildChildConfigHtml(tableId, relation)).join("");
     return `
       <div class="node-col-wrap" style="display:flex;flex-direction:column;align-items:center">
         <div class="node-card" draggable="true" data-node-id="${escapeHtml(tableId)}">
           <div class="node-card-head">
             <span class="node-step-badge">Step ${i + 1}</span>
             <span class="node-table-name" title="${escapeHtml(t.tableName)}">${escapeHtml(t.tableName)}</span>
+            <button class="node-standalone-btn" data-node-standalone="${escapeHtml(tableId)}" type="button" title="與資料流無關（例如品檢表）？轉為獨立的通用表格，移出這條資料流">→ 獨立表格</button>
             <span class="node-drag-handle" title="拖曳排序">⠿</span>
           </div>
           <div class="node-card-body">
@@ -1021,24 +1135,24 @@ function renderNodeCanvas() {
             <button class="${childBtnClass}" data-child-toggle="${escapeHtml(tableId)}" type="button">${childBtnLabel}</button>
           </div>
         </div>
-        ${rel ? `<div class="node-child-area"><div class="node-down-arrow"></div>${childConfigHtml}</div>` : ""}
+        ${relations.length ? `<div class="node-child-area"><div class="node-down-arrow"></div>${childConfigHtml}</div>` : ""}
       </div>
       ${connector}
     `;
   }).join("");
   canvas.innerHTML = sanitizeHtml(`<div class="node-row">${rowHtml}</div>`);
+  renderDataflowControls();
   bindNodeCardDrag(canvas);
   canvas.querySelectorAll("[data-child-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => toggleChildConfig(btn.dataset.childToggle));
   });
+  canvas.querySelectorAll("[data-node-standalone]").forEach((btn) => {
+    btn.addEventListener("click", () => convertTableToStandaloneForm(btn.dataset.nodeStandalone));
+  });
   canvas.querySelectorAll("[data-child-remove]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const parentId = btn.dataset.childRemove;
-      const rel = state.nodeRelations.get(parentId);
-      if (rel?.childTableId && !state.nodeOrder.includes(rel.childTableId)) {
-        state.nodeOrder.push(rel.childTableId);
-      }
-      state.nodeRelations.delete(parentId);
+      const flow = activeDataflow();
+      flow.edges = flow.edges.filter((edge) => edge.id !== btn.dataset.childRemove);
       renderNodeCanvas();
     });
   });
@@ -1047,13 +1161,13 @@ function renderNodeCanvas() {
   });
   canvas.querySelectorAll("[data-child-parent-col]").forEach((sel) => {
     sel.addEventListener("change", () => {
-      const rel = state.nodeRelations.get(sel.dataset.childParentCol);
+      const rel = activeDataflow().edges.find((edge) => edge.id === sel.dataset.childParentCol);
       if (rel) { rel.parentCol = sel.value; }
     });
   });
   canvas.querySelectorAll("[data-child-col]").forEach((sel) => {
     sel.addEventListener("change", () => {
-      const rel = state.nodeRelations.get(sel.dataset.childCol);
+      const rel = activeDataflow().edges.find((edge) => edge.id === sel.dataset.childCol);
       if (rel) { rel.childCol = sel.value; }
     });
   });
@@ -1067,40 +1181,34 @@ function buildChildConfigHtml(parentTableId, rel) {
   const colOptions = (cols, selected) => cols.map((c) =>
     `<option value="${escapeHtml(c.name)}" ${selected === c.name ? "selected" : ""}>${escapeHtml(c.displayName || c.name)}</option>`
   ).join("");
-  // only tables not already used as children elsewhere (and not the parent itself)
-  const childCandidates = state.uploadedTables.filter((t) => {
-    if (t.id === parentTableId) return false;
-    // allow if it's already the current child, or not a child of anyone
-    if (t.id === rel.childTableId) return true;
-    return !Array.from(state.nodeRelations.values()).some((r) => r.childTableId === t.id);
-  });
+  const childCandidates = state.uploadedTables.filter((t) => t.id !== parentTableId);
   const childTableOptions = childCandidates.map((t) =>
     `<option value="${escapeHtml(t.id)}" ${t.id === rel.childTableId ? "selected" : ""}>${escapeHtml(t.tableName)}</option>`
   ).join("");
   return `
     <div class="node-child-config">
       <div class="node-child-config-head">
-        <strong>↓ 子表格關聯</strong>
-        <button class="node-child-remove" data-child-remove="${escapeHtml(parentTableId)}" type="button" title="移除子表格">✕</button>
+        <strong>↓ 追溯連結</strong>
+        <button class="node-child-remove" data-child-remove="${escapeHtml(rel.id)}" type="button" title="移除此追溯連結">✕</button>
       </div>
       <div class="node-child-relation-label">
         <span class="relation-table-name">${escapeHtml(parentTable?.tableName || "")}</span>
         <span class="relation-arrow">串接</span>
-        <select class="relation-table-select" data-child-select="${escapeHtml(parentTableId)}">
+        <select class="relation-table-select" data-child-select="${escapeHtml(rel.id)}">
           ${childTableOptions}
         </select>
       </div>
       <div class="node-child-key-row">
         <div class="key-group">
           <span class="lbl">${escapeHtml(parentTable?.tableName || "父表")} 欄位</span>
-          <select data-child-parent-col="${escapeHtml(parentTableId)}">
+          <select data-child-parent-col="${escapeHtml(rel.id)}">
             <option value="">— 選欄位 —</option>${colOptions(parentSchema, rel.parentCol)}
           </select>
         </div>
         <span class="key-eq">=</span>
         <div class="key-group">
           <span class="lbl">${escapeHtml(childTable?.tableName || "子表")} 欄位</span>
-          <select data-child-col="${escapeHtml(parentTableId)}">
+          <select data-child-col="${escapeHtml(rel.id)}">
             <option value="">— 選欄位 —</option>${colOptions(childSchema, rel.childCol)}
           </select>
         </div>
@@ -1110,37 +1218,24 @@ function buildChildConfigHtml(parentTableId, rel) {
 }
 
 function toggleChildConfig(parentTableId) {
-  if (state.nodeRelations.has(parentTableId)) {
-    const rel = state.nodeRelations.get(parentTableId);
-    // add the former child back into the node flow
-    if (rel.childTableId && !state.nodeOrder.includes(rel.childTableId)) {
-      state.nodeOrder.push(rel.childTableId);
-    }
-    state.nodeRelations.delete(parentTableId);
-    renderNodeCanvas();
-    return;
-  }
-  // pick first table not already a child of something and not the parent itself
-  const usedAsChild = new Set(Array.from(state.nodeRelations.values()).map((r) => r.childTableId));
-  const candidate = state.uploadedTables.find((t) => t.id !== parentTableId && !usedAsChild.has(t.id));
+  const flow = activeDataflow();
+  const candidate = state.uploadedTables.find((table) => table.id !== parentTableId
+    && !edgeCreatesCycle(flow.edges, parentTableId, table.id));
   if (!candidate) return;
-  // remove the chosen child from the main node flow
-  state.nodeOrder = state.nodeOrder.filter((id) => id !== candidate.id);
-  state.nodeRelations.set(parentTableId, { childTableId: candidate.id, parentCol: "", childCol: "" });
+  flow.edges.push({ id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, parentTableId, childTableId: candidate.id, parentCol: "", childCol: "" });
   renderNodeCanvas();
 }
 
-function onChildTableSelect(parentTableId, newChildTableId) {
-  const rel = state.nodeRelations.get(parentTableId);
+function onChildTableSelect(edgeId, newChildTableId) {
+  const flow = activeDataflow();
+  const rel = flow.edges.find((edge) => edge.id === edgeId);
   if (!rel) return;
-  const oldChildTableId = rel.childTableId;
-  if (oldChildTableId === newChildTableId) return;
-  // restore old child to node flow
-  if (oldChildTableId && !state.nodeOrder.includes(oldChildTableId)) {
-    state.nodeOrder.push(oldChildTableId);
+  if (rel.childTableId === newChildTableId) return;
+  if (edgeCreatesCycle(flow.edges, rel.parentTableId, newChildTableId, edgeId)) {
+    window.alert("此關聯會形成循環，無法儲存。");
+    renderNodeCanvas();
+    return;
   }
-  // remove new child from node flow
-  state.nodeOrder = state.nodeOrder.filter((id) => id !== newChildTableId);
   rel.childTableId = newChildTableId;
   rel.parentCol = "";
   rel.childCol = "";
@@ -1164,13 +1259,251 @@ function bindNodeCardDrag(canvas) {
       card.classList.remove("is-dragover");
       const dropId = card.dataset.nodeId;
       if (!dragSrcId || dragSrcId === dropId) return;
-      const order = state.nodeOrder;
+      const order = activeDataflow().nodeOrder;
       const srcIdx = order.indexOf(dragSrcId);
       const dstIdx = order.indexOf(dropId);
       if (srcIdx === -1 || dstIdx === -1) return;
       order.splice(srcIdx, 1);
       order.splice(dstIdx, 0, dragSrcId);
       renderNodeCanvas();
+    });
+  });
+}
+
+// ── Form Schema Editor ────────────────────────────────────────────────────────
+function formSchemaUid() { return Math.random().toString(36).slice(2, 10); }
+
+function blankFormDef() {
+  return { id: formSchemaUid(), code: "", name: "", fields: [] };
+}
+
+function blankField() {
+  return { id: formSchemaUid(), name: "", fieldKey: "", type: "string", label: "", required: false, is_key: false };
+}
+
+// 匯入欄位時預判必填／識別鍵：沿用 detectPkFk() 同一套評分函式與門檻
+// （名稱 0-3 + 唯一性 0-4 + 值型態 0-2，總分 <3 或名稱與值型態皆無訊號則不視為 key）；
+// 必填則用同一輪掃描已取得的「樣本是否全部非空」判斷，使用者仍可在編輯器中手動調整。
+function guessFieldFlags(col, rows, colIdx) {
+  const allVals = rows.map((r) => String(r[colIdx] ?? "").normalize("NFKC").trim().toLocaleLowerCase());
+  const nonEmpty = allVals.filter(Boolean);
+  const nameScore = pkNameScore(col.name);
+  const valueScore = pkValuePatternScore(nonEmpty.slice(0, 50));
+  const totalScore = nameScore + pkUniquenessScore(nonEmpty, allVals.length) + valueScore;
+  const is_key = !((nameScore < 1 && valueScore < 2) || totalScore < 3);
+  const required = allVals.length > 0 && nonEmpty.length === allVals.length;
+  return { required, is_key };
+}
+
+// 將一筆已上傳的 CSV 表格轉成表單 Schema 草稿；表格代碼已存在於 formDefs 時回傳 null（呼叫端自行決定如何提示）。
+function csvTableToFormDef(t) {
+  const code = t.tableName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  if (state.formDefs.some((f) => f.code === code)) return null;
+  const cols = state.tableSchema.get(t.id) || [];
+  const rows = state.tableData.get(t.id) || [];
+  const fields = cols.map((col, colIdx) => ({
+    id: formSchemaUid(),
+    name: col.name,
+    fieldKey: col.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+    type: col.type || "string",
+    label: col.name,
+    ...guessFieldFlags(col, rows, colIdx),
+  }));
+  return { id: formSchemaUid(), code, name: t.tableName, fields };
+}
+
+function importCsvAsForms() {
+  if (!state.uploadedTables.length) return;
+  let added = 0;
+  state.uploadedTables.forEach((t) => {
+    const def = csvTableToFormDef(t);
+    if (!def) return;
+    state.formDefs.push(def);
+    added++;
+  });
+  if (added === 0) {
+    alert("所有 CSV 表格已匯入，或尚未上傳 CSV");
+    return;
+  }
+  ensureGenericFormsKitEnabled();
+  renderFormSchemaSection();
+  renderGeneration();
+}
+
+// 資料流節點畫布用：把節點從所有資料流中抽離，轉存為通用表格 Schema（generic-forms-kit 管理）。
+// 用於 CSV 中與資料流無關的獨立表格（例如品檢表）——不需要 PK/FK 關聯，也不該卡在追溯鏈節點上。
+function convertTableToStandaloneForm(tableId) {
+  const t = state.uploadedTables.find((x) => x.id === tableId);
+  if (!t) return;
+  const def = csvTableToFormDef(t);
+  if (!def) {
+    alert("已存在同名通用表格，請先於「表單 Schema 設定」重新命名或刪除後再試一次。");
+    return;
+  }
+  state.formDefs.push(def);
+  removeUploadedTable(tableId);
+  ensureGenericFormsKitEnabled();
+  renderUploadedTables();
+  renderNodeEditorSummary();
+  renderNodeCanvas();
+  renderFormSchemaSection();
+  renderDatabaseCarousel();
+  renderGeneration();
+}
+
+function bindFormSchemaEditor() {
+  document.getElementById("add-form-btn")?.addEventListener("click", () => {
+    const def = blankFormDef();
+    state.formDefs.push(def);
+    openFormOverlay(def.id);
+  });
+  document.getElementById("import-csv-forms-btn")?.addEventListener("click", importCsvAsForms);
+  document.getElementById("form-field-overlay-close")?.addEventListener("click", closeFormOverlay);
+  document.getElementById("form-field-cancel")?.addEventListener("click", closeFormOverlay);
+  document.getElementById("form-field-save")?.addEventListener("click", saveFormOverlay);
+  document.getElementById("add-field-btn")?.addEventListener("click", () => {
+    if (!state._editDraft) return;
+    state._editDraft.fields.push(blankField());
+    renderFormOverlayFields();
+  });
+}
+
+function renderFormSchemaSection() {
+  const section = document.getElementById("form-schema-section");
+  if (!section) return;
+  const importBtn = document.getElementById("import-csv-forms-btn");
+  if (importBtn) importBtn.hidden = !state.uploadedTables.length;
+  const list = elements.formDefsList;
+  if (!list) return;
+  if (!state.formDefs.length) {
+    list.innerHTML = `<div class="empty-state">尚未定義任何表格，點擊「＋ 新增表格」開始設計</div>`;
+    return;
+  }
+  list.innerHTML = state.formDefs.map((f) => `
+    <div class="form-def-row">
+      <div class="form-def-info">
+        <strong>${escapeHtml(f.name || "（未命名）")}</strong>
+        <code>${escapeHtml(f.code || "—")}</code>
+        <span class="hint-text">${f.fields.length} 個欄位</span>
+      </div>
+      <div class="form-def-actions">
+        <button class="ghost-action" data-form-edit="${escapeHtml(f.id)}" type="button">編輯</button>
+        <button class="ghost-action danger-action" data-form-delete="${escapeHtml(f.id)}" type="button">刪除</button>
+      </div>
+    </div>
+  `).join("");
+  list.querySelectorAll("[data-form-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => openFormOverlay(btn.dataset.formEdit));
+  });
+  list.querySelectorAll("[data-form-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.formDefs = state.formDefs.filter((f) => f.id !== btn.dataset.formDelete);
+      renderFormSchemaSection();
+    });
+  });
+}
+
+function openFormOverlay(formId) {
+  const def = state.formDefs.find((f) => f.id === formId);
+  if (!def) return;
+  state._editDraft = JSON.parse(JSON.stringify(def));
+  document.getElementById("form-overlay-title").textContent = def.name ? `編輯「${def.name}」` : "新增表格";
+  renderFormOverlayMeta();
+  renderFormOverlayFields();
+  document.getElementById("form-field-overlay").removeAttribute("hidden");
+}
+
+function closeFormOverlay() {
+  state._editDraft = null;
+  document.getElementById("form-field-overlay").setAttribute("hidden", "");
+}
+
+function saveFormOverlay() {
+  if (!state._editDraft) return;
+  const draft = state._editDraft;
+  if (!draft.code.trim()) { alert("請填寫表格代碼（英文 snake_case）"); return; }
+  if (!draft.name.trim()) { alert("請填寫表格名稱"); return; }
+  const idx = state.formDefs.findIndex((f) => f.id === draft.id);
+  if (idx !== -1) state.formDefs[idx] = draft;
+  closeFormOverlay();
+  ensureGenericFormsKitEnabled();
+  renderFormSchemaSection();
+  renderGeneration();
+}
+
+function renderFormOverlayMeta() {
+  const draft = state._editDraft;
+  if (!draft) return;
+  document.getElementById("form-field-editor-meta").innerHTML = sanitizeHtml(`
+    <div class="form-meta-row">
+      <label class="form-meta-label">
+        <span class="lbl">表格代碼 <small>(snake_case)</small></span>
+        <input class="form-meta-input" type="text" id="draft-code" value="${escapeHtml(draft.code)}" placeholder="e.g. quality_check" />
+      </label>
+      <label class="form-meta-label">
+        <span class="lbl">表格名稱</span>
+        <input class="form-meta-input" type="text" id="draft-name" value="${escapeHtml(draft.name)}" placeholder="e.g. 品質檢查表" />
+      </label>
+    </div>
+  `);
+  document.getElementById("draft-code").addEventListener("input", (e) => { state._editDraft.code = e.target.value.trim(); });
+  document.getElementById("draft-name").addEventListener("input", (e) => {
+    state._editDraft.name = e.target.value;
+    document.getElementById("form-overlay-title").textContent = e.target.value ? `編輯「${e.target.value}」` : "新增表格";
+  });
+}
+
+function renderFormOverlayFields() {
+  const draft = state._editDraft;
+  if (!draft) return;
+  const container = document.getElementById("form-field-editor-fields");
+  if (!draft.fields.length) {
+    container.innerHTML = `<div class="empty-state">尚未新增欄位</div>`;
+    return;
+  }
+  container.innerHTML = sanitizeHtml(`
+    <table class="field-def-table">
+      <thead>
+        <tr>
+          <th>名稱</th><th>欄位 Key</th><th>類型</th><th>標籤</th>
+          <th title="必填">必</th><th title="主鍵">鍵</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${draft.fields.map((f, i) => `
+          <tr data-field-idx="${i}">
+            <td><input type="text" class="field-cell-input" data-field="name" value="${escapeHtml(f.name)}" placeholder="欄位名稱" /></td>
+            <td><input type="text" class="field-cell-input" data-field="fieldKey" value="${escapeHtml(f.fieldKey)}" placeholder="field_key" /></td>
+            <td>
+              <select class="field-cell-select" data-field="type">
+                ${["string","integer","decimal","date"].map((t) =>
+                  `<option value="${t}"${f.type === t ? " selected" : ""}>${t}</option>`
+                ).join("")}
+              </select>
+            </td>
+            <td><input type="text" class="field-cell-input" data-field="label" value="${escapeHtml(f.label)}" placeholder="顯示標籤" /></td>
+            <td class="field-cell-check"><input type="checkbox" data-field="required"${f.required ? " checked" : ""} /></td>
+            <td class="field-cell-check"><input type="checkbox" data-field="is_key"${f.is_key ? " checked" : ""} /></td>
+            <td><button class="ghost-action danger-action" data-del-field="${i}" type="button">✕</button></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `);
+  container.querySelectorAll("[data-field-idx]").forEach((row) => {
+    const idx = Number(row.dataset.fieldIdx);
+    row.querySelectorAll("[data-field]").forEach((input) => {
+      const key = input.dataset.field;
+      const ev = input.type === "checkbox" ? "change" : "input";
+      input.addEventListener(ev, () => {
+        state._editDraft.fields[idx][key] = input.type === "checkbox" ? input.checked : input.value;
+      });
+    });
+  });
+  container.querySelectorAll("[data-del-field]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state._editDraft.fields.splice(Number(btn.dataset.delField), 1);
+      renderFormOverlayFields();
     });
   });
 }
@@ -1321,6 +1654,14 @@ function addKitWithDependencies(id) {
   enableDefaultSubfeatures(id);
 }
 
+// 使用者透過表單 Schema 編輯器（手動新增／CSV 匯入／節點轉獨立表格）實際儲存一筆表單定義時呼叫，
+// 讓 generic-forms-kit 隨之啟用，不需要使用者先手動到 Kit 清單勾選。
+function ensureGenericFormsKitEnabled() {
+  if (state.selected.has("generic-forms-kit")) return;
+  addKitWithDependencies("generic-forms-kit");
+  renderKits();
+}
+
 function removeOptionalKit(id) {
   const item = findKit(id);
   if (!item || item.required) return;
@@ -1359,17 +1700,41 @@ function renderAll() {
   renderFlows();
   renderKits();
   renderSummary();
-  renderDatabaseLayout();
   renderNodeEditorSummary();
-  renderDatabaseRecommendation();
+  renderFormSchemaSection();
+  renderDatabaseCarousel();
   renderPreview();
   renderGeneration();
 }
 
-function renderDatabaseLayout() {
-  const ready = ["usage-scale", "data-criticality", "analytics-need", "deployment-mode"]
-    .every((id) => document.querySelector(`#${id}`)?.value);
-  document.querySelector("#database-layout")?.classList.toggle("is-ready", ready);
+// Cards shown in the Step 2 carousel. Both cards are always present —
+// using the form-schema card auto-enables generic-forms-kit on save (see ensureGenericFormsKitEnabled()),
+// so users don't need to pre-select the kit before designing a standalone table.
+function databaseCards() {
+  return [document.querySelector(".upload-source-card"), document.getElementById("form-schema-section")].filter(Boolean);
+}
+
+function renderDatabaseCarousel() {
+  const cards = databaseCards();
+  if (!cards.length) return;
+  state.dbCard = Math.min(Math.max(state.dbCard, 0), cards.length - 1);
+
+  document.querySelectorAll(".database-card-stage > section")
+    .forEach((el) => el.classList.remove("is-active"));
+  cards[state.dbCard].classList.add("is-active");
+
+  const dotsWrap = document.getElementById("card-indicators");
+  if (!dotsWrap) return;
+  dotsWrap.style.display = cards.length > 1 ? "flex" : "none";
+  dotsWrap.innerHTML = cards.map((_, i) =>
+    `<button class="card-dot${i === state.dbCard ? " is-active" : ""}" type="button" data-card="${i}" aria-label="第 ${i + 1} 張卡片"></button>`
+  ).join("");
+  dotsWrap.querySelectorAll("[data-card]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      state.dbCard = Number(dot.dataset.card);
+      renderDatabaseCarousel();
+    });
+  });
 }
 
 function renderSummary() {
@@ -1391,26 +1756,9 @@ function dependencyTemplate(item) {
   return `<div class="dependency-item"><strong>${escapeHtml(item.id)}</strong><span>依賴：${deps}</span><span>${paid ? `付費 gating：${paid} 項` : "無 gating"}</span></div>`;
 }
 
+// ponytail: usage questionnaire removed from UI; production default is postgresql.
 function computeDbEngine() {
-  const score = scoreByValue("usage-scale", { single: 0, team: 2, company: 3 }) +
-    scoreByValue("data-criticality", { demo: 0, ops: 2, critical: 3 }) +
-    scoreByValue("analytics-need", { low: 0, medium: 1, high: 2 }) +
-    scoreByValue("deployment-mode", { local: 0, intranet: 1, cloud: 2 });
-  return { engine: score >= 4 ? "postgresql" : "sqlite", score };
-}
-
-function renderDatabaseRecommendation() {
-  const { engine, score } = computeDbEngine();
-  const displayName = engine === "postgresql" ? "PostgreSQL" : "SQLite";
-  document.querySelector("#db-engine").textContent = displayName;
-  document.querySelector("#db-reason").textContent = engine === "postgresql"
-    ? "建議使用 PostgreSQL 作為正式資料庫。這套系統會保存匯入紀錄、批號追溯、使用者權限與背景處理結果，需要可長期保存、備份、多人同時使用的資料庫。"
-    : "如果只是本機展示、單人測試或可重建資料，可先使用 SQLite 快速啟動；正式使用前再切換到 PostgreSQL。";
-  document.querySelector("#db-meter-fill").style.width = `${Math.min(100, 40 + score * 8)}%`;
-}
-
-function scoreByValue(id, weights) {
-  return weights[document.querySelector(`#${id}`).value] ?? 0;
+  return { engine: "postgresql", score: 5 };
 }
 
 function renderPreview() {
@@ -1624,6 +1972,7 @@ const kitMockups = {
 function renderGeneration() {
   const recipe = buildRecipe();
   if (elements.generationSummary) elements.generationSummary.innerHTML = [
+    ["客戶", recipe.clientName || "（尚未填寫）"],
     ["流程", recipe.selectedFlows.map((id) => findFlow(id)?.name || id).join("、") || "（未選擇）"],
     ["Kit", recipe.enabledKits.map((id) => findKit(id)?.name || id).join("、")],
     ["Database", recipe.database.engine],
@@ -1652,6 +2001,30 @@ function recipeName() {
   return parts.length ? "form-system-" + parts.join("-") : "form-system";
 }
 
+function clientName() {
+  return document.querySelector("#client-name")?.value.trim() || "";
+}
+
+function clientCode() {
+  return clientName().normalize("NFKC").toLocaleLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^\p{L}\p{N}_]/gu, "")
+    .replace(/^_+|_+$/g, "");
+}
+
+function clientTableCode(code) {
+  const prefix = clientCode();
+  const cleanCode = String(code || "").replace(/^_+/, "");
+  if (!cleanCode) return "";
+  return prefix && !cleanCode.startsWith(`${prefix}_`) ? `${prefix}_${cleanCode}` : cleanCode;
+}
+
+function tableCodeForId(tableId) {
+  const table = state.uploadedTables.find((item) => item.id === tableId);
+  const code = table?.tableName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || "";
+  return clientTableCode(code);
+}
+
 function buildRecipe() {
   const selected = selectedKits();
   const tableSchemas = state.uploadedTables.map((t) => ({
@@ -1668,12 +2041,32 @@ function buildRecipe() {
   return {
     recipeVersion: "0.2.0",
     name: recipeName(),
+    clientName: clientName(),
     sourceManifest: "kits/form-analysis.kit-manifest.json",
     selectedFlows: Array.from(state.selectedFlows),
     enabledKits: selected.map((item) => item.id),
     selectedSubfeatures: Object.fromEntries(selected.map((item) => [item.id, selectedSubfeatures(item).map((sub) => sub.id)])),
     selectedSubfeatureOptions: Object.fromEntries(state.subfeatureOptions.entries()),
     tableSchemas,
+    dataflows: state.dataflows.map((flow) => ({
+      code: flow.id,
+      name: flow.name,
+      nodes: flow.nodeOrder.map(tableCodeForId).filter(Boolean),
+      edges: flow.edges.map((edge) => ({
+        fromTableCode: tableCodeForId(edge.parentTableId),
+        toTableCode: tableCodeForId(edge.childTableId),
+        parentColumn: edge.parentCol || null,
+        childColumn: edge.childCol || null,
+      })).filter((edge) => edge.fromTableCode && edge.toTableCode),
+    })),
+    formSchemas: state.formDefs.map((f, i) => ({
+      code: clientTableCode(f.code),
+      name: f.name,
+      sort_order: i + 1,
+      fields: f.fields.map(({ name, fieldKey, type, label, required, is_key }) => ({
+        name, fieldKey, type, label, required, is_key,
+      })),
+    })),
     featureFlags: {},
     database: {
       engine: computeDbEngine().engine,
