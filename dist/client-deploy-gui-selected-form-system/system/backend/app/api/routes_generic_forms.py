@@ -1,4 +1,4 @@
-"""Generic Forms API — schema-driven form types, record storage, and CSV upload."""
+﻿"""Generic Forms API — schema-driven form types, record storage, and CSV upload."""
 from __future__ import annotations
 
 import io
@@ -75,12 +75,13 @@ def _coerce(value: Any, ftype: str) -> Any:
     s = str(value).strip()
     if not s:
         return None
-    if ftype == "integer":
+    ftype_lower = ftype.lower()
+    if ftype_lower == "integer":
         try:
             return int(float(s))
         except (ValueError, TypeError):
             return s
-    if ftype == "decimal":
+    if ftype_lower in ("decimal", "float", "number"):
         try:
             return float(s)
         except (ValueError, TypeError):
@@ -103,7 +104,7 @@ async def _get_station(code: str, tenant_id: uuid.UUID, db: AsyncSession) -> Sta
         await db.execute(
             select(Station).where(
                 Station.tenant_id == tenant_id,
-                Station.code == code.strip().upper(),
+                Station.code == code.strip(),
             )
         )
     ).scalar_one_or_none()
@@ -153,7 +154,7 @@ async def create_form(
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new form type (station)."""
-    code = body.code.strip().upper()
+    code = body.code.strip()
     if not code:
         raise HTTPException(status_code=422, detail="code is required")
 
@@ -187,15 +188,18 @@ async def delete_form(
     """Delete a form type and all its records."""
     station = await _get_station(code, tenant.id, db)
 
+    # Delete records (no ORM cascade to GenericRecord)
     await db.execute(
         sql_delete(GenericRecord).where(
             GenericRecord.station_id == station.id,
             GenericRecord.tenant_id == tenant.id,
         )
     )
+    # Delete schemas
     await db.execute(
         sql_delete(StationSchema).where(StationSchema.station_id == station.id)
     )
+    # Delete station
     await db.execute(sql_delete(Station).where(Station.id == station.id))
     await db.commit()
 
@@ -210,6 +214,7 @@ async def set_schema(
     """Set (or replace) the active schema for a form type."""
     station = await _get_station(code, tenant.id, db)
 
+    # Deactivate old schemas
     old = (
         await db.execute(
             select(StationSchema).where(
@@ -248,6 +253,74 @@ async def set_schema(
     return _to_station_read(station, schema)
 
 
+async def _list_domain_records(
+    code: str,
+    schema: "StationSchema | None",
+    tenant: Tenant,
+    page: int,
+    page_size: int,
+    db: AsyncSession,
+) -> dict:
+    """Read records directly from a domain physical table (e.g. daihui_entry)."""
+    from sqlalchemy import text as _text
+    fields: list[dict] = schema.record_fields if schema else []
+    field_keys = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("fieldKey") or f.get("name")
+    ]
+    lot_field_key = next(
+        (f.get("fieldKey") or f.get("name") for f in fields if f.get("role") == "lot"),
+        None,
+    )
+    offset = max(0, (page - 1) * page_size)
+    tid = str(tenant.id)
+
+    try:
+        total = (
+            await db.execute(
+                _text(f'SELECT COUNT(*) FROM "{code}" WHERE "_tenant_id" = :tid'),
+                {"tid": tid},
+            )
+        ).scalar() or 0
+    except Exception:
+        total = 0
+
+    safe_keys = [k for k in field_keys if k.replace("_", "").isalnum()]
+    if not safe_keys:
+        return {"total": total, "page": page, "page_size": page_size, "records": []}
+
+    try:
+        col_sql = ", ".join(f'"{k}"' for k in safe_keys)
+        field_keys = safe_keys
+        raw_rows = (
+            await db.execute(
+                _text(
+                    f'SELECT {col_sql}, "_import_job_id", "_row_index", "_imported_at" '
+                    f'FROM "{code}" WHERE "_tenant_id" = :tid '
+                    f'ORDER BY "_imported_at" DESC NULLS LAST OFFSET :offset LIMIT :lim'
+                ),
+                {"tid": tid, "offset": offset, "lim": page_size},
+            )
+        ).mappings().all()
+    except Exception:
+        raw_rows = []
+
+    records = []
+    for r in raw_rows:
+        data = {k: r.get(k) for k in field_keys}
+        lot_raw = str(r[lot_field_key]) if lot_field_key and r.get(lot_field_key) is not None else str(r.get("_row_index", ""))
+        imported_at = r.get("_imported_at")
+        records.append({
+            "id": f'{r.get("_import_job_id", "")}_{r.get("_row_index", "")}',
+            "lot_no_raw": lot_raw,
+            "data": data,
+            "created_at": imported_at.isoformat() if imported_at and hasattr(imported_at, "isoformat") else (str(imported_at) if imported_at else None),
+        })
+
+    return {"total": total, "page": page, "page_size": page_size, "records": records}
+
+
 @router.get("/forms/{code}/records")
 async def list_records(
     code: str,
@@ -258,6 +331,16 @@ async def list_records(
 ):
     """List records for a form type (paginated)."""
     station = await _get_station(code, tenant.id, db)
+    schema = await _active_schema(station.id, db)
+
+    # Domain-backed tables (registered in table_registry) store rows in the physical table,
+    # not GenericRecord. Check table_registry so this works for any client/project name.
+    from app.models.core.schema_registry import TableRegistry
+    is_domain = (
+        await db.execute(select(TableRegistry.id).where(TableRegistry.table_code == code).limit(1))
+    ).scalar_one_or_none() is not None
+    if is_domain:
+        return await _list_domain_records(code, schema, tenant, page, page_size, db)
 
     offset = max(0, (page - 1) * page_size)
     total = (
@@ -326,7 +409,23 @@ async def upload_csv(
         return UploadResult(total=0, imported=0, skipped=0, errors=[])
 
     fields: list[dict] = schema.record_fields or []
-    key_fields = [f["name"] for f in fields if f.get("is_key")]
+
+    # Reject upload when no CSV column matches any schema field
+    if fields:
+        csv_columns = set(df.columns)
+        schema_source_names = {f.get("sourceName") or f.get("name") for f in fields if f.get("sourceName") or f.get("name")}
+        if not csv_columns & schema_source_names:
+            raise HTTPException(
+                status_code=422,
+                detail=f"No CSV columns match the form schema. Expected headers: {sorted(schema_source_names)}, got: {sorted(csv_columns)}",
+            )
+
+    # Support both API-created format (name/is_key) and bootstrap format (fieldKey/sourceName/role)
+    key_fields = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("is_key") or f.get("role") == "lot"
+    ]
 
     imported = 0
     skipped = 0
@@ -338,22 +437,23 @@ async def upload_csv(
         row_errors: list[str] = []
 
         for field in fields:
-            fname = field["name"]
+            field_key = field.get("fieldKey") or field.get("name")  # DB storage key
+            source_name = field.get("sourceName") or field_key  # CSV column header
             ftype = field.get("type", "string")
-            raw_val = row_dict.get(fname)
+            raw_val = row_dict.get(source_name)
             coerced = _coerce(raw_val, ftype)
 
             if field.get("required") and coerced is None:
-                row_errors.append(f"'{fname}' 為必填欄位")
+                row_errors.append(f"'{source_name}' 為必填欄位")
             else:
-                row_data[fname] = coerced
+                row_data[field_key] = coerced
 
         if row_errors:
             errors.append({"row": row_idx + 1, "errors": row_errors})
             continue
 
         key_val = (
-            "_".join(str(row_data.get(k) or "") for k in key_fields)
+            "_".join(str(row_data.get(k) or "") for k in key_fields if k)
             if key_fields
             else str(uuid.uuid4())
         )

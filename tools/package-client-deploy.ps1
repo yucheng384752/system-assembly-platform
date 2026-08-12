@@ -10,6 +10,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Assert-WizardFresh([string]$Root) {
+    $wizardPy = Join-Path $Root "tools\install-wizard.py"
+    $wizardExe = Join-Path $Root "tools\install-wizard.exe"
+    if (Test-Path $wizardPy) {
+        if (-not (Test-Path $wizardExe)) {
+            throw "install-wizard.exe not found. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+        $pyTime = (Get-Item $wizardPy).LastWriteTime
+        $exeTime = (Get-Item $wizardExe).LastWriteTime
+        if ($pyTime -gt $exeTime) {
+            throw "install-wizard.py is newer than install-wizard.exe. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+    }
+}
+
+Assert-WizardFresh $ProjectRoot
+
 # Find recipe ---------------------------------------------------------------
 $assemblyDir = Join-Path $ProjectRoot 'assembly'
 if ($RecipeName) {
@@ -145,6 +162,7 @@ set_env_value() {
     else
         printf '%s=%s\n' "$key" "$value" >> "$file"
     fi
+    chmod 600 "$file" 2>/dev/null || true
 }
 
 get_env_value() {
@@ -557,7 +575,7 @@ start_backend() {
     echo "=== Deploy complete ==="
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
-        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
+        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
         echo "$!" >"${SYS_ROOT}/logs/backend.pid")
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"
@@ -565,20 +583,33 @@ start_backend() {
     else
         info "--- Next steps ---"
         info "Start backend:"
-        info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"
+        info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
     fi
     [ -d "${SYS_ROOT}/frontend/dist" ] && info "Frontend dist: ${SYS_ROOT}/frontend/dist/ (serve via nginx, see README)"
 }
 
 # -- early-exit: --get-machine-id -------------------------------------------
 if [ "${CMD_FINGERPRINT}" -eq 1 ]; then
-    if [ ! -f /etc/machine-id ]; then
-        die "/etc/machine-id not found. This command requires Linux."
+    _FP=""
+    _SOURCE=""
+    _MID=""
+    if command -v tpm2_getekcertificate >/dev/null 2>&1; then
+        _FP="$(tpm2_getekcertificate --ek-certificate /dev/stdout 2>/dev/null | python3 -c 'import hashlib,sys; data=sys.stdin.buffer.read(); print(hashlib.sha256(data).hexdigest() if data else "")' 2>/dev/null || true)"
+        if [ -n "${_FP}" ]; then
+            _SOURCE="TPM EK certificate"
+        fi
     fi
-    _MID="$(tr -d '[:space:]' </etc/machine-id | tr '[:upper:]' '[:lower:]')"
-    _FP="$(python3 -c "import hashlib; print(hashlib.sha256('${_MID}'.encode()).hexdigest())")"
+    if [ -z "${_FP}" ]; then
+        if [ ! -f /etc/machine-id ]; then
+            die "neither TPM EK certificate nor /etc/machine-id is available."
+        fi
+        _MID="$(tr -d '[:space:]' </etc/machine-id | tr '[:upper:]' '[:lower:]')"
+        _FP="$(printf '%s' "${_MID}" | python3 -c 'import hashlib,sys; print(hashlib.sha256(sys.stdin.buffer.read()).hexdigest())')"
+        _SOURCE="/etc/machine-id"
+    fi
     echo ""
-    echo "  Machine ID  : ${_MID}"
+    echo "  Source      : ${_SOURCE}"
+    [ -n "${_MID}" ] && echo "  Machine ID  : ${_MID}"
     echo "  Fingerprint : ${_FP}"
     echo ""
     echo "  Share the Fingerprint with your vendor to bind the license."
@@ -654,6 +685,109 @@ $deployShContent = $deployShContent -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $stageDir 'deploy.sh'),
     $deployShContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'deploy-offline.sh'),
+    $deployShContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$hibaShVars = @'
+HIBA_NODE_ID="${HIBA_NODE_ID:-}"
+HIBA_DASHBOARD_URL="${HIBA_DASHBOARD_URL:-}"
+HIBA_DASHBOARD_TOKEN="${HIBA_DASHBOARD_TOKEN:-}"
+HIBA_CALLBACK_ENABLED="${HIBA_CALLBACK_ENABLED:-true}"
+'@ -replace "`r`n", "`n"
+
+$hibaShFunctions = @'
+configure_hiba_node() {
+    echo "=== HIBA Node ==="
+    if [ -f "${SYS_ROOT}/.env" ]; then
+        HIBA_NODE_ID="${HIBA_NODE_ID:-$(get_env_value HIBA_NODE_ID)}"
+        HIBA_DASHBOARD_URL="${HIBA_DASHBOARD_URL:-$(get_env_value HIBA_DASHBOARD_URL)}"
+        HIBA_DASHBOARD_TOKEN="${HIBA_DASHBOARD_TOKEN:-$(get_env_value HIBA_DASHBOARD_TOKEN)}"
+        HIBA_CALLBACK_ENABLED="${HIBA_CALLBACK_ENABLED:-$(get_env_value HIBA_CALLBACK_ENABLED)}"
+    fi
+    if [ -z "${HIBA_NODE_ID}" ]; then
+        if [ -f /etc/machine-id ]; then
+            HIBA_NODE_ID="$(tr -d '[:space:]' </etc/machine-id | tr '[:upper:]' '[:lower:]')"
+        else
+            HIBA_NODE_ID="$(hostname 2>/dev/null || echo hiba-node)"
+        fi
+    fi
+    if [ "${INTERACTIVE}" -eq 1 ]; then
+        prompt_value HIBA_NODE_ID "HIBA node id" "${HIBA_NODE_ID}"
+        prompt_value HIBA_DASHBOARD_URL "HIBA dashboard URL" "${HIBA_DASHBOARD_URL}"
+        prompt_secret HIBA_DASHBOARD_TOKEN "HIBA dashboard token"
+        prompt_value HIBA_CALLBACK_ENABLED "HIBA dashboard callback enabled" "${HIBA_CALLBACK_ENABLED:-true}"
+        HIBA_NODE_ID="$(get_env_value HIBA_NODE_ID)"
+        HIBA_DASHBOARD_URL="$(get_env_value HIBA_DASHBOARD_URL)"
+        HIBA_DASHBOARD_TOKEN="$(get_env_value HIBA_DASHBOARD_TOKEN)"
+        HIBA_CALLBACK_ENABLED="$(get_env_value HIBA_CALLBACK_ENABLED)"
+    else
+        [ -n "${HIBA_DASHBOARD_URL}" ] || die "HIBA_DASHBOARD_URL not set. Use deploy-online.sh --interactive or set it in deploy-init.env/system/.env."
+        set_env_value HIBA_NODE_ID "${HIBA_NODE_ID}"
+        set_env_value HIBA_DASHBOARD_URL "${HIBA_DASHBOARD_URL}"
+        set_env_value HIBA_DASHBOARD_TOKEN "${HIBA_DASHBOARD_TOKEN}"
+        set_env_value HIBA_CALLBACK_ENABLED "${HIBA_CALLBACK_ENABLED:-true}"
+    fi
+    ok "HIBA node configured: ${HIBA_NODE_ID}"
+    echo ""
+}
+
+send_hiba_dashboard_callback() {
+    [ "${HIBA_CALLBACK_ENABLED:-true}" = "true" ] || return 0
+    [ -n "${HIBA_DASHBOARD_URL:-}" ] || return 0
+    echo "=== HIBA Dashboard Callback ==="
+    HIBA_NODE_ID="${HIBA_NODE_ID}" HIBA_DASHBOARD_URL="${HIBA_DASHBOARD_URL}" HIBA_DASHBOARD_TOKEN="${HIBA_DASHBOARD_TOKEN:-}" SYS_ROOT="${SYS_ROOT}" python3 - <<'PY' || true
+import json
+import os
+import socket
+import time
+import urllib.error
+import urllib.request
+
+base = os.environ["HIBA_DASHBOARD_URL"].rstrip("/")
+url = base + "/api/hiba/nodes/register"
+payload = {
+    "nodeId": os.environ["HIBA_NODE_ID"],
+    "recipe": "__RNAME__",
+    "status": "deployed",
+    "hostname": socket.gethostname(),
+    "systemRoot": os.environ["SYS_ROOT"],
+    "timestamp": int(time.time()),
+}
+data = json.dumps(payload).encode("utf-8")
+headers = {"Content-Type": "application/json"}
+token = os.environ.get("HIBA_DASHBOARD_TOKEN", "")
+if token:
+    headers["Authorization"] = "Bearer " + token
+req = urllib.request.Request(url, data=data, headers=headers, method="POST")
+try:
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        print(f"  OK dashboard callback HTTP {resp.status}")
+except urllib.error.URLError as exc:
+    print(f"  WARN dashboard callback failed: {exc}")
+PY
+    echo ""
+}
+'@ -replace "`r`n", "`n"
+
+$deployOnlineShContent = $deployShContent.Replace("ASK_VALIDATION=$askValidation", "ASK_VALIDATION=$askValidation`n$hibaShVars")
+$rNamePyString = ($rName -replace '[\r\n]', '' -replace '\\', '\\' -replace '"', '\"')
+$deployOnlineShContent = $deployOnlineShContent.Replace('# -- early-exit: --get-machine-id', ($hibaShFunctions.Replace('__RNAME__', $rNamePyString) + "`n# -- early-exit: --get-machine-id"))
+$deployOnlineShContent = $deployOnlineShContent.Replace("fi`ncheck_prerequisites", "fi`nconfigure_hiba_node`ncheck_prerequisites")
+if (-not $deployOnlineShContent.Contains("configure_hiba_node`ncheck_prerequisites")) {
+    throw "HIBA inject failed: anchor 'fi\ncheck_prerequisites' not found in deploy-online.sh template."
+}
+$deployOnlineShContent = $deployOnlineShContent.Replace("start_backend`nshow_license_notice", "start_backend`nsend_hiba_dashboard_callback`nshow_license_notice")
+if (-not $deployOnlineShContent.Contains("send_hiba_dashboard_callback`nshow_license_notice")) {
+    throw "HIBA inject failed: anchor 'start_backend\nshow_license_notice' not found in deploy-online.sh template."
+}
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'deploy-online.sh'),
+    $deployOnlineShContent,
     (New-Object System.Text.UTF8Encoding $false)
 )
 
@@ -808,7 +942,7 @@ New-Item -ItemType Directory -Force $LogPath     | Out-Null
 
 if ($Background) {
     $backendPid = (Start-Process $Python -ArgumentList @(
-        "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"
+        "-m", "uvicorn", "app.main:app", "--host", "127.0.0.1", "--port", "8000"
     ) -WorkingDirectory "$SysRoot\backend" `
       -WindowStyle Hidden `
       -RedirectStandardOutput "$LogPath\backend.out.log" `
@@ -832,7 +966,7 @@ if ($Background) {
 } else {
     Write-Host "  Starting backend on http://localhost:8000 (Ctrl+C to stop)..."
     Push-Location "$SysRoot\backend"
-    try { & $Python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 }
+    try { & $Python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 }
     finally { Pop-Location }
 }
 '@
@@ -843,6 +977,125 @@ $deployPs1Content = $deployPs1Content -replace "`r`n", "`n" -replace "`n", "`r`n
 [System.IO.File]::WriteAllText(
     (Join-Path $stageDir 'deploy.ps1'),
     $deployPs1Content,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'deploy-offline.ps1'),
+    $deployPs1Content,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$hibaPs1Params = @'
+,
+    [string]$HibaNodeId = "",
+    [string]$HibaDashboardUrl = "",
+    [string]$HibaDashboardToken = "",
+    [bool]$HibaCallbackEnabled = $true
+'@
+
+$hibaPs1Functions = @'
+
+function Protect-EnvFile([string]$Path) {
+    try {
+        if (-not (Test-Path -LiteralPath $Path)) { return }
+        $acl = Get-Acl -LiteralPath $Path
+        $acl.SetAccessRuleProtection($true, $false)
+        $current = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+        foreach ($identity in @($current, "BUILTIN\Administrators", "NT AUTHORITY\SYSTEM")) {
+            $rule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+                $identity,
+                "FullControl",
+                "Allow"
+            )
+            $acl.AddAccessRule($rule)
+        }
+        Set-Acl -LiteralPath $Path -AclObject $acl
+    } catch {
+        Write-Warning "Could not restrict $Path ACL: $($_.Exception.Message)"
+    }
+}
+
+function Set-EnvFileValue([string]$Path, [string]$Key, [string]$Value) {
+    $lines = @()
+    if (Test-Path $Path) { $lines = @(Get-Content -LiteralPath $Path) }
+    $escaped = $Value -replace '\\', '\\'
+    $found = $false
+    $updated = foreach ($line in $lines) {
+        if ($line -match "^$([regex]::Escape($Key))=") {
+            $found = $true
+            "$Key=$escaped"
+        } else {
+            $line
+        }
+    }
+    if (-not $found) { $updated += "$Key=$escaped" }
+    Set-Content -LiteralPath $Path -Value $updated -Encoding UTF8
+    Protect-EnvFile $Path
+    [System.Environment]::SetEnvironmentVariable($Key, $Value, 'Process')
+}
+
+function Configure-HibaNode {
+    param([string]$EnvFile)
+    Write-Host "=== HIBA Node ==="
+    if (-not $script:HibaNodeId) {
+        $machineGuid = ""
+        try { $machineGuid = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Cryptography" -Name MachineGuid).MachineGuid } catch {}
+        $script:HibaNodeId = if ($machineGuid) { $machineGuid } else { $env:COMPUTERNAME }
+    }
+    if (-not $script:HibaDashboardUrl) {
+        $script:HibaDashboardUrl = [System.Environment]::GetEnvironmentVariable("HIBA_DASHBOARD_URL", 'Process')
+    }
+    if (-not $script:HibaDashboardUrl) {
+        throw "HIBA_DASHBOARD_URL not set. Pass -HibaDashboardUrl or set it in system\.env."
+    }
+    Set-EnvFileValue $EnvFile "HIBA_NODE_ID" $script:HibaNodeId
+    Set-EnvFileValue $EnvFile "HIBA_DASHBOARD_URL" $script:HibaDashboardUrl
+    Set-EnvFileValue $EnvFile "HIBA_DASHBOARD_TOKEN" $script:HibaDashboardToken
+    Set-EnvFileValue $EnvFile "HIBA_CALLBACK_ENABLED" ([string]$script:HibaCallbackEnabled).ToLowerInvariant()
+    Write-Host "  OK HIBA node configured: $script:HibaNodeId"
+    Write-Host ""
+}
+
+function Send-HibaDashboardCallback {
+    if (-not $script:HibaCallbackEnabled) { return }
+    if (-not $script:HibaDashboardUrl) { return }
+    Write-Host "=== HIBA Dashboard Callback ==="
+    try {
+        $uri = $script:HibaDashboardUrl.TrimEnd("/") + "/api/hiba/nodes/register"
+        $body = @{
+            nodeId = $script:HibaNodeId
+            recipe = "__RNAME__"
+            status = "deployed"
+            hostname = $env:COMPUTERNAME
+            systemRoot = $SysRoot
+            timestamp = [DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        } | ConvertTo-Json -Depth 4
+        $headers = @{ "Content-Type" = "application/json" }
+        if ($script:HibaDashboardToken) { $headers["Authorization"] = "Bearer $script:HibaDashboardToken" }
+        $resp = Invoke-WebRequest -Uri $uri -Method Post -Headers $headers -Body $body -UseBasicParsing -TimeoutSec 15
+        Write-Host "  OK dashboard callback HTTP $($resp.StatusCode)"
+    } catch {
+        Write-Warning "dashboard callback failed: $($_.Exception.Message)"
+    }
+    Write-Host ""
+}
+'@
+
+$deployOnlinePs1Content = $deployPs1Content.Replace("[switch]`$SkipFrontend", "[switch]`$SkipFrontend$hibaPs1Params")
+$normalizedHibaPs1Functions = $hibaPs1Functions.Replace('__RNAME__', $rName) -replace "`r`n", "`n" -replace "`n", "`r`n"
+$deployOnlinePs1Content = $deployOnlinePs1Content.Replace('# --- Check and load .env into session environment', ($normalizedHibaPs1Functions + "`r`n# --- Check and load .env into session environment"))
+$deployOnlinePs1Content = $deployOnlinePs1Content.Replace('Write-Host "  OK .env loaded"', 'Write-Host "  OK .env loaded"' + "`r`n" + 'Configure-HibaNode $EnvFile')
+$deployOnlinePs1Content = $deployOnlinePs1Content.Replace('Write-Host "  OK backend PID=$backendPid  url=http://localhost:8000"', 'Write-Host "  OK backend PID=$backendPid  url=http://localhost:8000"' + "`r`n" + '    Send-HibaDashboardCallback')
+$deployOnlinePs1Content = $deployOnlinePs1Content.Replace('try { & $Python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 }', 'try {' + "`r`n" + '        Send-HibaDashboardCallback' + "`r`n" + '        & $Python -m uvicorn app.main:app --host 127.0.0.1 --port 8000' + "`r`n" + '    }')
+if (-not (
+    $deployOnlinePs1Content.Contains('Write-Host "  OK backend PID=$backendPid  url=http://localhost:8000"' + "`r`n" + '    Send-HibaDashboardCallback') -and
+    $deployOnlinePs1Content.Contains('try {' + "`r`n" + '        Send-HibaDashboardCallback' + "`r`n" + '        & $Python -m uvicorn app.main:app --host 127.0.0.1 --port 8000')
+)) {
+    throw "HIBA inject failed: Send-HibaDashboardCallback not found in deploy-online.ps1 template (anchor may have changed)."
+}
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'deploy-online.ps1'),
+    $deployOnlinePs1Content,
     (New-Object System.Text.UTF8Encoding $false)
 )
 
@@ -960,7 +1213,7 @@ $R.Add('**Option A - foreground (for testing):**')
 $R.Add('')
 $R.Add($tick3 + 'bash')
 $R.Add('cd system/backend')
-$R.Add('../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000')
+$R.Add('../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000')
 $R.Add($tick3)
 $R.Add('')
 $R.Add('**Option B - background (recommended for servers):**')
@@ -1140,6 +1393,8 @@ WORKDIR /app
 COPY system/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY system/backend/ .
+COPY system/db-bootstrap-plan.json ./db-bootstrap-plan.json
+COPY license.lic /app/license.lic
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 '@
 $backendDockerfileContent = $backendDockerfileContent -replace "`r`n", "`n"
@@ -1310,35 +1565,67 @@ WantedBy=multi-user.target
     (New-Object System.Text.UTF8Encoding $false)
 )
 
+# Inject signing public key into staged license.py --------------------------
+Write-Host 'Injecting signing public key into staged license.py...'
+$pubKeyPath = Join-Path $PSScriptRoot 'keys\signing-public-key.pem'
+if (-not (Test-Path $pubKeyPath)) {
+    throw "signing-public-key.pem not found at $pubKeyPath. Run tools\generate-license-keys.ps1 first."
+}
+$pubKeyContent = [System.IO.File]::ReadAllText($pubKeyPath, [System.Text.Encoding]::UTF8).Trim().Replace("`r`n", "`n")
+$stagedLicensePy = Join-Path $stageDir 'system\backend\app\core\license.py'
+if (-not (Test-Path $stagedLicensePy)) {
+    throw "license.py not found in staged system at $stagedLicensePy — check that assemble-system.ps1 includes platform-core-kit."
+}
+$licPyRaw = [System.IO.File]::ReadAllText($stagedLicensePy, [System.Text.Encoding]::UTF8).Replace("`r`n", "`n")
+$beginMarker = '_PUBLIC_KEY_PEM = """'
+$tripleQuote  = '"""'
+$mStart = $licPyRaw.IndexOf($beginMarker)
+if ($mStart -eq -1) { throw "Cannot find _PUBLIC_KEY_PEM assignment in staged license.py — injection anchor has changed." }
+$mEnd = $licPyRaw.IndexOf($tripleQuote, $mStart + $beginMarker.Length)
+if ($mEnd -eq -1) { throw "Cannot find closing triple-quote for _PUBLIC_KEY_PEM in staged license.py." }
+$licPyNew = $licPyRaw.Substring(0, $mStart) +
+    $beginMarker + "`n" + $pubKeyContent + "`n" +
+    $licPyRaw.Substring($mEnd)
+[System.IO.File]::WriteAllText($stagedLicensePy, $licPyNew, (New-Object System.Text.UTF8Encoding $false))
+Write-Host "  OK  $stagedLicensePy"
+
+# Sign package (requires tools/keys/signing-private-key.pem) ---------------
+$signScript = Join-Path $PSScriptRoot 'sign-package.ps1'
+$privKey    = Join-Path $PSScriptRoot 'keys\signing-private-key.pem'
+if ((-not (Test-Path $signScript)) -or (-not (Test-Path $privKey))) {
+    throw 'Cannot build deploy package: no signing key found at tools\keys\signing-private-key.pem. The backend enforces a license at startup, so a package without a signed license.lic would crash-loop. Run tools\generate-license-keys.ps1 (and ensure tools\sign-package.ps1 exists) before packaging.'
+}
+
+Write-Host 'Signing package...'
+$recipeMachineId = if ($recipe.machineFingerprint) { [string]$recipe.machineFingerprint } else { '' }
+$signArgs = @(
+    '-ExecutionPolicy', 'Bypass',
+    '-File', $signScript,
+    '-RecipePath', $recipePath,
+    '-PackageZipPath', $zipPath,
+    '-PrivateKeyPath', $privKey,
+    '-OutputDir', $stageDir,
+    '-LicenseeName', $(if ($LicenseeName) { $LicenseeName } else { '__none__' }),
+    '-LicenseeEmail', $(if ($LicenseeEmail) { $LicenseeEmail } else { '__none__' }),
+    '-ExpiresAfterDays', ([string]$ExpiresAfterDays),
+    '-MachineId', $(if ($recipeMachineId) { $recipeMachineId } else { '__none__' })
+)
+& powershell @signArgs
+$licFile = Join-Path $stageDir 'license.lic'
+if (Test-Path $licFile) {
+    $systemDir = Join-Path $stageDir 'system'
+    New-Item -ItemType Directory -Path $systemDir -Force | Out-Null
+    Copy-Item $licFile (Join-Path $systemDir 'license.lic') -Force
+}
+
 # Create ZIP ----------------------------------------------------------------
 if (-not $SkipZip) {
     if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
     Compress-Archive -Path (Join-Path $stageDir '*') -DestinationPath $zipPath -Force
     Write-Host ('Client deploy zip: ' + $zipPath)
-
-    # Sign package (requires tools/keys/signing-private-key.pem) ---------------
-    $signScript = Join-Path $PSScriptRoot 'sign-package.ps1'
-    $privKey    = Join-Path $PSScriptRoot 'keys\signing-private-key.pem'
-    if ((Test-Path $signScript) -and (Test-Path $privKey)) {
-        Write-Host 'Signing package...'
-        $recipeMachineId = if ($recipe.machineFingerprint) { [string]$recipe.machineFingerprint } else { '' }
-        & powershell -ExecutionPolicy Bypass -File $signScript `
-            -RecipePath $recipePath `
-            -PackageZipPath $zipPath `
-            -PrivateKeyPath $privKey `
-            -OutputDir $stageDir `
-            -LicenseeName $LicenseeName `
-            -LicenseeEmail $LicenseeEmail `
-            -ExpiresAfterDays $ExpiresAfterDays `
-            -MachineId $recipeMachineId
-        # Copy license.lic into zip (re-compress with license)
-        $licFile = Join-Path $stageDir 'license.lic'
-        if (Test-Path $licFile) {
-            Compress-Archive -Path $licFile -DestinationPath $zipPath -Update
-            Write-Host 'license.lic added to zip'
-        }
-    } else {
-        Write-Host 'SKIP signing (no private key found). Run tools\generate-license-keys.ps1 to enable.'
+    if (Test-Path $licFile) {
+        Compress-Archive -Path $licFile -DestinationPath $zipPath -Update
+        Write-Host 'license.lic added to zip'
     }
 } else {
     Write-Host ('Client deploy folder: ' + $stageDir)

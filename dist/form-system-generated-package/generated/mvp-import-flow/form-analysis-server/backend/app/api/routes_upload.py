@@ -53,6 +53,7 @@ from app.schemas.upload import (
     UpdateUploadContentRequest,
     UploadErrorResponse,
 )
+from app.core.monitoring import report_user_action
 from app.services.audit_events import write_audit_event_best_effort
 from app.services.pdf_conversion import (
     process_pdf_conversion_job_background,
@@ -579,6 +580,13 @@ async def update_upload_content(
         await db.commit()
         await db.refresh(upload_job)
 
+        _ip = http_request.client.host if http_request.client else "unknown"
+        report_user_action(
+            action="update_upload_content",
+            state="success",
+            describe=f"process_id={process_id} rows={upload_job.total_rows} invalid={upload_job.invalid_rows} ip={_ip}",
+        )
+
         sample_errors = [
             UploadErrorResponse(
                 row_index=error["row_index"],
@@ -918,6 +926,13 @@ async def upload_file(
 
             await db.commit()
 
+            _ip = http_request.client.host if http_request.client else "unknown"
+            report_user_action(
+                action="upload_file",
+                state="success",
+                describe=f"file={file.filename} rows={validation_result['total_rows']} invalid={validation_result['invalid_rows']} ip={_ip}",
+            )
+
             # 7. 準備回應資料
             sample_errors = [
                 UploadErrorResponse(
@@ -1127,6 +1142,13 @@ async def upload_pdf(
         processing_time=time.time() - start_time,
     )
 
+    _ip = http_request.client.host if http_request and http_request.client else "unknown"
+    report_user_action(
+        action="upload_pdf",
+        state="success",
+        describe=f"file={file.filename} size={file_size} process_id={process_id} ip={_ip}",
+    )
+
     return FileUploadResponse(
         process_id=process_id,
         total_rows=0,
@@ -1227,6 +1249,13 @@ async def trigger_pdf_convert(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    _ip = http_request.client.host if http_request.client else "unknown"
+    report_user_action(
+        action="trigger_pdf_convert",
+        state="queued",
+        describe=f"process_id={process_id} job={job.id} ip={_ip}",
+    )
 
     # Background processing only when global session factory is available.
     if database.async_session_factory:
@@ -1506,6 +1535,13 @@ async def ingest_pdf_converted_csvs(
 
     latest_job.ingested_upload_jobs = created
     await db.commit()
+
+    _ip = http_request.client.host if http_request.client else "unknown"
+    report_user_action(
+        action="ingest_pdf_csvs",
+        state="success",
+        describe=f"process_id={process_id} files={len(uploads)} ip={_ip}",
+    )
 
     return PdfConvertIngestResponse(uploads=uploads)
 

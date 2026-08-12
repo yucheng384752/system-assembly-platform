@@ -1,24 +1,95 @@
-// ── 機器碼腳本（內嵌，無伺服器時也能下載） ───────────────────────────────────────
-const MACHINE_ID_SCRIPT = `#!/bin/sh
-# get-machine-id.sh — Form System Kit Composer
+﻿// ── TPM 完整初始化腳本（base64，避免 ${...} 插值問題）────────────────────────
+// Source: scripts_pi/deploy_http/01_tpm_full_setup.sh
+const _TPM_FULL_SETUP_B64 = "IyEvdXNyL2Jpbi9lbnYgYmFzaAojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KIyAwMV90cG1fZnVsbF9zZXR1cC5zaCDigJQg5oyB5LmF5YyWIHN3dHBtIOWIneWni+WMluiFs+acrAojCiMg54m55oCn77yaCiMgICAtIHN3dHBtIOeLgOaFi+WtmOaWvCAvdmFyL2xpYi9zd3RwbS1oaWJhL3N3dHBtLXN0YXRl77yI6YeN6ZaL5qmf5L+d55WZ77yJCiMgICAtIOmmluasoeWft+ihjO+8muW7uueriyBzd3RwbSDni4DmhYsgKyBzeXN0ZW1kIOacjeWLmSArIFRQTSDph5HpkbAKIyAgIC0g6YeN6KSH5Z+36KGM77yI5Yaq562J77yJ77ya6YeN5paw6YCj5o6l5bey5pyJ54uA5oWL77yM6Lez6YGO5bey5a6M5oiQ5q2l6amfCiMgICAtIOmWi+apn+iHquWVn++8mnN3dHBtLnNlcnZpY2Ug55SxIHN5c3RlbWQg566h55CGCiMgICAtIOaMh+e0i+epqeWumu+8muWQjOS4gCBzd3RwbSDni4DmhYvmr4/mrKHnsL3lkI3ph5HpkbDnm7jlkIwKIwojIOS9v+eUqOaWueW8j++8mnN1ZG8gYmFzaCAwMV90cG1fZnVsbF9zZXR1cC5zaAojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0KCnNldCAtdW8gcGlwZWZhaWwKCkdSRUVOPSdcMDMzWzA7MzJtJzsgUkVEPSdcMDMzWzA7MzFtJzsgWUVMTE9XPSdcMDMzWzE7MzNtJzsgQ1lBTj0nXDAzM1swOzM2bSc7IE5DPSdcMDMzWzBtJwpvaygpICAgeyBlY2hvIC1lICIke0dSRUVOfeKckyAkMSR7TkN9IjsgfQplcnIoKSAgeyBlY2hvIC1lICIke1JFRH3inJcgJDEke05DfSI7IH0KaW5mbygpIHsgZWNobyAtZSAiXG4ke1lFTExPV33ilrggJDEke05DfSI7IH0Kc2tpcCgpIHsgZWNobyAtZSAiJHtDWUFOfeKGtyAkMe+8iOW3suWtmOWcqO+8jOi3s+mBju+8iSR7TkN9IjsgfQpkaWUoKSAgeyBlcnIgIiQxIjsgZWNobyAiICDihpIg6KuL5bCH5Lul5LiK6Yyv6Kqk6LK857Wm6ZaL55m86ICF5o6S5p+lIjsgZXhpdCAxOyB9CgojIOKUgOKUgCDot6/lvpHoqK3lrprvvIjlhajpg6jmjIHkuYXljJboh7MgL3Zhci9saWIvc3d0cG0taGliYe+8iSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKIyBwb255dGFpbDogL3Zhci9saWIg5pivIFVidW50dSAyMi4wNCBBcHBBcm1vciBwcm9maWxlIOmgkOioreWFgeiosei3r+W+kQpUUE1fRElSPSIvdmFyL2xpYi9zd3RwbS1oaWJhIgpUUE1fU1RBVEU9IiR7VFBNX0RJUn0vc3d0cG0tc3RhdGUiICAgIyDmjIHkuYXljJbvvJrpnZ4gL3RtcApIQU5ETEU9IjB4ODEwMDAwMDEiClRDVElfRU5WX0ZJTEU9Ii9ldGMvcHJvZmlsZS5kL2hpYmEtdHBtLnNoIgpTV1RQTV9TRVJWSUNFPSIvZXRjL3N5c3RlbWQvc3lzdGVtL3N3dHBtLnNlcnZpY2UiClRDVElfQ09ORj0iJHtUUE1fRElSfS90Y3RpLmNvbmYiICAgICAjIOS+myBzeXN0ZW1kIEVudmlyb25tZW50RmlsZSDkvb/nlKgKU1dUUE1fTE9HPSIke1RQTV9ESVJ9L3N3dHBtLmxvZyIKClRDVElfVkFMVUU9InN3dHBtOmhvc3Q9MTI3LjAuMC4xLHBvcnQ9MjMyMSIKCmVjaG8gIj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSIKZWNobyAiICBIaUJBLUFCIFRQTSDmjIHkuYXljJbliJ3lp4vljJbohbPmnKwiCmVjaG8gIiAgVFBNIFN0YXRlIDogJFRQTV9TVEFURSIKZWNobyAiICBIYW5kbGUgICAgOiAkSEFORExFIgplY2hvICI9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0iCgojIOKUgOKUgCBTVEFHRSAw77ya5YmN572u56K66KqNIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAppbmZvICJTVEFHRSAw77ya5YmN572u56K66KqNIgoKW1sgJEVVSUQgLWVxIDAgXV0gfHwgZGllICLoq4vku6Ugc3VkbyDln7fooYzvvJpzdWRvIGJhc2ggJDAiCgojIOiHquWLleWuieijnee8uuWwkeeahOWll+S7tu+8iOmBv+WFjemcgOimgeS9v+eUqOiAheaJi+WLleWuieijne+8iQpQS0dTX05FRURFRD0oKQpjb21tYW5kIC12IHN3dHBtICAgICAgID4vZGV2L251bGwgMj4mMSB8fCBQS0dTX05FRURFRCs9KHN3dHBtKQpjb21tYW5kIC12IHN3dHBtX3NldHVwID4vZGV2L251bGwgMj4mMSB8fCBQS0dTX05FRURFRCs9KHN3dHBtLXRvb2xzKQpjb21tYW5kIC12IHRwbTJfY3JlYXRlcHJpbWFyeSA+L2Rldi9udWxsIDI+JjEgfHwgUEtHU19ORUVERUQrPSh0cG0yLXRvb2xzKQpjb21tYW5kIC12IG9wZW5zc2wgICAgID4vZGV2L251bGwgMj4mMSB8fCBQS0dTX05FRURFRCs9KG9wZW5zc2wpCgppZiBbWyAkeyNQS0dTX05FRURFRFtAXX0gLWd0IDAgXV07IHRoZW4KICBpbmZvICLoh6rli5Xlronoo53nvLrlsJHlpZfku7bvvJoke1BLR1NfTkVFREVEWypdfSIKICBhcHQtZ2V0IHVwZGF0ZSAtcSAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgYXB0LWdldCBpbnN0YWxsIC15ICIke1BLR1NfTkVFREVEW0BdfSIgXAogICAgfHwgZGllICLlpZfku7blronoo53lpLHmlZfvvIzoq4vmiYvli5Xln7fooYzvvJpzdWRvIGFwdC1nZXQgaW5zdGFsbCAteSBzd3RwbSBzd3RwbS10b29scyB0cG0yLXRvb2xzIG9wZW5zc2wiCmZpCgpmb3IgY21kIGluIHN3dHBtIHN3dHBtX3NldHVwIHRwbTJfY3JlYXRlcHJpbWFyeSB0cG0yX2NyZWF0ZSB0cG0yX2xvYWQgXAogICAgICAgICAgIHRwbTJfZXZpY3Rjb250cm9sIHRwbTJfcmVhZHB1YmxpYyB0cG0yX2ZsdXNoY29udGV4dCBvcGVuc3NsOyBkbwogIGNvbW1hbmQgLXYgIiRjbWQiID4vZGV2L251bGwgMj4mMSBcCiAgICAmJiBvayAiJGNtZCDlt7Llronoo50iIFwKICAgIHx8IGRpZSAiJGNtZCDmnKrmib7liLDvvIjlronoo53lpLHmlZfvvIkiCmRvbmUKCiMg4pSA4pSAIEFwcEFybW9yIOebuOWuueaAp++8iFVidW50dSAyMi4wNCDnmoQgc3d0cG0gYXB0IOWll+S7tumZhOW4tiBwcm9maWxl77yJIOKUgOKUgAojIHN3dHBtIOeahCBBcHBBcm1vciBwcm9maWxlIOmgkOioreS4jeWFgeioseWtmOWPliAvb3B0Lyoq77yMCiMg5pS555SoIC92YXIvbGliL3N3dHBtLWhpYmEg5Y2z54K65YWB6Kix56+E5ZyN77yM5L2G6Iul5LuN5pyJ6ZmQ5Yi25YmH5YiH5o+bIGNvbXBsYWlu44CCCmlmIGNvbW1hbmQgLXYgYWEtc3RhdHVzID4vZGV2L251bGwgMj4mMSAmJiBhYS1zdGF0dXMgLS1lbmFibGVkIDI+L2Rldi9udWxsOyB0aGVuCiAgQVBQQVJNT1JfRklYRUQ9MAogIGZvciBfcHJvZiBpbiAvZXRjL2FwcGFybW9yLmQvdXNyLmJpbi5zd3RwbSAvZXRjL2FwcGFybW9yLmQvc3d0cG0gXAogICAgICAgICAgICAgICAvZXRjL2FwcGFybW9yLmQvdXNyLnNiaW4uc3d0cG07IGRvCiAgICBpZiBbWyAtZiAiJF9wcm9mIiBdXTsgdGhlbgogICAgICBpbmZvICLlgbXmuKzliLAgQXBwQXJtb3IgcHJvZmlsZe+8miRfcHJvZiIKICAgICAgaWYgY29tbWFuZCAtdiBhYS1jb21wbGFpbiA+L2Rldi9udWxsIDI+JjE7IHRoZW4KICAgICAgICBhYS1jb21wbGFpbiAiJF9wcm9mIiAyPi9kZXYvbnVsbCBcCiAgICAgICAgICAmJiBvayAic3d0cG0gQXBwQXJtb3Ig4oaSIGNvbXBsYWluIOaooeW8j++8iOS4jeaUlOaIqu+8iSIgXAogICAgICAgICAgfHwgZXJyICJhYS1jb21wbGFpbiDlpLHmlZfvvIjnubznuozvvIzoi6Xlvoznuowgc3d0cG1fc2V0dXAg5aSx5pWX6KuL5omL5YuV5Z+36KGM77yJIgogICAgICBlbHNlCiAgICAgICAgYXBwYXJtb3JfcGFyc2VyIC1SICIkX3Byb2YiIDI+L2Rldi9udWxsIFwKICAgICAgICAgICYmIG9rICJzd3RwbSBBcHBBcm1vciBwcm9maWxlIOW3suenu+mZpCIgXAogICAgICAgICAgfHwgZXJyICJBcHBBcm1vciDnp7vpmaTlpLHmlZfvvIjnubznuozvvIkiCiAgICAgIGZpCiAgICAgIEFQUEFSTU9SX0ZJWEVEPTEKICAgICAgYnJlYWsKICAgIGZpCiAgZG9uZQogIGlmIFtbICRBUFBBUk1PUl9GSVhFRCAtZXEgMCBdXSAmJiBhYS1zdGF0dXMgMj4vZGV2L251bGwgfCBncmVwIC1xICdzd3RwbSc7IHRoZW4KICAgIGFhLWNvbXBsYWluIC91c3IvYmluL3N3dHBtICAgICAgIDI+L2Rldi9udWxsIHx8IHRydWUKICAgIGFhLWNvbXBsYWluIC91c3IvYmluL3N3dHBtX3NldHVwIDI+L2Rldi9udWxsIHx8IHRydWUKICAgIG9rICJzd3RwbSBBcHBBcm1vciDihpIgY29tcGxhaW4g5qih5byP77yIYnkgYmluYXJ577yJIgogIGZpCmZpCgojIOW7uueri+ebrumMhO+8iOaMgeS5heWMlui3r+W+ke+8iQpta2RpciAtcCAiJFRQTV9ESVIiICIkVFBNX1NUQVRFIgpSRUFMX1VTRVI9IiR7U1VET19VU0VSOi0ke1VTRVI6LSQobG9nbmFtZSAyPi9kZXYvbnVsbCB8fCB3aG9hbWkpfX0iCmNob3duIC1SIHJvb3Q6cm9vdCAiJFRQTV9ESVIiCmNobW9kIDc1NSAiJFRQTV9ESVIiCmNobW9kIDc1NSAiJFRQTV9TVEFURSIKb2sgIuebrumMhOW7uueri++8miRUUE1fRElSIgoKIyDilIDilIAgU1RBR0UgMe+8mnN3dHBtIOeLgOaFi+WIneWni+WMlu+8iOWGquetie+8muWDhemmluasoeWft+ihjO+8iSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKaW5mbyAiU1RBR0UgMe+8mnN3dHBtIOeLgOaFi+WIneWni+WMliIKClNUQVRFX01BUktFUj0iJHtUUE1fU1RBVEV9Ly5pbml0aWFsaXplZCIKCmlmIFtbIC1mICIkU1RBVEVfTUFSS0VSIiBdXTsgdGhlbgogIHNraXAgInN3dHBtIOeLgOaFi+W3suWtmOWcqO+8iCRUUE1fU1RBVEXvvInvvIzot7PpgY4gc3d0cG1fc2V0dXAiCiAgZWNobyAiICDihpIg5oyH57SL6IiH6aaW5qyh5Yid5aeL5YyW55u45ZCM77yI56mp5a6a77yJIgplbHNlCiAgIyDpppbmrKHln7fooYzvvJrlu7rnq4sgc3d0cG0g54uA5oWL77yI5LiN5YqgIC0tb3ZlcndyaXRl77yM56K65L+d6YeR6ZGw5Y+q5bu65LiA5qyh77yJCiAgc3d0cG1fc2V0dXAgXAogICAgLS10cG0yIFwKICAgIC0tdHBtc3RhdGUgIiRUUE1fU1RBVEUiIFwKICAgIC0tYWxsb3ctc2lnbmluZyAyPj4iJFNXVFBNX0xPRyIgfHwgZGllICJzd3RwbV9zZXR1cCDlpLHmlZfvvIzmn6XnnIvvvJokU1dUUE1fTE9HIgoKICB0b3VjaCAiJFNUQVRFX01BUktFUiIKICBvayAic3d0cG0g54uA5oWL5Yid5aeL5YyW5a6M5oiQ77yIU2lnbmluZyBLZXkg5bey5bu656uL77yJIgpmaQoKIyDilIDilIAgU1RBR0UgMu+8muW7uueriyBzeXN0ZW1kIOacjeWLme+8iOWGquetie+8iSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKaW5mbyAiU1RBR0UgMu+8mnN3dHBtIHN5c3RlbWQg5pyN5YuZIgoKIyDlr6vlhaUgRW52aXJvbm1lbnRGaWxl77yI5L6bIHN5c3RlbWQgc2VydmljZSDoroDlj5YgVENUSe+8iQpjYXQgPiAiJFRDVElfQ09ORiIgPDxFT0YKVFBNMlRPT0xTX1RDVEk9JHtUQ1RJX1ZBTFVFfQpFT0YKY2hvd24gcm9vdDpyb290ICIkVENUSV9DT05GIgpjaG1vZCA2NDQgIiRUQ1RJX0NPTkYiCm9rICJUQ1RJIOioreWumuaqlO+8miRUQ1RJX0NPTkYiCgppZiBbWyAtZiAiJFNXVFBNX1NFUlZJQ0UiIF1dOyB0aGVuCiAgc2tpcCAic3d0cG0uc2VydmljZSDlt7LlrZjlnKgiCmVsc2UKICBjYXQgPiAiJFNXVFBNX1NFUlZJQ0UiIDw8RU9GCltVbml0XQpEZXNjcmlwdGlvbj1Tb2Z0d2FyZSBUUE0gKHN3dHBtKSBmb3IgSGlCQS1BQgpBZnRlcj1uZXR3b3JrLnRhcmdldApCZWZvcmU9aGliYS1zdWJ3ZWIuc2VydmljZQoKW1NlcnZpY2VdClR5cGU9Zm9ya2luZwpVc2VyPXJvb3QKRXhlY1N0YXJ0UHJlPS9iaW4vbWtkaXIgLXAgJHtUUE1fU1RBVEV9CkV4ZWNTdGFydD0vdXNyL2Jpbi9zd3RwbSBzb2NrZXQgXFwKICAtLXRwbXN0YXRlIGRpcj0ke1RQTV9TVEFURX0gXFwKICAtLWN0cmwgdHlwZT10Y3AscG9ydD0yMzIyIFxcCiAgLS1zZXJ2ZXIgdHlwZT10Y3AscG9ydD0yMzIxIFxcCiAgLS10cG0yIFxcCiAgLS1mbGFncyBzdGFydHVwLWNsZWFyIFxcCiAgLS1kYWVtb24gXFwKICAtLWxvZyBmaWxlPSR7U1dUUE1fTE9HfSxsZXZlbD01CkV4ZWNTdG9wPS91c3IvYmluL3BraWxsIC1mICJzd3RwbSBzb2NrZXQiClJlbWFpbkFmdGVyRXhpdD15ZXMKUmVzdGFydD1vbi1mYWlsdXJlClJlc3RhcnRTZWM9MwoKW0luc3RhbGxdCldhbnRlZEJ5PW11bHRpLXVzZXIudGFyZ2V0CkVPRgogIG9rICJzd3RwbS5zZXJ2aWNlIOW7uueri+WujOaIkCIKZmkKCiMg5ZWf55So5Lim77yI6YeN77yJ5ZWf5YuVIHN3dHBtIOacjeWLmQpzeXN0ZW1jdGwgZGFlbW9uLXJlbG9hZApzeXN0ZW1jdGwgZW5hYmxlIHN3dHBtLnNlcnZpY2UKc3lzdGVtY3RsIHJlc3RhcnQgc3d0cG0uc2VydmljZQpzbGVlcCAyCgppZiBzeXN0ZW1jdGwgaXMtYWN0aXZlIC0tcXVpZXQgc3d0cG0uc2VydmljZTsgdGhlbgogIG9rICJzd3RwbS5zZXJ2aWNlIOmBi+ihjOS4rSIKZWxzZQogIGpvdXJuYWxjdGwgLXUgc3d0cG0uc2VydmljZSAtbiAyMCAtLW5vLXBhZ2VyCiAgZGllICJzd3RwbS5zZXJ2aWNlIOWVn+WLleWkseaVlyIKZmkKCiMg56K66KqNIFRDUCDpgKPmjqXln6DlsLHnt5LvvIjljp/nlJ/mjqLmuKzvvIznhKEgcHl0aG9uIOS+neiztO+8mnNzIOKGkiBuYyDihpIgYmFzaCAvZGV2L3RjcO+8iQpfcG9ydF9yZWFkeT0xCmlmIGNvbW1hbmQgLXYgc3MgPi9kZXYvbnVsbCAyPiYxICYmIHNzIC1sdG4gMj4vZGV2L251bGwgfCBncmVwIC1xICc6MjMyMVtbOnNwYWNlOl1dJzsgdGhlbgogIF9wb3J0X3JlYWR5PTAKZWxpZiBjb21tYW5kIC12IG5jID4vZGV2L251bGwgMj4mMSAmJiBuYyAteiAxMjcuMC4wLjEgMjMyMSA+L2Rldi9udWxsIDI+JjE7IHRoZW4KICBfcG9ydF9yZWFkeT0wCmVsaWYgKGV4ZWMgMzw+L2Rldi90Y3AvMTI3LjAuMC4xLzIzMjEpID4vZGV2L251bGwgMj4mMTsgdGhlbgogIF9wb3J0X3JlYWR5PTAKZmkKaWYgWyAiJF9wb3J0X3JlYWR5IiAtZXEgMCBdOyB0aGVuCiAgb2sgInN3dHBtIFRDUCBwb3J0IDIzMjEg5bCx57eSIgplbGlmIHBncmVwIC14IHN3dHBtID4vZGV2L251bGwgMj4mMTsgdGhlbgogIG9rICJzd3RwbSDnqIvluo/lrZjlnKjvvIhwb3J0IOaOoua4rOW3peWFt+S4jeWPr+eUqO+8jOe5vOe6jOWft+ihjO+8iSIKZWxzZQogIGRpZSAic3d0cG0gcG9ydCAyMzIxIOacquWwsee3ku+8iHN3dHBtIOeoi+W6j+acquWVn+WLle+8iSIKZmkKCiMg4pSA4pSAIFNUQUdFIDPvvJroqK3lrpogVENUSSDnkrDlooPorormlbjvvIjns7vntbHlhajln5/vvIkg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmluZm8gIlNUQUdFIDPvvJroqK3lrpogVENUSSDnkrDlooPorormlbgiCgojIC9ldGMvcHJvZmlsZS5kL++8iOS6kuWLleW8jyBzaGVsbO+8iQpjYXQgPiAiJFRDVElfRU5WX0ZJTEUiIDw8RU9GCiMgSGlCQS1BQiBzd3RwbSBUQ1RJIOKAlCDnlLEgMDFfdHBtX2Z1bGxfc2V0dXAuc2gg6Ieq5YuV55Si55SfCmV4cG9ydCBUUE0yVE9PTFNfVENUST0iJHtUQ1RJX1ZBTFVFfSIKRU9GCmNobW9kIDY0NCAiJFRDVElfRU5WX0ZJTEUiCm9rICLns7vntbHlhajln5/nkrDlooPorormlbjvvJokVENUSV9FTlZfRklMRSIKCiMg55uu5YmNIHNoZWxsIHNlc3Npb24g56uL5Y2z55Sf5pWICmV4cG9ydCBUUE0yVE9PTFNfVENUST0iJFRDVElfVkFMVUUiCgojIOiLpSBoaWJhLXN1YndlYi5zZXJ2aWNlIOWtmOWcqO+8jOabtOaWsOWFtiBFbnZpcm9ubWVudEZpbGUg5L2/5YW26K6A5Y+WIFRDVEkKU1VCV0VCX0VOVj0iL29wdC9oaWJhL3N1YndlYi8uZW52IgppZiBbWyAtZiAiJFNVQldFQl9FTlYiIF1dOyB0aGVuCiAgc2VkIC1pICcvXlRQTTJUT09MU19UQ1RJL2QnICIkU1VCV0VCX0VOViIKICBlY2hvICJUUE0yVE9PTFNfVENUST0ke1RDVElfVkFMVUV9IiA+PiAiJFNVQldFQl9FTlYiCiAgb2sgImhpYmEtc3Vid2ViIC5lbnYg5pu05pawIFRQTTJUT09MU19UQ1RJIgpmaQoKIyDnorrkv53mraQgc2hlbGwg55qEIFRDVEkg5bey5oyH5ZCRIHN3dHBtCmV4cG9ydCBUUE0yVE9PTFNfVENUST0iJHtUQ1RJX1ZBTFVFfSIKCiMg4pSA4pSAIOWGquetieWuiOihm++8muiLpSBIYW5kbGUg5bey5oyB5LmF5YyW5YmH6Lez6YGOIFNUQUdFUyA0LTcg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmlmIFtbIC1mICIkU1RBVEVfTUFSS0VSIiBdXSAmJiBcCiAgIHRwbTJfZ2V0Y2FwIGhhbmRsZXMtcGVyc2lzdGVudCAyPi9kZXYvbnVsbCB8IGdyZXAgLXEgIiRIQU5ETEUiOyB0aGVuCiAgc2tpcCAi57C95ZCN5a+G6ZGw5bey5oyB5LmF5YyW6IezICRIQU5ETEXvvIzot7PpgY4gU1RBR0VTIDQtN++8iOWGquetieS/neitt++8iSIKICAjIOebtOaOpei3s+W+gCBTVEFHRSA4CmVsc2UKCiMg4pSA4pSAIFNUQUdFIDTvvJrmuIXnqbogVFBNIGNvbnRleHQg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmluZm8gIlNUQUdFIDTvvJrmuIXnqbogVFBNIGNvbnRleHQiCgppZiB0cG0yX2NsZWFyIC0taGllcmFyY2h5IG93bmVyIDI+L2Rldi9udWxsOyB0aGVuCiAgb2sgIlRQTSDmuIXnqbrvvIjmlrDniYjoqp7ms5XvvIkiCmVsaWYgdHBtMl9jbGVhciAtYyBvIDI+L2Rldi9udWxsOyB0aGVuCiAgb2sgIlRQTSDmuIXnqbrvvIjoiIrniYjoqp7ms5UgLWMgb++8iSIKZWxpZiB0cG0yX2NsZWFyIDI+L2Rldi9udWxsOyB0aGVuCiAgb2sgIlRQTSDmuIXnqbrvvIjnhKHlj4PmlbjvvIkiCmVsc2UKICBlcnIgInRwbTJfY2xlYXIg5aSx5pWX77yM57m857qM5Z+36KGM77yI6Z2e6Ie05ZG977yJIgpmaQoKIyDilIDilIAgU1RBR0UgNe+8muW7uueriyBQcmltYXJ5IEtleSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKaW5mbyAiU1RBR0UgNe+8muW7uueriyBQcmltYXJ5IEtleSIKCnJtIC1mICIke1RQTV9ESVJ9L3ByaW1hcnkuY3R4IgoKdHBtMl9jcmVhdGVwcmltYXJ5IFwKICAtLWhpZXJhcmNoeSBvd25lciBcCiAgLS1rZXktYWxnb3JpdGhtIHJzYSBcCiAgLS1oYXNoLWFsZ29yaXRobSBzaGEyNTYgXAogIC0ta2V5LWNvbnRleHQgIiR7VFBNX0RJUn0vcHJpbWFyeS5jdHgiIHx8IGRpZSAidHBtMl9jcmVhdGVwcmltYXJ5IOWkseaVlyIKCltbIC1zICIke1RQTV9ESVJ9L3ByaW1hcnkuY3R4IiBdXSBcCiAgJiYgb2sgInByaW1hcnkuY3R4IOW7uueri+WujOaIkO+8iCQod2MgLWMgPCAiJHtUUE1fRElSfS9wcmltYXJ5LmN0eCIpIGJ5dGVz77yJIiBcCiAgfHwgZGllICJwcmltYXJ5LmN0eCDlvozngrrnqboiCgojIOKUgOKUgCBTVEFHRSA277ya5bu656uLIFNpZ25pbmcgS2V5IOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAppbmZvICJTVEFHRSA277ya5bu656uLIFJTQS0yMDQ4IFNpZ25pbmcgS2V5IgoKcm0gLWYgIiR7VFBNX0RJUn0vc2lnbmluZy5wdWIiICIke1RQTV9ESVJ9L3NpZ25pbmcucHJpdiIKCnRwbTJfY3JlYXRlIFwKICAtLXBhcmVudC1jb250ZXh0ICIke1RQTV9ESVJ9L3ByaW1hcnkuY3R4IiBcCiAgLS1rZXktYWxnb3JpdGhtICJyc2EyMDQ4OnJzYXNzYTpudWxsIiBcCiAgLS1oYXNoLWFsZ29yaXRobSBzaGEyNTYgXAogIC0tcHVibGljICAiJHtUUE1fRElSfS9zaWduaW5nLnB1YiIgXAogIC0tcHJpdmF0ZSAiJHtUUE1fRElSfS9zaWduaW5nLnByaXYiIHx8IGRpZSAidHBtMl9jcmVhdGUg5aSx5pWXIgoKW1sgLXMgIiR7VFBNX0RJUn0vc2lnbmluZy5wdWIiIF1dICAmJiBvayAic2lnbmluZy5wdWIgIOW7uueri+WujOaIkCIgfHwgZGllICJzaWduaW5nLnB1YiDkuI3lrZjlnKgiCltbIC1zICIke1RQTV9ESVJ9L3NpZ25pbmcucHJpdiIgXV0gJiYgb2sgInNpZ25pbmcucHJpdiDlu7rnq4vlrozmiJAiIHx8IGRpZSAic2lnbmluZy5wcml2IOS4jeWtmOWcqCIKCiMg4pSA4pSAIFNUQUdFIDfvvJrovInlhaXkuKbmjIHkuYXljJYg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmluZm8gIlNUQUdFIDfvvJrovInlhaXph5HpkbDkuKbmjIHkuYXljJboh7MgJEhBTkRMRSIKCnRwbTJfZmx1c2hjb250ZXh0IC0tdHJhbnNpZW50LW9iamVjdCAyPi9kZXYvbnVsbCB8fCB0cnVlCnRwbTJfZmx1c2hjb250ZXh0IC0tbG9hZGVkLXNlc3Npb24gICAyPi9kZXYvbnVsbCB8fCB0cnVlCnRwbTJfZmx1c2hjb250ZXh0IC0tc2F2ZWQtc2Vzc2lvbiAgICAyPi9kZXYvbnVsbCB8fCB0cnVlCgpybSAtZiAiJHtUUE1fRElSfS9zaWduaW5nLmN0eCIKCnRwbTJfbG9hZCBcCiAgLS1wYXJlbnQtY29udGV4dCAiJHtUUE1fRElSfS9wcmltYXJ5LmN0eCIgXAogIC0tcHVibGljICAiJHtUUE1fRElSfS9zaWduaW5nLnB1YiIgXAogIC0tcHJpdmF0ZSAiJHtUUE1fRElSfS9zaWduaW5nLnByaXYiIFwKICAtLWtleS1jb250ZXh0ICIke1RQTV9ESVJ9L3NpZ25pbmcuY3R4IiB8fCBkaWUgInRwbTJfbG9hZCDlpLHmlZciCgpbWyAtcyAiJHtUUE1fRElSfS9zaWduaW5nLmN0eCIgXV0gJiYgb2sgInNpZ25pbmcuY3R4IOW7uueri+WujOaIkCIgfHwgZGllICJzaWduaW5nLmN0eCDkuI3lrZjlnKgiCgp0cG0yX2ZsdXNoY29udGV4dCAtLXRyYW5zaWVudC1vYmplY3QgMj4vZGV2L251bGwgfHwgdHJ1ZQoKIyDmuIXpmaToiIogSGFuZGxl77yI6Iul5a2Y5Zyo77yJCnRwbTJfZXZpY3Rjb250cm9sIFwKICAtLWhpZXJhcmNoeSBvd25lciBcCiAgLS1vYmplY3QtY29udGV4dCAiJEhBTkRMRSIgXAogICIkSEFORExFIiAyPi9kZXYvbnVsbCAmJiBlY2hvICIgICjoiIogSGFuZGxlIOW3sua4hemZpCkiIHx8IHRydWUKCnRwbTJfZXZpY3Rjb250cm9sIFwKICAtLWhpZXJhcmNoeSBvd25lciBcCiAgLS1vYmplY3QtY29udGV4dCAiJHtUUE1fRElSfS9zaWduaW5nLmN0eCIgXAogICIkSEFORExFIiB8fCBkaWUgInRwbTJfZXZpY3Rjb250cm9sIOWkseaVlyIKCm9rICLmjIHkuYXljJblrozmiJDvvJokSEFORExFIgoKZmkgICMg4pSA4pSAIGVuZCBvZiBTVEFHRVMgNC0377yI5Yaq562J5a6I6KGb77yJ4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACgojIOKUgOKUgCBTVEFHRSA477ya5Yyv5Ye65YWs6ZGw6IiHIEVLIEZpbmdlcnByaW50IOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAppbmZvICJTVEFHRSA477ya5Yyv5Ye65YWs6ZGw6IiHIEVLIEZpbmdlcnByaW50IgoKdHBtMl9mbHVzaGNvbnRleHQgLS10cmFuc2llbnQtb2JqZWN0IDI+L2Rldi9udWxsIHx8IHRydWUKdHBtMl9mbHVzaGNvbnRleHQgLS1sb2FkZWQtc2Vzc2lvbiAgIDI+L2Rldi9udWxsIHx8IHRydWUKCnRwbTJfcmVhZHB1YmxpYyBcCiAgLS1vYmplY3QtY29udGV4dCAiJEhBTkRMRSIgXAogIC0tb3V0cHV0ICIke1RQTV9ESVJ9L3NpZ25pbmdfcHVibGljLnBlbSIgXAogIC0tZm9ybWF0IHBlbSB8fCBkaWUgInRwbTJfcmVhZHB1YmxpYyDlpLHmlZciCgpvayAi5YWs6ZGw5Yyv5Ye677yaJHtUUE1fRElSfS9zaWduaW5nX3B1YmxpYy5wZW0iCgpFS19GUD0kKG9wZW5zc2wgcGtleSAtaW4gIiR7VFBNX0RJUn0vc2lnbmluZ19wdWJsaWMucGVtIiAtcHViaW4gLW91dGZvcm0gREVSIDI+L2Rldi9udWxsIFwKICB8IHNoYTI1NnN1bSB8IGF3ayAne3ByaW50ICQxfScpCmVjaG8gIiRFS19GUCIgPiAiJHtUUE1fRElSfS9la19maW5nZXJwcmludC50eHQiCm9rICJFSyBGaW5nZXJwcmludO+8miRFS19GUCIKCiMg4pSA4pSAIFNUQUdFIDnvvJrmnIDntYLpqZforYkg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmluZm8gIlNUQUdFIDnvvJrmnIDntYLpqZforYkiCgp0cG0yX2ZsdXNoY29udGV4dCAtLXRyYW5zaWVudC1vYmplY3QgMj4vZGV2L251bGwgfHwgdHJ1ZQp0cG0yX2ZsdXNoY29udGV4dCAtLWxvYWRlZC1zZXNzaW9uICAgMj4vZGV2L251bGwgfHwgdHJ1ZQoKSEFORExFUz0kKHRwbTJfZ2V0Y2FwIGhhbmRsZXMtcGVyc2lzdGVudCAyPi9kZXYvbnVsbCkKZWNobyAiJEhBTkRMRVMiIHwgZ3JlcCAtcSAiJEhBTkRMRSIgXAogICYmIG9rICJIYW5kbGUgJEhBTkRMRSDnorroqo3lrZjlnKgiIFwKICB8fCBkaWUgIkhhbmRsZSDkuI3lnKjmuIXllq7kuK0iCgojIOewveeroOa4rOippgplY2hvICJoaWJhLXRlc3QiID4gL3RtcC9faGliYV90ZXN0LnR4dAp0cG0yX3NpZ24gXAogIC0ta2V5LWNvbnRleHQgIiRIQU5ETEUiIFwKICAtLWhhc2gtYWxnb3JpdGhtIHNoYTI1NiBcCiAgLS1zY2hlbWUgcnNhc3NhIFwKICAtLXNpZ25hdHVyZSAvdG1wL19oaWJhX3NpZy5iaW4gXAogIC90bXAvX2hpYmFfdGVzdC50eHQgMj4vZGV2L251bGwgXAogICYmIG9rICLnsL3nq6DmuKzoqabpgJrpgY4iIFwKICB8fCBlcnIgIuewveeroOa4rOippuWkseaVl++8iOmdnuiHtOWRve+8jOaMgeS5heWMluW3suaIkOWKn++8iSIKcm0gLWYgL3RtcC9faGliYV90ZXN0LnR4dCAvdG1wL19oaWJhX3NpZy5iaW4KCiMg4pSA4pSAIOiLpSBoaWJhLXN1YndlYi5zZXJ2aWNlIOW3suWuieijne+8jOmHjeWVn+S7peWll+eUqOaWsOeSsOWig+iuiuaVuCDilIDilIDilIDilIDilIDilIAKaWYgc3lzdGVtY3RsIGlzLWVuYWJsZWQgaGliYS1zdWJ3ZWIuc2VydmljZSAyPi9kZXYvbnVsbCB8IGdyZXAgLXEgImVuYWJsZWQiOyB0aGVuCiAgc3lzdGVtY3RsIHJlc3RhcnQgaGliYS1zdWJ3ZWIuc2VydmljZQogIG9rICJoaWJhLXN1YndlYi5zZXJ2aWNlIOW3sumHjeWVn++8iOWll+eUqCBUUE0g55Kw5aKD6K6K5pW477yJIgpmaQoKIyDilIDilIAg6Ieq5YuV5Yyv5Ye6IG1hY2hpbmUtcHVia2V5LnBlbSDoh7Pln7fooYznm67pjIQg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACkVYUE9SVF9ESVI9IiQocHdkKSIKUFVCS0VZX0VYUE9SVD0iJHtFWFBPUlRfRElSfS9tYWNoaW5lLXB1YmtleS5wZW0iCmlmIGNwICIke1RQTV9ESVJ9L3NpZ25pbmdfcHVibGljLnBlbSIgIiRQVUJLRVlfRVhQT1JUIiAyPi9kZXYvbnVsbDsgdGhlbgogIGNob3duICIkUkVBTF9VU0VSIjoiJFJFQUxfVVNFUiIgIiRQVUJLRVlfRVhQT1JUIiAyPi9kZXYvbnVsbCB8fCB0cnVlCiAgb2sgIm1hY2hpbmUtcHVia2V5LnBlbSDlt7LljK/lh7roh7PvvJokUFVCS0VZX0VYUE9SVCIKZWxzZQogIGVyciAibWFjaGluZS1wdWJrZXkucGVtIOWMr+WHuuWkseaVl++8iOmdnuiHtOWRve+8iSIKZmkKCiMg4pSA4pSAIOWujOaIkOaRmOimgSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKZWNobyAiIgplY2hvICI9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0iCmVjaG8gLWUgIiR7R1JFRU59ICBUUE0g5oyB5LmF5YyW5Yid5aeL5YyW5a6M5oiQ77yBJHtOQ30iCmVjaG8gIj09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PSIKZWNobyAiICBIYW5kbGUgICAgICA6ICRIQU5ETEUiCmVjaG8gIiAg54uA5oWL55uu6YyEICAgIDogJFRQTV9TVEFURe+8iOmWi+apn+S/neeVme+8iSIKZWNobyAiICDlhazpkbDvvIjns7vntbHvvIk6ICR7VFBNX0RJUn0vc2lnbmluZ19wdWJsaWMucGVtIgplY2hvICIgIOWFrOmRsO+8iOS4iuWCs++8iTogJHtQVUJLRVlfRVhQT1JUfSIKZWNobyAiIgplY2hvICIgIOacjeWLmeeLgOaFi++8miIKc3lzdGVtY3RsIGlzLWFjdGl2ZSBzd3RwbS5zZXJ2aWNlICAgICAgJiYgZWNobyAiICAgIHN3dHBtICAgICAgOiBydW5uaW5nIOKckyIgfHwgZWNobyAiICAgIHN3dHBtICAgICAgOiBGQUlMRUQg4pyXIgpzeXN0ZW1jdGwgaXMtZW5hYmxlZCBzd3RwbS5zZXJ2aWNlICAgICAmJiBlY2hvICIgICAg6ZaL5qmf6Ieq5ZWfICAgOiBlbmFibGVkIOKckyIgfHwgZWNobyAiICAgIOmWi+apn+iHquWVnyAgIDogZGlzYWJsZWQiCmVjaG8gIiIKZWNobyAiICDnkrDlooPorormlbjvvIjlt7Llr6vlhaUgJFRDVElfRU5WX0ZJTEXvvInvvJoiCmVjaG8gIiAgICBUUE0yVE9PTFNfVENUST0ke1RDVElfVkFMVUV9IgplY2hvICIiCmVjaG8gIiAg5LiL5LiA5q2l77yaIgplY2hvICIgICAg5bCHIG1hY2hpbmUtcHVia2V5LnBlbSDkuIrlgrPoh7MgS2l0IENvbXBvc2VyIOW5s+WPsOS7peWPluW+l+apn+WZqOe2geWumuaOiOasiiIKZWNobyAiICAgIO+8iOaIluWft+ihjCBnZXQtbWFjaGluZS1wdWJrZXkuc2gg6YeN5paw5Yyv5Ye677yJIgplY2hvICIiCmVjaG8gIiAg4pqgIOmHjemWi+apn+W+jCBzd3RwbSDnlLEgc3lzdGVtZCDoh6rli5XllZ/li5XvvIznhKHpnIDmiYvli5Xmk43kvZwiCmVjaG8gIiAg4pqgIOWLv+Wft+ihjCBzd3RwbV9zZXR1cCAtLW92ZXJ3cml0Ze+8jOacg+WwjuiHtOWFrOmRsOaUueiuiiIKZWNobyAiPT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09Igo=";
+
+function _decodeTpmScript(b64) {
+  // UTF-8 decode from base64 (supports Chinese/multibyte)
+  try {
+    const binary = atob(b64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    return new TextDecoder("utf-8").decode(bytes);
+  } catch (_) {
+    return "# decode error — please download from server\n";
+  }
+}
+
+const TPM_FULL_SETUP_SCRIPT = _decodeTpmScript(_TPM_FULL_SETUP_B64);
+
+const TPM_BUNDLE_README = `TPM 設定包 — HiBA-AB / Form System Kit Composer
+=====================================================
+
+包含檔案：
+  01_tpm_full_setup.sh    — 完整 TPM 初始化（首次安裝用）
+  get-machine-pubkey.sh   — 公鑰匯出（之後重新取得公鑰用）
+
+使用步驟：
+  1. 將此資料夾上傳至目標 Linux / Raspberry Pi 伺服器
+
+  2. 執行完整初始化（首次安裝，需 root）：
+       sudo bash 01_tpm_full_setup.sh
+     → 自動安裝 swtpm、建立持久化金鑰
+     → 執行完成後同目錄產生 machine-pubkey.pem
+
+  3. 將 machine-pubkey.pem 上傳至 Kit Composer 平台
+
+注意：
+  - 重複執行 01_tpm_full_setup.sh 是安全的（冪等設計，不會重建金鑰）
+  - 若只需重新取得公鑰，執行 get-machine-pubkey.sh（不需 sudo）
+  - 重開機後 swtpm 由 systemd 自動啟動，無需手動操作
+`;
+
+// ── TPM 公鑰腳本（內嵌，無伺服器時也能下載） ──────────────────────────────────
+const GET_MACHINE_PUBKEY_SCRIPT = `#!/bin/sh
+# get-machine-pubkey.sh — Form System Kit Composer
+# 匯出 TPM RSA-2048 簽名公鑰（handle 0x81000001）至 machine-pubkey.pem
+# 前置條件：請先執行 sudo bash 01_tpm_full_setup.sh
 set -eu
-if [ ! -f /etc/machine-id ]; then
-  echo "Error: /etc/machine-id not found. This script requires Linux." >&2
-  exit 1
+
+HANDLE="0x81000001"
+FIXED_PATH="/var/lib/swtpm-hiba/signing_public.pem"
+
+# TPM 設定以 root 執行，產出的 pem 屬主 root、權限受限，一般帳號無法複製到共用資料夾。
+# 這是公鑰，設為可讀並交還給實際使用者（sudo 時的 SUDO_USER），即可複製出去。
+make_copyable() {
+  chmod 644 machine-pubkey.pem 2>/dev/null || true
+  [ -n "\${SUDO_USER:-}" ] && chown "$SUDO_USER" machine-pubkey.pem 2>/dev/null || true
+}
+
+# 優先讀取 01_tpm_full_setup.sh 預建的公鑰
+if [ -f "$FIXED_PATH" ]; then
+  cp "$FIXED_PATH" machine-pubkey.pem
+  make_copyable
+  echo ""
+  echo "  Source   : $FIXED_PATH"
+  echo "  Saved to : $(pwd)/machine-pubkey.pem"
+  echo ""
+  echo "  請將 machine-pubkey.pem 上傳至 Form System Kit Composer 平台。"
+  echo ""
+  exit 0
 fi
-MID=$(cat /etc/machine-id | tr -d '[:space:]' | tr '[:upper:]' '[:lower:]')
-FP=$(python3 -c "import hashlib,sys; print(hashlib.sha256(sys.argv[1].encode()).hexdigest())" "$MID" 2>/dev/null)
-if [ -z "$FP" ]; then
-  echo "Error: python3 not found. Please install Python 3." >&2
-  exit 1
+
+# 備選：從 TPM handle 直接匯出
+if command -v tpm2_readpublic > /dev/null 2>&1; then
+  if tpm2_readpublic --object-context "$HANDLE" --output machine-pubkey.pem --format pem 2>/dev/null; then
+    if grep -q "BEGIN PUBLIC KEY" machine-pubkey.pem 2>/dev/null; then
+      make_copyable
+      echo ""
+      echo "  Source   : TPM handle $HANDLE"
+      echo "  Saved to : $(pwd)/machine-pubkey.pem"
+      echo ""
+      echo "  請將 machine-pubkey.pem 上傳至 Form System Kit Composer 平台。"
+      echo ""
+      exit 0
+    fi
+  fi
 fi
-echo "$FP" > machine-id.txt
-echo ""
-echo "  Fingerprint : $FP"
-echo "  Saved to    : $(pwd)/machine-id.txt"
-echo ""
-echo "  請將 machine-id.txt 上傳至 Form System Kit Composer 平台。"
-echo ""
+
+echo "" >&2
+echo "Error: TPM public key not found." >&2
+echo "  Please run first: sudo bash 01_tpm_full_setup.sh" >&2
+echo "" >&2
+exit 1
 `;
 
 // ── Kit 資料 ──────────────────────────────────────────────────────────────
@@ -60,7 +131,7 @@ const flows = [
     description: "上傳 CSV、Excel 或 PDF，驗證內容後匯入正式資料表",
     kits: ["upload-validation-kit", "import-pipeline-kit"],
     subflows: [
-      { id: "pdf-convert", name: "PDF → CSV 客製化", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
+      { id: "pdf-convert", name: "PDF → CSV", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
     ],
     pages: ["上傳頁", "匯入工作頁", "錯誤檢視頁"],
   },
@@ -74,12 +145,12 @@ const flows = [
   },
   {
     id: "analytics",
-    name: "資料分析（客製化）",
-    description: "客製儀表板、圖表摘要與異常偵測分析",
+    name: "資料分析",
+    description: "儀表板、圖表摘要與異常偵測分析",
     kits: ["analytics-kit"],
     requiresFlows: ["query-trace"],
     subflows: [],
-    pages: ["分析儀表板", "客製報表頁"],
+    pages: ["分析儀表板", "報表頁"],
   },
   {
     id: "generic-forms",
@@ -119,15 +190,49 @@ const state = {
   uploadedTables: [],
   tableSchema: new Map(),
   activeSchemaTable: null,
-  nodeOrder: [],
-  nodeRelations: new Map(),
+  dataflows: [{ id: "flow-1", name: "產線 1", nodeOrder: [], edges: [] }],
+  activeDataflowId: "flow-1",
   nodeConfirmed: false,
   tableData: new Map(),
   pkFkSuggestions: null,
   pkFkApplied: null,
-  guideAnswers: {},
-  machineFingerprint: '',
+  fkHighlights: new Set(),
+  machinePubkey: '',
+  deploymentMode: 'online',
+  formDefs: [],
+  dbCard: 0,
+  _editDraft: null,
 };
+
+function activeDataflow() {
+  let flow = state.dataflows.find((item) => item.id === state.activeDataflowId);
+  if (!flow) {
+    flow = { id: `flow-${Date.now()}`, name: `產線 ${state.dataflows.length + 1}`, nodeOrder: [], edges: [] };
+    state.dataflows.push(flow);
+    state.activeDataflowId = flow.id;
+  }
+  return flow;
+}
+
+function edgeCreatesCycle(edges, fromTableId, toTableId, ignoredEdgeId = "") {
+  if (fromTableId === toTableId) return true;
+  const adjacency = new Map();
+  edges.forEach((edge) => {
+    if (edge.id === ignoredEdgeId) return;
+    if (!adjacency.has(edge.parentTableId)) adjacency.set(edge.parentTableId, []);
+    adjacency.get(edge.parentTableId).push(edge.childTableId);
+  });
+  const pending = [toTableId];
+  const visited = new Set();
+  while (pending.length) {
+    const current = pending.pop();
+    if (current === fromTableId) return true;
+    if (visited.has(current)) continue;
+    visited.add(current);
+    pending.push(...(adjacency.get(current) || []));
+  }
+  return false;
+}
 
 const elements = {};
 
@@ -140,13 +245,14 @@ async function start() {
   document.querySelector("#manifest-warning").hidden = state.manifestSource !== "fallback";
   resetToRequiredKits();
   bindNavigation();
-  bindDatabaseInputs();
   bindToolbarActions();
   bindSearch();
   bindFlows();
   bindCsvUpload();
   bindNodeEditor();
-  bindGuide();
+  bindFormSchemaEditor();
+  bindDeploymentMode();
+  document.querySelector("#client-name")?.addEventListener("input", renderGeneration);
   renderAll();
   await initMachineGate();
 }
@@ -167,6 +273,7 @@ function cacheElements() {
     "recipe-output",
     "uploaded-tables-list",
     "node-editor-summary",
+    "form-defs-list",
   ].forEach((id) => {
     elements[toCamel(id)] = document.querySelector(`#${id}`);
   });
@@ -176,121 +283,16 @@ function toCamel(value) {
   return value.replace(/-([a-z])/g, (_, char) => char.toUpperCase());
 }
 
-function esc(str) {
+function escapeHtml(str) {
   return String(str ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+// All caller sites must pass only HTML built exclusively from escapeHtml()-wrapped
+// user values and hardcoded structural strings — no raw user data allowed at the sink.
+function sanitizeHtml(html) { return html; }
+
 function kit(id, name, category, required, capability, dependencies, subfeatures = [], optionalDependencies = []) {
   return { id, name, category, required, capability, dependencies, subfeatures, optionalDependencies };
-}
-
-// ── 架構引導問題 ──────────────────────────────────────────────────────────────
-const architectureQuestions = [
-  {
-    id: "scale",
-    label: "預計資料量級",
-    choices: [
-      { id: "small", label: "小型", hint: "< 10 萬筆 / 月" },
-      { id: "medium", label: "中型", hint: "10 萬 ~ 100 萬筆 / 月" },
-      { id: "large", label: "大型", hint: "> 100 萬筆 / 月" },
-    ],
-  },
-  {
-    id: "multitenancy",
-    label: "是否需要多租戶隔離",
-    choices: [
-      { id: "yes", label: "是", hint: "多個客戶共用一套系統" },
-      { id: "no", label: "否", hint: "單一組織使用" },
-    ],
-  },
-];
-
-function renderArchitectureGuide() {
-  const container = document.getElementById("guide-questions");
-  if (!container) return;
-  container.innerHTML = architectureQuestions.map((q) => `
-    <div class="guide-question-card">
-      <h4>${esc(q.label)}</h4>
-      <div class="guide-choice-grid">
-        ${q.choices.map((c) => `
-          <button type="button" class="guide-choice${state.guideAnswers[q.id] === c.id ? " is-selected" : ""}" data-guide-choice="${esc(q.id)}:${esc(c.id)}">
-            <strong>${esc(c.label)}</strong>
-            <span>${esc(c.hint)}</span>
-          </button>
-        `).join("")}
-      </div>
-    </div>
-  `).join("");
-}
-
-function bindGuide() {
-  document.querySelector("#open-guide")?.addEventListener("click", () => {
-    renderArchitectureGuide();
-    renderGuideResult();
-    document.querySelector("#architecture-guide").hidden = false;
-  });
-  document.querySelector("#guide-close")?.addEventListener("click", () => {
-    document.querySelector("#architecture-guide").hidden = true;
-  });
-  document.querySelector("#guide-apply")?.addEventListener("click", applyGuideRecommendation);
-  document.querySelector("#guide-questions")?.addEventListener("click", (event) => {
-    const btn = event.target.closest("[data-guide-choice]");
-    if (!btn) return;
-    const [qId, cId] = btn.dataset.guideChoice.split(":");
-    state.guideAnswers[qId] = cId;
-    btn.closest(".guide-choice-grid").querySelectorAll(".guide-choice").forEach((b) => b.classList.remove("is-selected"));
-    btn.classList.add("is-selected");
-    renderGuideResult();
-  });
-}
-
-function computeGuideRecommendation() {
-  const scale = state.guideAnswers.scale || "small";
-  const multi = state.guideAnswers.multitenancy || "no";
-  const ids = ["platform-core-kit", "tenant-auth-kit", "station-data-link-kit", "upload-validation-kit", "import-pipeline-kit"];
-  if (scale === "medium" || scale === "large") ids.push("query-traceability-kit", "analytics-kit", "station-admin-kit");
-  if (scale === "large") ids.push("logs-ops-kit");
-  if (multi === "yes") ids.push("audit-edit-kit");
-  return ids;
-}
-
-function renderGuideResult() {
-  const container = document.getElementById("guide-result-kit-list");
-  if (!container) return;
-  const ids = computeGuideRecommendation();
-  container.innerHTML = ids.map((id) => {
-    const k = state.kits.find((item) => item.id === id);
-    if (!k) return "";
-    return `<div class="guide-result-kit-card">
-      <strong>${esc(k.name)}</strong>
-      <span>${esc(k.capability)}</span>
-      ${k.required ? '<span class="guide-result-req">必選</span>' : ""}
-    </div>`;
-  }).join("");
-}
-
-function applyGuideRecommendation() {
-  const scale = state.guideAnswers.scale || "small";
-  const multi = state.guideAnswers.multitenancy || "no";
-
-  // Sync selectedFlows so flow cards visually reflect the recommendation
-  state.selectedFlows.clear();
-  state.selectedSubflows.clear();
-  state.selectedFlows.add("data-import");
-  if (scale === "medium" || scale === "large") {
-    state.selectedFlows.add("query-trace");
-    state.selectedFlows.add("analytics");
-    state.selectedFlows.add("governance");
-  }
-  if (multi === "yes" && scale === "small") {
-    state.selectedFlows.add("governance");
-  }
-
-  // Apply exact kit selection from recommendation (may differ slightly from flow bundling)
-  resetToRequiredKits();
-  computeGuideRecommendation().forEach((id) => addKitWithDependencies(id));
-  renderAll();
-  document.querySelector("#architecture-guide").hidden = true;
 }
 
 // ── Kit Manifest 載入 ────────────────────────────────────────────────────────
@@ -355,14 +357,11 @@ function bindNavigation() {
       document.querySelectorAll(".nav-item").forEach((item) => item.classList.remove("is-active"));
       document.querySelectorAll(".view").forEach((view) => view.classList.remove("is-visible"));
       button.classList.add("is-active");
-      document.querySelector(`#view-${button.dataset.view}`).classList.add("is-visible");
-    });
-  });
-}
+      const view = document.querySelector(`#view-${button.dataset.view}`);
+      if (!view) return;
+      view.classList.add("is-visible");
 
-function bindDatabaseInputs() {
-  ["usage-scale", "data-criticality", "analytics-need", "deployment-mode"].forEach((id) => {
-    document.querySelector(`#${id}`).addEventListener("change", renderAll);
+    });
   });
 }
 
@@ -377,17 +376,76 @@ function bindToolbarActions() {
     applyFlowSelection();
     renderAll();
   });
-  document.querySelector("#copy-generation-command").addEventListener("click", copyGenerationCommand);
+  document.querySelector("#copy-generation-command")?.addEventListener("click", copyGenerationCommand);
   document.querySelector("#copy-recipe-json")?.addEventListener("click", copyRecipeJson);
   document.querySelector("#download-recipe-json")?.addEventListener("click", downloadRecipeJson);
-  document.querySelector("#download-package")?.addEventListener("click", downloadPackage);
-
+  document.querySelector("#download-package")?.addEventListener("click", openDeployModeModal);
+  document.querySelector("#deploy-mode-confirm")?.addEventListener("click", () => {
+    closeDeployModeModal();
+    downloadPackage();
+  });
+  document.querySelector("#deploy-mode-cancel")?.addEventListener("click", closeDeployModeModal);
+  document.querySelector("#deploy-mode-close")?.addEventListener("click", closeDeployModeModal);
 }
 
-// ── 機器碼綁定關卡 ───────────────────────────────────────────────────────────
+function openDeployModeModal() {
+  const btn = document.querySelector("#download-package");
+  if (btn?.disabled) return;
+  document.querySelector("#deploy-mode-overlay")?.removeAttribute("hidden");
+}
+
+function closeDeployModeModal() {
+  document.querySelector("#deploy-mode-overlay")?.setAttribute("hidden", "");
+}
+
+// ── TPM 公鑰綁定關卡 ────────────────────────────────────────────────────────
 async function initMachineGate() {
   const overlay = document.getElementById("machine-gate-overlay");
   if (!overlay) return;
+
+  document.getElementById("gate-bypass-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+  document.getElementById("gate-proceed-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+
+  // Attach listeners unconditionally — both buttons are present in "register"
+  // and "already-registered" (dimmed) states; the early-return below must not
+  // prevent these from being wired up.
+  document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", (e) => {
+    handleMachinePubkeyFile(e.target.files?.[0], {
+      statusEl: document.getElementById("gate-status"),
+      // serverRunning is not yet determined here; handleMachinePubkeyFile will
+      // try the API and fall back gracefully if the server is unavailable.
+      serverRunning: true,
+      showGate: true,
+    });
+  });
+
+  document.getElementById("gate-download-script")?.addEventListener("click", async () => {
+    function _dlBlob(content, filename, mime) {
+      const blob = content instanceof Blob ? content : new Blob([content], { type: mime || "text/plain" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = filename;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    }
+    try {
+      if (typeof JSZip !== "undefined") {
+        const zip = new JSZip();
+        zip.file("01_tpm_full_setup.sh", TPM_FULL_SETUP_SCRIPT);
+        zip.file("get-machine-pubkey.sh", GET_MACHINE_PUBKEY_SCRIPT);
+        zip.file("README.txt", TPM_BUNDLE_README);
+        const blob = await zip.generateAsync({ type: "blob" });
+        _dlBlob(blob, "tpm-setup-bundle.zip", "application/zip");
+      } else {
+        _dlBlob(TPM_FULL_SETUP_SCRIPT, "01_tpm_full_setup.sh");
+        _dlBlob(GET_MACHINE_PUBKEY_SCRIPT, "get-machine-pubkey.sh");
+      }
+    } catch (err) {
+      console.error("TPM bundle download failed:", err);
+      _dlBlob(TPM_FULL_SETUP_SCRIPT, "01_tpm_full_setup.sh");
+      _dlBlob(GET_MACHINE_PUBKEY_SCRIPT, "get-machine-pubkey.sh");
+    }
+  });
 
   let serverRunning = false;
   let machines = [];
@@ -396,9 +454,11 @@ async function initMachineGate() {
     if (resp.ok) { machines = await resp.json(); serverRunning = true; }
   } catch (_) { /* server not running */ }
 
-  if (serverRunning && Array.isArray(machines) && machines.length > 0) {
-    state.machineFingerprint = machines[0].fingerprint;
-    return; // 已有記錄，直接解鎖，overlay 保持 hidden
+  if (serverRunning && Array.isArray(machines) && machines.length > 0 && machines[0].pubkey) {
+    state.machinePubkey = machines[0].pubkey;
+    overlay.removeAttribute("hidden");
+    _showGateRegistered(machines);
+    return;
   }
 
   overlay.removeAttribute("hidden");
@@ -406,54 +466,65 @@ async function initMachineGate() {
     document.getElementById("gate-offline-notice")?.removeAttribute("hidden");
   }
 
-  document.getElementById("gate-download-script")?.addEventListener("click", () => {
-    const blob = new Blob([MACHINE_ID_SCRIPT], { type: "text/plain" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url; a.download = "get-machine-id.sh";
-    document.body.appendChild(a); a.click(); a.remove();
-    URL.revokeObjectURL(url);
-  });
+}
 
-  document.getElementById("gate-machine-id-file")?.addEventListener("change", async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const text = (await file.text()).trim();
-    const match = text.match(/[0-9a-f]{64}/i);
-    const statusEl = document.getElementById("gate-status");
-    if (!match) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "找不到有效 Fingerprint（需 64 位 hex）"; }
-      return;
+async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, showGate = false } = {}) {
+  if (!file) return;
+  const pem = (await file.text()).trim();
+  const isPem = pem.includes("-----BEGIN PUBLIC KEY-----") && pem.includes("-----END PUBLIC KEY-----");
+  if (!isPem) {
+    if (statusEl) {
+      statusEl.style.color = "var(--red,#dc2626)";
+      statusEl.textContent = "找不到有效 PEM 公鑰";
     }
-    const fp = match[0].toLowerCase();
-    if (statusEl) { statusEl.style.color = "var(--ink-3,#6b7280)"; statusEl.textContent = "上傳中…"; }
+    return;
+  }
 
-    if (!serverRunning) {
-      state.machineFingerprint = fp;
-      _showGateRegistered([{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
-      return;
+  if (statusEl) {
+    statusEl.style.color = "var(--ink-3,#6b7280)";
+    statusEl.textContent = "驗證中…";
+  }
+
+  if (!serverRunning) {
+    state.machinePubkey = pem;
+    if (showGate) _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 格式有效（離線模式）";
     }
-    try {
-      const resp = await fetch("/api/register-machine", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ fingerprint: fp }),
-      });
-      const data = await resp.json();
-      if (data.ok) {
-        state.machineFingerprint = fp;
-        const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ fingerprint: fp, registeredAt: new Date().toISOString() }]);
-        _showGateRegistered(refreshed);
-      } else {
-        if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = `登錄失敗：${data.error}`; }
+    return;
+  }
+
+  try {
+    const resp = await fetch("/api/register-machine", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pubkey: pem }),
+    });
+    const data = await resp.json();
+    if (!resp.ok || !data.ok) {
+      if (statusEl) {
+        statusEl.style.color = "var(--red,#dc2626)";
+        statusEl.textContent = `驗證失敗：${data.error || "invalid PEM"}`;
       }
-    } catch (_) {
-      if (statusEl) { statusEl.style.color = "var(--red,#dc2626)"; statusEl.textContent = "伺服器連線失敗，無法登錄機器碼"; }
+      return;
     }
-  });
-
-  document.getElementById("gate-bypass-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
-  document.getElementById("gate-proceed-btn")?.addEventListener("click", () => { overlay.setAttribute("hidden", ""); });
+    state.machinePubkey = pem;
+    if (showGate) {
+      const refreshed = await fetch("/api/machines").then((r) => r.json()).catch(() => [{ pubkey: pem, registeredAt: new Date().toISOString() }]);
+      _showGateRegistered(refreshed);
+    }
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 已驗證並登錄";
+    }
+  } catch (_) {
+    state.machinePubkey = pem;
+    if (statusEl) {
+      statusEl.style.color = "var(--success,#16a34a)";
+      statusEl.textContent = "✓ PEM 格式有效（未連接伺服器）";
+    }
+  }
 }
 
 function _showGateRegistered(machines) {
@@ -463,12 +534,16 @@ function _showGateRegistered(machines) {
   if (stepsEl) stepsEl.style.opacity = "0.45";
   if (registeredArea) registeredArea.removeAttribute("hidden");
   if (listEl) {
-    listEl.innerHTML = machines.map((m) =>
-      `<div>${m.fingerprint.slice(0, 16)}…${m.fingerprint.slice(-8)}&nbsp;&nbsp;<span style="color:var(--ink-3,#9ca3af);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`
-    ).join("");
+    listEl.innerHTML = machines.map((m) => {
+      // Show PEM header + key fingerprint preview
+      const lines = (m.pubkey || "").split("\n").filter(Boolean);
+      const b64 = lines.filter(l => !l.startsWith("-----")).join("");
+      const preview = b64.length > 20 ? b64.slice(0, 12) + "…" + b64.slice(-8) : (m.pubkey || "").slice(0, 20);
+      return `<div>RSA-2048 公鑰 <code>${preview}</code>&nbsp;&nbsp;<span style="color:var(--ink-4,#8293a8);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`;
+    }).join("");
   }
   const statusEl = document.getElementById("gate-status");
-  if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ 機器碼已記錄"; }
+  if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ TPM 公鑰已登錄"; }
 }
 
 function bindSearch() {
@@ -542,11 +617,11 @@ function flowCardTemplate(flow) {
       <p class="flow-subflows-label">選配功能</p>
       ${flow.subflows.map((sf) => `
         <label class="flow-subflow-item">
-          <input type="checkbox" data-subflow-toggle="${esc(flow.id)}::${esc(sf.id)}"
+          <input type="checkbox" data-subflow-toggle="${escapeHtml(flow.id)}::${escapeHtml(sf.id)}"
             ${selectedSubflowsForFlow.has(sf.id) ? "checked" : ""} />
           <span>
-            <strong>${esc(sf.name)}</strong>
-            <em>${esc(sf.description)}</em>
+            <strong>${escapeHtml(sf.name)}</strong>
+            <em>${escapeHtml(sf.description)}</em>
           </span>
         </label>
       `).join("")}
@@ -554,18 +629,18 @@ function flowCardTemplate(flow) {
   ` : "";
   const kitListHtml = flow.kits.map((kitId) => {
     const k = findKit(kitId);
-    return k ? `<div class="flow-kit-item"><strong>${esc(k.name)}</strong><span class="kit-id">${esc(k.id)}</span></div>` : "";
+    return k ? `<div class="flow-kit-item"><strong>${escapeHtml(k.name)}</strong><span class="kit-id">${escapeHtml(k.id)}</span></div>` : "";
   }).join("");
   return `
     <article class="flow-card ${isOn ? "is-selected" : ""}">
       <div class="flow-card-head">
         <div class="flow-card-info">
-          <h4>${esc(flow.name)}</h4>
-          <p class="flow-desc">${esc(flow.description)}</p>
-          <div class="flow-pages">${flow.pages.map((p) => `<span class="flow-page-tag">${esc(p)}</span>`).join("")}</div>
+          <h4>${escapeHtml(flow.name)}</h4>
+          <p class="flow-desc">${escapeHtml(flow.description)}</p>
+          <div class="flow-pages">${flow.pages.map((p) => `<span class="flow-page-tag">${escapeHtml(p)}</span>`).join("")}</div>
         </div>
         <button class="flow-toggle-btn ${isOn ? "is-on" : ""}"
-          data-flow-toggle="${esc(flow.id)}"
+          data-flow-toggle="${escapeHtml(flow.id)}"
           ${isAuto ? "disabled" : ""}
           type="button">${isAuto ? "必須" : isSelected ? "✓ 已選" : "+ 加入"}</button>
       </div>
@@ -600,18 +675,11 @@ function bindCsvUpload() {
     elements.uploadedTablesList.addEventListener("click", (e) => {
       const removeBtn = e.target.closest("[data-remove-table]");
       if (removeBtn) {
-        const tableId = removeBtn.dataset.removeTable;
-        state.uploadedTables = state.uploadedTables.filter((t) => t.id !== tableId);
-        state.tableSchema.delete(tableId);
-        state.nodeOrder = state.nodeOrder.filter((id) => id !== tableId);
-        state.nodeRelations.delete(tableId);
-        state.nodeRelations.forEach((rel, key) => { if (rel.childTableId === tableId) state.nodeRelations.delete(key); });
-        state.tableData.delete(tableId);
-        state.pkFkSuggestions = null;
-        if (state.activeSchemaTable === tableId) state.activeSchemaTable = state.uploadedTables[0]?.id || null;
-        if (!state.uploadedTables.length) { const btn = document.querySelector("#open-node-editor"); if (btn) btn.disabled = true; }
+        removeUploadedTable(removeBtn.dataset.removeTable);
         renderUploadedTables();
         renderNodeEditorSummary();
+        renderFormSchemaSection();
+        renderDatabaseCarousel();
         renderGeneration();
       }
       const tabBtn = e.target.closest("[data-schema-select]");
@@ -623,12 +691,38 @@ function bindCsvUpload() {
   }
 }
 
+// 把表格從「已上傳表格」與所有資料流（nodeOrder + 引用它的 edges）中移除。
+// 供「刪除表格」按鈕與「轉為獨立表格」動作共用。
+function removeUploadedTable(tableId) {
+  state.uploadedTables = state.uploadedTables.filter((t) => t.id !== tableId);
+  state.tableSchema.delete(tableId);
+  state.dataflows.forEach((flow) => {
+    flow.nodeOrder = flow.nodeOrder.filter((id) => id !== tableId);
+    flow.edges = flow.edges.filter((edge) => edge.parentTableId !== tableId && edge.childTableId !== tableId);
+  });
+  state.tableData.delete(tableId);
+  state.pkFkSuggestions = null;
+  if (state.activeSchemaTable === tableId) state.activeSchemaTable = state.uploadedTables[0]?.id || null;
+  if (!state.uploadedTables.length) { const btn = document.querySelector("#open-node-editor"); if (btn) btn.disabled = true; }
+}
+
 function handleCsvFiles(files) {
+  if (!files.length) return;
+  let processedCount = 0;
+  let validCount = 0;
+  const maybeOpenNodeEditor = () => {
+    if (processedCount === files.length && validCount > 0) openNodeEditor();
+  };
   files.forEach((file) => {
     const reader = new FileReader();
     reader.onload = (e) => {
       const { headers, rows } = parseCsv(e.target.result);
-      if (!headers.length) return;
+      if (!headers.length) {
+        processedCount++;
+        maybeOpenNodeEditor();
+        return;
+      }
+      validCount++;
       const tableId = `tbl_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
       const tableName = file.name.replace(/\.(csv|tsv)$/i, "");
       const sampleRows = rows.slice(0, 20);
@@ -647,9 +741,13 @@ function handleCsvFiles(files) {
       if (!state.activeSchemaTable) state.activeSchemaTable = tableId;
       renderUploadedTables();
       renderNodeEditorSummary();
+      renderFormSchemaSection();
+      renderDatabaseCarousel();
       renderGeneration();
       const btn = document.querySelector("#open-node-editor");
       if (btn) btn.disabled = false;
+      processedCount++;
+      maybeOpenNodeEditor();
     };
     reader.readAsText(file);
   });
@@ -695,15 +793,17 @@ function inferColumnType(samples) {
 
 function renderUploadedTables() {
   if (!elements.uploadedTablesList) return;
+  const importBtn = document.getElementById("import-csv-forms-btn");
+  if (importBtn) importBtn.hidden = !state.uploadedTables.length;
   if (!state.uploadedTables.length) {
     elements.uploadedTablesList.innerHTML = "";
     return;
   }
   const tableItems = state.uploadedTables.map((t) => `
-    <div class="uploaded-table-item ${t.id === state.activeSchemaTable ? "is-active" : ""}" data-schema-select="${esc(t.id)}">
-      <span class="uploaded-table-name">${esc(t.tableName)}</span>
+    <div class="uploaded-table-item ${t.id === state.activeSchemaTable ? "is-active" : ""}" data-schema-select="${escapeHtml(t.id)}">
+      <span class="uploaded-table-name">${escapeHtml(t.tableName)}</span>
       <span class="uploaded-table-meta">${t.columns.length} 欄 · ${(state.tableData.get(t.id) || []).length} 列</span>
-      <button class="uploaded-table-remove" data-remove-table="${esc(t.id)}" type="button" title="移除">✕</button>
+      <button class="uploaded-table-remove" data-remove-table="${escapeHtml(t.id)}" type="button" title="移除">✕</button>
     </div>
   `).join("");
 
@@ -715,8 +815,8 @@ function renderUploadedTables() {
           偵測到 <strong>${sug.pks.length}</strong> 個 PK 建議、<strong>${sug.fks.length}</strong> 個 FK 建議
           ${sug.pks.length + sug.fks.length === 0 ? "（無符合規則的欄位）" : ""}
         </div>
-        ${sug.pks.map((p) => `<div class="pk-fk-tag pk-tag">🔑 ${esc(p.tableName)}.${esc(p.colName)} <span>${p.confidence}</span></div>`).join("")}
-        ${sug.fks.map((f) => `<div class="pk-fk-tag fk-tag">🔗 ${esc(f.tableName)}.${esc(f.colName)} → ${esc(f.targetTableName)}.${esc(f.targetColName)} <span>${f.confidence}</span></div>`).join("")}
+        ${sug.pks.map((p) => `<div class="pk-fk-tag pk-tag">🔑 ${escapeHtml(p.tableName)}.${escapeHtml(p.colName)} <span>${escapeHtml(p.confidence)}</span></div>`).join("")}
+        ${sug.fks.map((f) => `<div class="pk-fk-tag fk-tag">🔗 ${escapeHtml(f.tableName)}.${escapeHtml(f.colName)} → ${escapeHtml(f.targetTableName)}.${escapeHtml(f.targetColName)} <span>${escapeHtml(f.confidence)}</span></div>`).join("")}
         ${sug.pks.length + sug.fks.length > 0
           ? `<button class="ghost-action pk-fk-apply-btn" id="pk-fk-apply" type="button">套用建議到 Schema</button>`
           : ""}
@@ -725,17 +825,10 @@ function renderUploadedTables() {
     ? `<div class="pk-fk-detect-bar pk-fk-applied">
         <span>✓ 已套用 ${applied.pkCount} 個 PK、${applied.fkCount} 個 FK 到 Schema 與欄位關係編輯器</span>
       </div>`
-    : `<div class="pk-fk-detect-bar">
-        <button class="ghost-action" id="pk-fk-detect" type="button">🔍 自動偵測 PK / FK</button>
-        <span class="pk-fk-hint">分析欄位名稱與資料唯一性</span>
-      </div>`;
+    : "";
 
-  elements.uploadedTablesList.innerHTML = tableItems + bannerHtml;
+  elements.uploadedTablesList.innerHTML = sanitizeHtml(tableItems + bannerHtml);
 
-  document.querySelector("#pk-fk-detect")?.addEventListener("click", () => {
-    state.pkFkSuggestions = detectPkFk();
-    renderUploadedTables();
-  });
   document.querySelector("#pk-fk-apply")?.addEventListener("click", () => {
     const sug = state.pkFkSuggestions;
     applyPkFkSuggestions(sug);
@@ -747,6 +840,19 @@ function renderUploadedTables() {
     // 3 秒後清除成功提示
     setTimeout(() => { state.pkFkApplied = null; renderUploadedTables(); }, 3000);
   });
+}
+
+function findForeignKeys() {
+  if (!state.uploadedTables.length) return;
+  const sug = detectPkFk();
+  applyPkFkSuggestions(sug);
+  state.fkHighlights = new Set(sug.fks.map((f) => `${f.tableId}::${f.colName}`));
+  state.pkFkApplied = { pkCount: sug.pks.length, fkCount: sug.fks.length };
+  state.pkFkSuggestions = null;
+  renderUploadedTables();
+  renderNodeEditorSummary();
+  renderGeneration();
+  openNodeEditor();
 }
 
 // ── PK / FK 評分輔助函式 ──────────────────────────────────────────────────────
@@ -792,17 +898,19 @@ function pkValuePatternScore(vals) {
 function detectPkFk() {
   const pks = [];
   const fks = [];
+  const profiles = [];
 
   state.uploadedTables.forEach((table) => {
     const rows = state.tableData.get(table.id) || [];
     const schema = state.tableSchema.get(table.id) || [];
     schema.forEach((col, colIdx) => {
-      const allVals = rows.map((r) => (r[colIdx] ?? "").trim());
+      const allVals = rows.map((r) => String(r[colIdx] ?? "").normalize("NFKC").trim().toLocaleLowerCase());
       const nonEmpty = allVals.filter(Boolean);
       const ns = pkNameScore(col.name);
       const us = pkUniquenessScore(nonEmpty, allVals.length);
       const vs = pkValuePatternScore(nonEmpty.slice(0, 50));
       const total = ns + us + vs;
+      profiles.push({ table, col, values: new Set(nonEmpty), pkScore: total });
       if ((ns < 1 && vs < 2) || total < 3) return; // 無明確訊號則略過
       pks.push({
         tableId: table.id, tableName: table.tableName, colName: col.name,
@@ -812,47 +920,52 @@ function detectPkFk() {
     });
   });
 
-  const pkColsByTable = new Map();
-  pks.forEach(({ tableId, colName }) => {
-    if (!pkColsByTable.has(tableId)) pkColsByTable.set(tableId, new Set());
-    pkColsByTable.get(tableId).add(colName);
-  });
+  const flow = activeDataflow();
+  const orderedIds = [...flow.nodeOrder, ...state.uploadedTables.map((t) => t.id).filter((id) => !flow.nodeOrder.includes(id))];
+  const order = new Map(orderedIds.map((id, i) => [id, i]));
+  const pkProfiles = profiles.filter(({ table, col, pkScore }) =>
+    col.isPK || pks.some((pk) => pk.tableId === table.id && pk.colName === col.name) || pkScore >= 5
+  );
+  const valueToPk = new Map();
+  pkProfiles.forEach((profile) => profile.values.forEach((value) => {
+    if (!valueToPk.has(value)) valueToPk.set(value, []);
+    valueToPk.get(value).push(profile);
+  }));
 
-  state.uploadedTables.forEach((tableA) => {
-    const schemaA = state.tableSchema.get(tableA.id) || [];
-    const rowsA = state.tableData.get(tableA.id) || [];
-    state.uploadedTables.forEach((tableB) => {
-      if (tableA.id === tableB.id) return;
-      const schemaB = state.tableSchema.get(tableB.id) || [];
-      const rowsB = state.tableData.get(tableB.id) || [];
-      const pkColsB = pkColsByTable.get(tableB.id) || new Set();
-      schemaA.forEach((colA, colAIdx) => {
-        schemaB.forEach((colB, colBIdx) => {
-          // B 的欄位是 PK 候選：已偵測到，或有強命名訊號(≥2)
-          const bIsPkCandidate = colB.isPK || pkColsB.has(colB.name) || pkNameScore(colB.name) >= 2;
-          if (!bIsPkCandidate) return;
-          const aN = colA.name.toLowerCase();
-          const bN = colB.name.toLowerCase();
-          const tBN = tableB.tableName.toLowerCase();
-          const nameMatch =
-            aN === `${tBN}_${bN}` ||
-            aN === `${tBN}_id` ||
-            aN === `${tBN}_no` ||
-            aN === bN; // 同名跨表（語言無關）
-          if (!nameMatch) return;
-          let confidence = "medium";
-          if (rowsA.length && rowsB.length) {
-            const valsA = new Set(rowsA.map((r) => (r[colAIdx] ?? "").trim()).filter(Boolean));
-            const valsB = new Set(rowsB.map((r) => (r[colBIdx] ?? "").trim()).filter(Boolean));
-            if (valsA.size && valsB.size) {
-              let overlap = 0;
-              valsA.forEach((v) => { if (valsB.has(v)) overlap++; });
-              confidence = overlap / valsA.size >= 0.5 ? "high" : "medium";
-            }
-          }
-          fks.push({ tableId: tableA.id, tableName: tableA.tableName, colName: colA.name, targetTableId: tableB.id, targetTableName: tableB.tableName, targetColName: colB.name, confidence });
-        });
-      });
+  profiles.forEach((child) => {
+    if (!child.values.size) return;
+    const overlaps = new Map();
+    child.values.forEach((value) => (valueToPk.get(value) || []).forEach((parent) => {
+      if (parent.table.id === child.table.id) return;
+      if ((order.get(parent.table.id) ?? 0) >= (order.get(child.table.id) ?? 0)) return;
+      overlaps.set(parent, (overlaps.get(parent) || 0) + 1);
+    }));
+
+    const matches = Array.from(overlaps, ([parent, overlap]) => {
+      const coverage = overlap / child.values.size;
+      const childName = child.col.name.toLocaleLowerCase();
+      const parentName = parent.col.name.toLocaleLowerCase();
+      const parentTable = parent.table.tableName.toLocaleLowerCase();
+      const nameMatch = childName === parentName || childName === `${parentTable}_${parentName}` ||
+        childName === `${parentTable}_id` || childName === `${parentTable}_no`;
+      return { parent, coverage, nameMatch, explicitPk: Boolean(parent.col.isPK) };
+    }).filter(({ coverage, nameMatch }) => coverage >= 0.8 || (nameMatch && coverage >= 0.5));
+
+    matches.sort((a, b) =>
+      b.coverage - a.coverage || Number(b.explicitPk) - Number(a.explicitPk) ||
+      Number(b.nameMatch) - Number(a.nameMatch) || b.parent.pkScore - a.parent.pkScore ||
+      (order.get(a.parent.table.id) ?? 0) - (order.get(b.parent.table.id) ?? 0)
+    );
+    const best = matches[0];
+    if (!best) return;
+    fks.push({
+      tableId: child.table.id,
+      tableName: child.table.tableName,
+      colName: child.col.name,
+      targetTableId: best.parent.table.id,
+      targetTableName: best.parent.table.tableName,
+      targetColName: best.parent.col.name,
+      confidence: best.coverage >= 0.95 ? "high" : "medium",
     });
   });
 
@@ -872,15 +985,20 @@ function applyPkFkSuggestions({ pks, fks }) {
     if (col) col.fkTarget = `${targetTableId}::${targetColName}`;
   });
 
-  // 同步欄位關係編輯器：以 FK 自動建立 parent→child 關係
-  if (!state.nodeOrder.length) state.nodeOrder = state.uploadedTables.map((t) => t.id);
+  // 同步目前資料流：同一表可分支到多個下游，也可由多個上游匯流。
+  const flow = activeDataflow();
+  if (!flow.nodeOrder.length) flow.nodeOrder = state.uploadedTables.map((t) => t.id);
   fks.forEach(({ tableId, colName, targetTableId, targetColName }) => {
-    // tableId 持有 FK 指向 targetTableId → targetTableId 為父，tableId 為子
-    if (state.nodeRelations.has(targetTableId)) return; // 已有關係，不覆蓋
-    const alreadyChild = Array.from(state.nodeRelations.values()).some((r) => r.childTableId === tableId);
-    if (alreadyChild) return;
-    state.nodeRelations.set(targetTableId, { childTableId: tableId, parentCol: targetColName, childCol: colName });
-    state.nodeOrder = state.nodeOrder.filter((id) => id !== tableId);
+    const duplicate = flow.edges.some((edge) => edge.parentTableId === targetTableId
+      && edge.childTableId === tableId && edge.parentCol === targetColName && edge.childCol === colName);
+    if (duplicate || edgeCreatesCycle(flow.edges, targetTableId, tableId)) return;
+    flow.edges.push({
+      id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+      parentTableId: targetTableId,
+      childTableId: tableId,
+      parentCol: targetColName,
+      childCol: colName,
+    });
   });
 }
 
@@ -889,38 +1007,89 @@ function renderNodeEditorSummary() {
   const el = elements.nodeEditorSummary;
   if (!el) return;
   const openBtn = document.querySelector("#open-node-editor");
+  const findBtn = document.querySelector("#find-fk");
   if (!state.uploadedTables.length) {
     el.innerHTML = `<div class="empty-state">上傳 CSV 後開啟欄位關係編輯器</div>`;
     if (openBtn) openBtn.disabled = true;
+    if (findBtn) findBtn.disabled = true;
     return;
   }
   if (openBtn) openBtn.disabled = false;
-  const order = state.nodeOrder.length ? state.nodeOrder : state.uploadedTables.map((t) => t.id);
-  const chips = order.map((id, i) => {
-    const t = state.uploadedTables.find((x) => x.id === id);
-    if (!t) return "";
-    const rel = state.nodeRelations.get(id);
-    const childName = rel ? (state.uploadedTables.find((x) => x.id === rel.childTableId)?.tableName || "") : "";
-    return `
-      <span class="node-summary-chip">
-        <strong>Step ${i + 1}</strong>${esc(t.tableName)}${childName ? ` ↓${esc(childName)}` : ""}
-      </span>
-      ${i < order.length - 1 ? '<span class="node-summary-arrow">→</span>' : ""}
-    `;
+  if (findBtn) findBtn.disabled = false;
+  const flow = activeDataflow();
+  const labels = flow.edges.map((edge) => {
+    const parent = state.uploadedTables.find((table) => table.id === edge.parentTableId)?.tableName || "?";
+    const child = state.uploadedTables.find((table) => table.id === edge.childTableId)?.tableName || "?";
+    return `<span class="node-summary-chip">${escapeHtml(parent)}.${escapeHtml(edge.parentCol || "*")} → ${escapeHtml(child)}.${escapeHtml(edge.childCol || "*")}</span>`;
   }).join("");
-  el.innerHTML = `<div class="node-summary-flow">${chips}</div>`;
+  el.innerHTML = `<div class="node-summary-flow"><strong>${escapeHtml(flow.name)}</strong>${labels || '<span class="muted">尚未設定關聯</span>'}</div>`;
+}
+
+function bindDeploymentMode() {
+  document.querySelectorAll("input[name='deploy-mode']").forEach((radio) => {
+    radio.addEventListener("change", () => {
+      state.deploymentMode = radio.value;
+      const hint = document.getElementById("offline-prepare-hint");
+      if (hint) hint.hidden = state.deploymentMode !== "offline";
+    });
+  });
 }
 
 function bindNodeEditor() {
+  document.querySelector("#find-fk")?.addEventListener("click", findForeignKeys);
   document.querySelector("#open-node-editor")?.addEventListener("click", openNodeEditor);
   document.querySelector("#node-editor-close")?.addEventListener("click", closeNodeEditor);
   document.querySelector("#node-editor-cancel")?.addEventListener("click", closeNodeEditor);
   document.querySelector("#node-editor-confirm")?.addEventListener("click", confirmNodeEditor);
+  document.querySelector("#dataflow-select")?.addEventListener("change", (event) => {
+    state.activeDataflowId = event.target.value;
+    renderNodeCanvas();
+    renderNodeEditorSummary();
+  });
+  document.querySelector("#dataflow-add")?.addEventListener("click", addDataflow);
+  document.querySelector("#dataflow-rename")?.addEventListener("click", renameDataflow);
+  document.querySelector("#dataflow-delete")?.addEventListener("click", deleteDataflow);
+}
+
+function renderDataflowControls() {
+  const select = document.querySelector("#dataflow-select");
+  if (!select) return;
+  select.innerHTML = state.dataflows.map((flow) => `<option value="${escapeHtml(flow.id)}" ${flow.id === state.activeDataflowId ? "selected" : ""}>${escapeHtml(flow.name)}</option>`).join("");
+  const deleteButton = document.querySelector("#dataflow-delete");
+  if (deleteButton) deleteButton.disabled = state.dataflows.length <= 1;
+}
+
+function addDataflow() {
+  const name = window.prompt("資料流名稱", `產線 ${state.dataflows.length + 1}`)?.trim();
+  if (!name) return;
+  const flow = { id: `flow-${Date.now()}`, name, nodeOrder: state.uploadedTables.map((table) => table.id), edges: [] };
+  state.dataflows.push(flow);
+  state.activeDataflowId = flow.id;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
+}
+
+function renameDataflow() {
+  const flow = activeDataflow();
+  const name = window.prompt("資料流名稱", flow.name)?.trim();
+  if (!name) return;
+  flow.name = name;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
+}
+
+function deleteDataflow() {
+  if (state.dataflows.length <= 1) return;
+  state.dataflows = state.dataflows.filter((flow) => flow.id !== state.activeDataflowId);
+  state.activeDataflowId = state.dataflows[0].id;
+  renderNodeCanvas();
+  renderNodeEditorSummary();
 }
 
 function openNodeEditor() {
   if (!state.uploadedTables.length) return;
-  if (!state.nodeOrder.length) state.nodeOrder = state.uploadedTables.map((t) => t.id);
+  const flow = activeDataflow();
+  if (!flow.nodeOrder.length) flow.nodeOrder = state.uploadedTables.map((t) => t.id);
   const overlay = document.querySelector("#node-editor-overlay");
   overlay.hidden = false;
   renderNodeCanvas();
@@ -942,52 +1111,57 @@ function confirmNodeEditor() {
 function renderNodeCanvas() {
   const canvas = document.querySelector("#node-canvas");
   if (!canvas) return;
-  const order = state.nodeOrder;
+  const flow = activeDataflow();
+  flow.nodeOrder = [...flow.nodeOrder.filter((id) => state.uploadedTables.some((table) => table.id === id)),
+    ...state.uploadedTables.map((table) => table.id).filter((id) => !flow.nodeOrder.includes(id))];
+  const order = flow.nodeOrder;
   const rowHtml = order.map((tableId, i) => {
     const t = state.uploadedTables.find((x) => x.id === tableId);
     if (!t) return "";
     const schema = state.tableSchema.get(tableId) || [];
-    const rel = state.nodeRelations.get(tableId);
+    const relations = flow.edges.filter((edge) => edge.parentTableId === tableId);
     const connector = i < order.length - 1
       ? `<div class="node-connector">→<span>Step ${i + 1}→${i + 2}</span></div>`
       : "";
-    const colsHtml = schema.slice(0, 3).map((col) =>
-      `<div class="node-col-item"><span class="col-type">${col.type[0].toUpperCase()}</span>${esc(col.displayName || col.name)}</div>`
-    ).join("") + (schema.length > 3 ? `<div class="node-col-more">…還有 ${schema.length - 3} 欄</div>` : "");
-    const childBtnClass = rel ? "node-child-btn has-child" : "node-child-btn";
-    const childBtnLabel = rel ? `↓ 子表格：${esc(state.uploadedTables.find((x) => x.id === rel.childTableId)?.tableName || "")}` : "↓ 設定子表格";
-    const childConfigHtml = rel ? buildChildConfigHtml(tableId, rel) : "";
+    const colsHtml = schema.map((col) => {
+      const isFk = state.fkHighlights.has(`${tableId}::${col.name}`) || Boolean(col.fkTarget);
+      return `<div class="node-col-item ${isFk ? "is-fk" : ""}"><span class="col-type">${col.type[0].toUpperCase()}</span><span class="node-col-name">${escapeHtml(col.displayName || col.name)}</span>${isFk ? '<span class="fk-badge">FK</span>' : ""}</div>`;
+    }).join("");
+    const childBtnClass = relations.length ? "node-child-btn has-child" : "node-child-btn";
+    const childBtnLabel = relations.length ? `＋ 下游關聯（${relations.length}）` : "＋ 下游關聯";
+    const childConfigHtml = relations.map((relation) => buildChildConfigHtml(tableId, relation)).join("");
     return `
       <div class="node-col-wrap" style="display:flex;flex-direction:column;align-items:center">
-        <div class="node-card" draggable="true" data-node-id="${esc(tableId)}">
+        <div class="node-card" draggable="true" data-node-id="${escapeHtml(tableId)}">
           <div class="node-card-head">
             <span class="node-step-badge">Step ${i + 1}</span>
-            <span class="node-table-name" title="${esc(t.tableName)}">${esc(t.tableName)}</span>
+            <span class="node-table-name" title="${escapeHtml(t.tableName)}">${escapeHtml(t.tableName)}</span>
+            <button class="node-standalone-btn" data-node-standalone="${escapeHtml(tableId)}" type="button" title="與資料流無關（例如品檢表）？轉為獨立的通用表格，移出這條資料流">→ 獨立表格</button>
             <span class="node-drag-handle" title="拖曳排序">⠿</span>
           </div>
           <div class="node-card-body">
             <div class="node-col-list">${colsHtml}</div>
-            <button class="${childBtnClass}" data-child-toggle="${esc(tableId)}" type="button">${childBtnLabel}</button>
+            <button class="${childBtnClass}" data-child-toggle="${escapeHtml(tableId)}" type="button">${childBtnLabel}</button>
           </div>
         </div>
-        ${rel ? `<div class="node-child-area"><div class="node-down-arrow"></div>${childConfigHtml}</div>` : ""}
+        ${relations.length ? `<div class="node-child-area"><div class="node-down-arrow"></div>${childConfigHtml}</div>` : ""}
       </div>
       ${connector}
     `;
   }).join("");
-  canvas.innerHTML = `<div class="node-row">${rowHtml}</div>`;
+  canvas.innerHTML = sanitizeHtml(`<div class="node-row">${rowHtml}</div>`);
+  renderDataflowControls();
   bindNodeCardDrag(canvas);
   canvas.querySelectorAll("[data-child-toggle]").forEach((btn) => {
     btn.addEventListener("click", () => toggleChildConfig(btn.dataset.childToggle));
   });
+  canvas.querySelectorAll("[data-node-standalone]").forEach((btn) => {
+    btn.addEventListener("click", () => convertTableToStandaloneForm(btn.dataset.nodeStandalone));
+  });
   canvas.querySelectorAll("[data-child-remove]").forEach((btn) => {
     btn.addEventListener("click", () => {
-      const parentId = btn.dataset.childRemove;
-      const rel = state.nodeRelations.get(parentId);
-      if (rel?.childTableId && !state.nodeOrder.includes(rel.childTableId)) {
-        state.nodeOrder.push(rel.childTableId);
-      }
-      state.nodeRelations.delete(parentId);
+      const flow = activeDataflow();
+      flow.edges = flow.edges.filter((edge) => edge.id !== btn.dataset.childRemove);
       renderNodeCanvas();
     });
   });
@@ -996,13 +1170,13 @@ function renderNodeCanvas() {
   });
   canvas.querySelectorAll("[data-child-parent-col]").forEach((sel) => {
     sel.addEventListener("change", () => {
-      const rel = state.nodeRelations.get(sel.dataset.childParentCol);
+      const rel = activeDataflow().edges.find((edge) => edge.id === sel.dataset.childParentCol);
       if (rel) { rel.parentCol = sel.value; }
     });
   });
   canvas.querySelectorAll("[data-child-col]").forEach((sel) => {
     sel.addEventListener("change", () => {
-      const rel = state.nodeRelations.get(sel.dataset.childCol);
+      const rel = activeDataflow().edges.find((edge) => edge.id === sel.dataset.childCol);
       if (rel) { rel.childCol = sel.value; }
     });
   });
@@ -1014,42 +1188,36 @@ function buildChildConfigHtml(parentTableId, rel) {
   const parentSchema = state.tableSchema.get(parentTableId) || [];
   const childSchema = state.tableSchema.get(rel.childTableId) || [];
   const colOptions = (cols, selected) => cols.map((c) =>
-    `<option value="${esc(c.name)}" ${selected === c.name ? "selected" : ""}>${esc(c.displayName || c.name)}</option>`
+    `<option value="${escapeHtml(c.name)}" ${selected === c.name ? "selected" : ""}>${escapeHtml(c.displayName || c.name)}</option>`
   ).join("");
-  // only tables not already used as children elsewhere (and not the parent itself)
-  const childCandidates = state.uploadedTables.filter((t) => {
-    if (t.id === parentTableId) return false;
-    // allow if it's already the current child, or not a child of anyone
-    if (t.id === rel.childTableId) return true;
-    return !Array.from(state.nodeRelations.values()).some((r) => r.childTableId === t.id);
-  });
+  const childCandidates = state.uploadedTables.filter((t) => t.id !== parentTableId);
   const childTableOptions = childCandidates.map((t) =>
-    `<option value="${esc(t.id)}" ${t.id === rel.childTableId ? "selected" : ""}>${esc(t.tableName)}</option>`
+    `<option value="${escapeHtml(t.id)}" ${t.id === rel.childTableId ? "selected" : ""}>${escapeHtml(t.tableName)}</option>`
   ).join("");
   return `
     <div class="node-child-config">
       <div class="node-child-config-head">
-        <strong>↓ 子表格關聯</strong>
-        <button class="node-child-remove" data-child-remove="${esc(parentTableId)}" type="button" title="移除子表格">✕</button>
+        <strong>↓ 追溯連結</strong>
+        <button class="node-child-remove" data-child-remove="${escapeHtml(rel.id)}" type="button" title="移除此追溯連結">✕</button>
       </div>
       <div class="node-child-relation-label">
-        <span class="relation-table-name">${esc(parentTable?.tableName || "")}</span>
+        <span class="relation-table-name">${escapeHtml(parentTable?.tableName || "")}</span>
         <span class="relation-arrow">串接</span>
-        <select class="relation-table-select" data-child-select="${esc(parentTableId)}">
+        <select class="relation-table-select" data-child-select="${escapeHtml(rel.id)}">
           ${childTableOptions}
         </select>
       </div>
       <div class="node-child-key-row">
         <div class="key-group">
-          <span class="lbl">${esc(parentTable?.tableName || "父表")} 欄位</span>
-          <select data-child-parent-col="${esc(parentTableId)}">
+          <span class="lbl">${escapeHtml(parentTable?.tableName || "父表")} 欄位</span>
+          <select data-child-parent-col="${escapeHtml(rel.id)}">
             <option value="">— 選欄位 —</option>${colOptions(parentSchema, rel.parentCol)}
           </select>
         </div>
         <span class="key-eq">=</span>
         <div class="key-group">
-          <span class="lbl">${esc(childTable?.tableName || "子表")} 欄位</span>
-          <select data-child-col="${esc(parentTableId)}">
+          <span class="lbl">${escapeHtml(childTable?.tableName || "子表")} 欄位</span>
+          <select data-child-col="${escapeHtml(rel.id)}">
             <option value="">— 選欄位 —</option>${colOptions(childSchema, rel.childCol)}
           </select>
         </div>
@@ -1059,37 +1227,24 @@ function buildChildConfigHtml(parentTableId, rel) {
 }
 
 function toggleChildConfig(parentTableId) {
-  if (state.nodeRelations.has(parentTableId)) {
-    const rel = state.nodeRelations.get(parentTableId);
-    // add the former child back into the node flow
-    if (rel.childTableId && !state.nodeOrder.includes(rel.childTableId)) {
-      state.nodeOrder.push(rel.childTableId);
-    }
-    state.nodeRelations.delete(parentTableId);
-    renderNodeCanvas();
-    return;
-  }
-  // pick first table not already a child of something and not the parent itself
-  const usedAsChild = new Set(Array.from(state.nodeRelations.values()).map((r) => r.childTableId));
-  const candidate = state.uploadedTables.find((t) => t.id !== parentTableId && !usedAsChild.has(t.id));
+  const flow = activeDataflow();
+  const candidate = state.uploadedTables.find((table) => table.id !== parentTableId
+    && !edgeCreatesCycle(flow.edges, parentTableId, table.id));
   if (!candidate) return;
-  // remove the chosen child from the main node flow
-  state.nodeOrder = state.nodeOrder.filter((id) => id !== candidate.id);
-  state.nodeRelations.set(parentTableId, { childTableId: candidate.id, parentCol: "", childCol: "" });
+  flow.edges.push({ id: `edge-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, parentTableId, childTableId: candidate.id, parentCol: "", childCol: "" });
   renderNodeCanvas();
 }
 
-function onChildTableSelect(parentTableId, newChildTableId) {
-  const rel = state.nodeRelations.get(parentTableId);
+function onChildTableSelect(edgeId, newChildTableId) {
+  const flow = activeDataflow();
+  const rel = flow.edges.find((edge) => edge.id === edgeId);
   if (!rel) return;
-  const oldChildTableId = rel.childTableId;
-  if (oldChildTableId === newChildTableId) return;
-  // restore old child to node flow
-  if (oldChildTableId && !state.nodeOrder.includes(oldChildTableId)) {
-    state.nodeOrder.push(oldChildTableId);
+  if (rel.childTableId === newChildTableId) return;
+  if (edgeCreatesCycle(flow.edges, rel.parentTableId, newChildTableId, edgeId)) {
+    window.alert("此關聯會形成循環，無法儲存。");
+    renderNodeCanvas();
+    return;
   }
-  // remove new child from node flow
-  state.nodeOrder = state.nodeOrder.filter((id) => id !== newChildTableId);
   rel.childTableId = newChildTableId;
   rel.parentCol = "";
   rel.childCol = "";
@@ -1113,13 +1268,251 @@ function bindNodeCardDrag(canvas) {
       card.classList.remove("is-dragover");
       const dropId = card.dataset.nodeId;
       if (!dragSrcId || dragSrcId === dropId) return;
-      const order = state.nodeOrder;
+      const order = activeDataflow().nodeOrder;
       const srcIdx = order.indexOf(dragSrcId);
       const dstIdx = order.indexOf(dropId);
       if (srcIdx === -1 || dstIdx === -1) return;
       order.splice(srcIdx, 1);
       order.splice(dstIdx, 0, dragSrcId);
       renderNodeCanvas();
+    });
+  });
+}
+
+// ── Form Schema Editor ────────────────────────────────────────────────────────
+function formSchemaUid() { return Math.random().toString(36).slice(2, 10); }
+
+function blankFormDef() {
+  return { id: formSchemaUid(), code: "", name: "", fields: [] };
+}
+
+function blankField() {
+  return { id: formSchemaUid(), name: "", fieldKey: "", type: "string", label: "", required: false, is_key: false };
+}
+
+// 匯入欄位時預判必填／識別鍵：沿用 detectPkFk() 同一套評分函式與門檻
+// （名稱 0-3 + 唯一性 0-4 + 值型態 0-2，總分 <3 或名稱與值型態皆無訊號則不視為 key）；
+// 必填則用同一輪掃描已取得的「樣本是否全部非空」判斷，使用者仍可在編輯器中手動調整。
+function guessFieldFlags(col, rows, colIdx) {
+  const allVals = rows.map((r) => String(r[colIdx] ?? "").normalize("NFKC").trim().toLocaleLowerCase());
+  const nonEmpty = allVals.filter(Boolean);
+  const nameScore = pkNameScore(col.name);
+  const valueScore = pkValuePatternScore(nonEmpty.slice(0, 50));
+  const totalScore = nameScore + pkUniquenessScore(nonEmpty, allVals.length) + valueScore;
+  const is_key = !((nameScore < 1 && valueScore < 2) || totalScore < 3);
+  const required = allVals.length > 0 && nonEmpty.length === allVals.length;
+  return { required, is_key };
+}
+
+// 將一筆已上傳的 CSV 表格轉成表單 Schema 草稿；表格代碼已存在於 formDefs 時回傳 null（呼叫端自行決定如何提示）。
+function csvTableToFormDef(t) {
+  const code = t.tableName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "");
+  if (state.formDefs.some((f) => f.code === code)) return null;
+  const cols = state.tableSchema.get(t.id) || [];
+  const rows = state.tableData.get(t.id) || [];
+  const fields = cols.map((col, colIdx) => ({
+    id: formSchemaUid(),
+    name: col.name,
+    fieldKey: col.name.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
+    type: col.type || "string",
+    label: col.name,
+    ...guessFieldFlags(col, rows, colIdx),
+  }));
+  return { id: formSchemaUid(), code, name: t.tableName, fields };
+}
+
+function importCsvAsForms() {
+  if (!state.uploadedTables.length) return;
+  let added = 0;
+  state.uploadedTables.forEach((t) => {
+    const def = csvTableToFormDef(t);
+    if (!def) return;
+    state.formDefs.push(def);
+    added++;
+  });
+  if (added === 0) {
+    alert("所有 CSV 表格已匯入，或尚未上傳 CSV");
+    return;
+  }
+  ensureGenericFormsKitEnabled();
+  renderFormSchemaSection();
+  renderGeneration();
+}
+
+// 資料流節點畫布用：把節點從所有資料流中抽離，轉存為通用表格 Schema（generic-forms-kit 管理）。
+// 用於 CSV 中與資料流無關的獨立表格（例如品檢表）——不需要 PK/FK 關聯，也不該卡在追溯鏈節點上。
+function convertTableToStandaloneForm(tableId) {
+  const t = state.uploadedTables.find((x) => x.id === tableId);
+  if (!t) return;
+  const def = csvTableToFormDef(t);
+  if (!def) {
+    alert("已存在同名通用表格，請先於「表單 Schema 設定」重新命名或刪除後再試一次。");
+    return;
+  }
+  state.formDefs.push(def);
+  removeUploadedTable(tableId);
+  ensureGenericFormsKitEnabled();
+  renderUploadedTables();
+  renderNodeEditorSummary();
+  renderNodeCanvas();
+  renderFormSchemaSection();
+  renderDatabaseCarousel();
+  renderGeneration();
+}
+
+function bindFormSchemaEditor() {
+  document.getElementById("add-form-btn")?.addEventListener("click", () => {
+    const def = blankFormDef();
+    state.formDefs.push(def);
+    openFormOverlay(def.id);
+  });
+  document.getElementById("import-csv-forms-btn")?.addEventListener("click", importCsvAsForms);
+  document.getElementById("form-field-overlay-close")?.addEventListener("click", closeFormOverlay);
+  document.getElementById("form-field-cancel")?.addEventListener("click", closeFormOverlay);
+  document.getElementById("form-field-save")?.addEventListener("click", saveFormOverlay);
+  document.getElementById("add-field-btn")?.addEventListener("click", () => {
+    if (!state._editDraft) return;
+    state._editDraft.fields.push(blankField());
+    renderFormOverlayFields();
+  });
+}
+
+function renderFormSchemaSection() {
+  const section = document.getElementById("form-schema-section");
+  if (!section) return;
+  const importBtn = document.getElementById("import-csv-forms-btn");
+  if (importBtn) importBtn.hidden = !state.uploadedTables.length;
+  const list = elements.formDefsList;
+  if (!list) return;
+  if (!state.formDefs.length) {
+    list.innerHTML = `<div class="empty-state">尚未定義任何表格，點擊「＋ 新增表格」開始設計</div>`;
+    return;
+  }
+  list.innerHTML = state.formDefs.map((f) => `
+    <div class="form-def-row">
+      <div class="form-def-info">
+        <strong>${escapeHtml(f.name || "（未命名）")}</strong>
+        <code>${escapeHtml(f.code || "—")}</code>
+        <span class="hint-text">${f.fields.length} 個欄位</span>
+      </div>
+      <div class="form-def-actions">
+        <button class="ghost-action" data-form-edit="${escapeHtml(f.id)}" type="button">編輯</button>
+        <button class="ghost-action danger-action" data-form-delete="${escapeHtml(f.id)}" type="button">刪除</button>
+      </div>
+    </div>
+  `).join("");
+  list.querySelectorAll("[data-form-edit]").forEach((btn) => {
+    btn.addEventListener("click", () => openFormOverlay(btn.dataset.formEdit));
+  });
+  list.querySelectorAll("[data-form-delete]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state.formDefs = state.formDefs.filter((f) => f.id !== btn.dataset.formDelete);
+      renderFormSchemaSection();
+    });
+  });
+}
+
+function openFormOverlay(formId) {
+  const def = state.formDefs.find((f) => f.id === formId);
+  if (!def) return;
+  state._editDraft = JSON.parse(JSON.stringify(def));
+  document.getElementById("form-overlay-title").textContent = def.name ? `編輯「${def.name}」` : "新增表格";
+  renderFormOverlayMeta();
+  renderFormOverlayFields();
+  document.getElementById("form-field-overlay").removeAttribute("hidden");
+}
+
+function closeFormOverlay() {
+  state._editDraft = null;
+  document.getElementById("form-field-overlay").setAttribute("hidden", "");
+}
+
+function saveFormOverlay() {
+  if (!state._editDraft) return;
+  const draft = state._editDraft;
+  if (!draft.code.trim()) { alert("請填寫表格代碼（英文 snake_case）"); return; }
+  if (!draft.name.trim()) { alert("請填寫表格名稱"); return; }
+  const idx = state.formDefs.findIndex((f) => f.id === draft.id);
+  if (idx !== -1) state.formDefs[idx] = draft;
+  closeFormOverlay();
+  ensureGenericFormsKitEnabled();
+  renderFormSchemaSection();
+  renderGeneration();
+}
+
+function renderFormOverlayMeta() {
+  const draft = state._editDraft;
+  if (!draft) return;
+  document.getElementById("form-field-editor-meta").innerHTML = sanitizeHtml(`
+    <div class="form-meta-row">
+      <label class="form-meta-label">
+        <span class="lbl">表格代碼 <small>(snake_case)</small></span>
+        <input class="form-meta-input" type="text" id="draft-code" value="${escapeHtml(draft.code)}" placeholder="e.g. quality_check" />
+      </label>
+      <label class="form-meta-label">
+        <span class="lbl">表格名稱</span>
+        <input class="form-meta-input" type="text" id="draft-name" value="${escapeHtml(draft.name)}" placeholder="e.g. 品質檢查表" />
+      </label>
+    </div>
+  `);
+  document.getElementById("draft-code").addEventListener("input", (e) => { state._editDraft.code = e.target.value.trim(); });
+  document.getElementById("draft-name").addEventListener("input", (e) => {
+    state._editDraft.name = e.target.value;
+    document.getElementById("form-overlay-title").textContent = e.target.value ? `編輯「${e.target.value}」` : "新增表格";
+  });
+}
+
+function renderFormOverlayFields() {
+  const draft = state._editDraft;
+  if (!draft) return;
+  const container = document.getElementById("form-field-editor-fields");
+  if (!draft.fields.length) {
+    container.innerHTML = `<div class="empty-state">尚未新增欄位</div>`;
+    return;
+  }
+  container.innerHTML = sanitizeHtml(`
+    <table class="field-def-table">
+      <thead>
+        <tr>
+          <th>名稱</th><th>欄位 Key</th><th>類型</th><th>標籤</th>
+          <th title="必填">必</th><th title="主鍵">鍵</th><th></th>
+        </tr>
+      </thead>
+      <tbody>
+        ${draft.fields.map((f, i) => `
+          <tr data-field-idx="${i}">
+            <td><input type="text" class="field-cell-input" data-field="name" value="${escapeHtml(f.name)}" placeholder="欄位名稱" /></td>
+            <td><input type="text" class="field-cell-input" data-field="fieldKey" value="${escapeHtml(f.fieldKey)}" placeholder="field_key" /></td>
+            <td>
+              <select class="field-cell-select" data-field="type">
+                ${["string","integer","decimal","date"].map((t) =>
+                  `<option value="${t}"${f.type === t ? " selected" : ""}>${t}</option>`
+                ).join("")}
+              </select>
+            </td>
+            <td><input type="text" class="field-cell-input" data-field="label" value="${escapeHtml(f.label)}" placeholder="顯示標籤" /></td>
+            <td class="field-cell-check"><input type="checkbox" data-field="required"${f.required ? " checked" : ""} /></td>
+            <td class="field-cell-check"><input type="checkbox" data-field="is_key"${f.is_key ? " checked" : ""} /></td>
+            <td><button class="ghost-action danger-action" data-del-field="${i}" type="button">✕</button></td>
+          </tr>
+        `).join("")}
+      </tbody>
+    </table>
+  `);
+  container.querySelectorAll("[data-field-idx]").forEach((row) => {
+    const idx = Number(row.dataset.fieldIdx);
+    row.querySelectorAll("[data-field]").forEach((input) => {
+      const key = input.dataset.field;
+      const ev = input.type === "checkbox" ? "change" : "input";
+      input.addEventListener(ev, () => {
+        state._editDraft.fields[idx][key] = input.type === "checkbox" ? input.checked : input.value;
+      });
+    });
+  });
+  container.querySelectorAll("[data-del-field]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      state._editDraft.fields.splice(Number(btn.dataset.delField), 1);
+      renderFormOverlayFields();
     });
   });
 }
@@ -1154,17 +1547,17 @@ function kitCardTemplate(item) {
   const disabled = item.required ? "disabled" : "";
   const expanded = state.searchQuery ? "" : "hidden";
   return `
-    <article class="kit-card" data-category="${esc(item.category)}" data-kit-row="${esc(item.id)}" tabindex="0">
+    <article class="kit-card" data-category="${escapeHtml(item.category)}" data-kit-row="${escapeHtml(item.id)}" tabindex="0">
       <div class="kit-top">
         <div>
-          <h4>${esc(item.name)}</h4>
-          <p class="kit-id">${esc(item.id)}</p>
+          <h4>${escapeHtml(item.name)}</h4>
+          <p class="kit-id">${escapeHtml(item.id)}</p>
         </div>
-        <input class="kit-checkbox" type="checkbox" data-kit-toggle="${esc(item.id)}" ${checked} ${disabled} aria-label="${esc(item.name)}" />
+        <input class="kit-checkbox" type="checkbox" data-kit-toggle="${escapeHtml(item.id)}" ${checked} ${disabled} aria-label="${escapeHtml(item.name)}" />
       </div>
-      <p class="kit-desc">${esc(item.capability)}</p>
+      <p class="kit-desc">${escapeHtml(item.capability)}</p>
       <div class="tag-row">${kitTagsTemplate(item)}</div>
-      <div class="kit-subfeatures" id="kit-subfeatures-${esc(item.id)}" ${expanded}>${subfeaturesTemplate(item)}</div>
+      <div class="kit-subfeatures" id="kit-subfeatures-${escapeHtml(item.id)}" ${expanded}>${subfeaturesTemplate(item)}</div>
     </article>
   `;
 }
@@ -1172,9 +1565,9 @@ function kitCardTemplate(item) {
 function kitTagsTemplate(item) {
   const meta = categoryMeta[item.category] || { label: item.category, group: "未分類" };
   const tags = [
-    `<span class="tag tag-cat">${esc(meta.group)}</span>`,
-    `<span class="tag tag-kind">${esc(meta.label)}</span>`,
-    ...item.dependencies.map((id) => `<span class="tag">依賴 ${esc(id)}</span>`),
+    `<span class="tag tag-cat">${escapeHtml(meta.group)}</span>`,
+    `<span class="tag tag-kind">${escapeHtml(meta.label)}</span>`,
+    ...item.dependencies.map((id) => `<span class="tag">依賴 ${escapeHtml(id)}</span>`),
   ];
   if (item.required) tags.push(`<span class="tag tag-req">必選</span>`);
   return tags.join("");
@@ -1184,7 +1577,7 @@ function subfeaturesTemplate(item) {
   const locked = item.required;
   const action = locked
     ? `<span class="locked-note">必選 kit 的子功能會自動納入。</span>`
-    : `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${esc(item.id)}" type="button">全選子功能</button>`;
+    : `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${escapeHtml(item.id)}" type="button">全選子功能</button>`;
   return `
     <div class="subfeature-actions">${action}</div>
     <div class="subfeature-grid">${subfeatureList(item).map((subfeature) => subfeatureTemplate(subfeature, locked)).join("")}</div>
@@ -1199,16 +1592,16 @@ function subfeatureTemplate(subfeature, locked) {
   const key = subfeatureKey(subfeature.parentId, subfeature.id);
   const checked = locked || state.selectedSubfeatures.get(subfeature.parentId)?.has(subfeature.id) ? "checked" : "";
   const disabled = locked ? "disabled" : "";
-  const entitlement = subfeature.entitlement ? `<span class="subfeature-service-note">需要方案或客製權益</span>` : "";
+  const entitlement = subfeature.entitlement ? `<span class="subfeature-service-note">需要方案權益</span>` : "";
   return `
     <div class="subfeature-item">
       <div>
-        <strong>${esc(subfeature.name)}</strong>
-        <span>${esc(subfeature.description)}</span>
+        <strong>${escapeHtml(subfeature.name)}</strong>
+        <span>${escapeHtml(subfeature.description)}</span>
         ${entitlement}
         ${subfeatureOptionsTemplate(subfeature, locked)}
       </div>
-      <input class="kit-checkbox" type="checkbox" data-subfeature-toggle="${esc(key)}" ${checked} ${disabled} aria-label="${esc(subfeature.name)}" />
+      <input class="kit-checkbox" type="checkbox" data-subfeature-toggle="${escapeHtml(key)}" ${checked} ${disabled} aria-label="${escapeHtml(subfeature.name)}" />
     </div>
   `;
 }
@@ -1224,10 +1617,10 @@ function subfeatureOptionTemplate(subfeature, option, locked) {
   const disabled = locked ? "disabled" : "";
   if (option.type === "boolean") {
     const checked = value === true || value === "true" ? "checked" : "";
-    return `<label class="subfeature-option-toggle"><input type="checkbox" data-subfeature-option="${esc(key)}" data-option-id="${esc(option.id)}" ${checked} ${disabled} />${esc(option.displayName)}</label>`;
+    return `<label class="subfeature-option-toggle"><input type="checkbox" data-subfeature-option="${escapeHtml(key)}" data-option-id="${escapeHtml(option.id)}" ${checked} ${disabled} />${escapeHtml(option.displayName)}</label>`;
   }
-  const choices = (option.choices || []).map((choice) => `<option value="${esc(choice.value)}" ${String(choice.value) === String(value) ? "selected" : ""}>${esc(choice.displayName)}</option>`).join("");
-  return `<label class="subfeature-option"><span>${esc(option.displayName)}</span><select data-subfeature-option="${esc(key)}" data-option-id="${esc(option.id)}" ${disabled}>${choices}</select></label>`;
+  const choices = (option.choices || []).map((choice) => `<option value="${escapeHtml(choice.value)}" ${String(choice.value) === String(value) ? "selected" : ""}>${escapeHtml(choice.displayName)}</option>`).join("");
+  return `<label class="subfeature-option"><span>${escapeHtml(option.displayName)}</span><select data-subfeature-option="${escapeHtml(key)}" data-option-id="${escapeHtml(option.id)}" ${disabled}>${choices}</select></label>`;
 }
 
 function onKitToggle(event) {
@@ -1270,6 +1663,14 @@ function addKitWithDependencies(id) {
   enableDefaultSubfeatures(id);
 }
 
+// 使用者透過表單 Schema 編輯器（手動新增／CSV 匯入／節點轉獨立表格）實際儲存一筆表單定義時呼叫，
+// 讓 generic-forms-kit 隨之啟用，不需要使用者先手動到 Kit 清單勾選。
+function ensureGenericFormsKitEnabled() {
+  if (state.selected.has("generic-forms-kit")) return;
+  addKitWithDependencies("generic-forms-kit");
+  renderKits();
+}
+
 function removeOptionalKit(id) {
   const item = findKit(id);
   if (!item || item.required) return;
@@ -1309,9 +1710,40 @@ function renderAll() {
   renderKits();
   renderSummary();
   renderNodeEditorSummary();
-  renderDatabaseRecommendation();
+  renderFormSchemaSection();
+  renderDatabaseCarousel();
   renderPreview();
   renderGeneration();
+}
+
+// Cards shown in the Step 2 carousel. Both cards are always present —
+// using the form-schema card auto-enables generic-forms-kit on save (see ensureGenericFormsKitEnabled()),
+// so users don't need to pre-select the kit before designing a standalone table.
+function databaseCards() {
+  return [document.querySelector(".upload-source-card"), document.getElementById("form-schema-section")].filter(Boolean);
+}
+
+function renderDatabaseCarousel() {
+  const cards = databaseCards();
+  if (!cards.length) return;
+  state.dbCard = Math.min(Math.max(state.dbCard, 0), cards.length - 1);
+
+  document.querySelectorAll(".database-card-stage > section")
+    .forEach((el) => el.classList.remove("is-active"));
+  cards[state.dbCard].classList.add("is-active");
+
+  const dotsWrap = document.getElementById("card-indicators");
+  if (!dotsWrap) return;
+  dotsWrap.style.display = cards.length > 1 ? "flex" : "none";
+  dotsWrap.innerHTML = cards.map((_, i) =>
+    `<button class="card-dot${i === state.dbCard ? " is-active" : ""}" type="button" data-card="${i}" aria-label="第 ${i + 1} 張卡片"></button>`
+  ).join("");
+  dotsWrap.querySelectorAll("[data-card]").forEach((dot) => {
+    dot.addEventListener("click", () => {
+      state.dbCard = Number(dot.dataset.card);
+      renderDatabaseCarousel();
+    });
+  });
 }
 
 function renderSummary() {
@@ -1324,38 +1756,22 @@ function renderSummary() {
 function summaryTemplate(item) {
   const selectedCount = selectedSubfeatures(item).length;
   const totalCount = subfeatureList(item).length;
-  return `<div class="summary-item"><strong>${esc(item.name)}</strong><span>${esc(item.capability)}</span><small>${selectedCount}/${totalCount} 子功能</small></div>`;
+  return `<div class="summary-item"><strong>${escapeHtml(item.name)}</strong><span>${escapeHtml(item.capability)}</span><small>${selectedCount}/${totalCount} 子功能</small></div>`;
 }
 
 function dependencyTemplate(item) {
-  const deps = item.dependencies.length ? item.dependencies.map((id) => esc(findKit(id)?.name || id)).join("、") : "無";
+  const deps = item.dependencies.length ? item.dependencies.map((id) => escapeHtml(findKit(id)?.name || id)).join("、") : "無";
   const paid = selectedSubfeatures(item).filter((subfeature) => subfeature.entitlement).length;
-  return `<div class="dependency-item"><strong>${esc(item.id)}</strong><span>依賴：${deps}</span><span>${paid ? `付費或客製 gating：${paid} 項` : "無 gating"}</span></div>`;
+  return `<div class="dependency-item"><strong>${escapeHtml(item.id)}</strong><span>依賴：${deps}</span><span>${paid ? `付費 gating：${paid} 項` : "無 gating"}</span></div>`;
 }
 
+// ponytail: usage questionnaire removed from UI; production default is postgresql.
 function computeDbEngine() {
-  const score = scoreByValue("usage-scale", { single: 0, team: 2, company: 3 }) +
-    scoreByValue("data-criticality", { demo: 0, ops: 2, critical: 3 }) +
-    scoreByValue("analytics-need", { low: 0, medium: 1, high: 2 }) +
-    scoreByValue("deployment-mode", { local: 0, intranet: 1, cloud: 2 });
-  return { engine: score >= 4 ? "postgresql" : "sqlite", score };
-}
-
-function renderDatabaseRecommendation() {
-  const { engine, score } = computeDbEngine();
-  const displayName = engine === "postgresql" ? "PostgreSQL" : "SQLite";
-  document.querySelector("#db-engine").textContent = displayName;
-  document.querySelector("#db-reason").textContent = engine === "postgresql"
-    ? "建議使用 PostgreSQL 作為正式資料庫。這套系統會保存匯入紀錄、批號追溯、使用者權限與背景處理結果，需要可長期保存、備份、多人同時使用的資料庫。"
-    : "如果只是本機展示、單人測試或可重建資料，可先使用 SQLite 快速啟動；正式使用前再切換到 PostgreSQL。";
-  document.querySelector("#db-meter-fill").style.width = `${Math.min(100, 40 + score * 8)}%`;
-}
-
-function scoreByValue(id, weights) {
-  return weights[document.querySelector(`#${id}`).value] ?? 0;
+  return { engine: "postgresql", score: 5 };
 }
 
 function renderPreview() {
+  if (!elements.previewBody) return;
   const items = selectedKits();
   if (!items.length) {
     if (elements.previewTabs) elements.previewTabs.innerHTML = "";
@@ -1387,10 +1803,10 @@ function previewTemplate(item) {
 function defaultMockup(item) {
   const subs = selectedSubfeatures(item);
   return `
-    <h3>${esc(item.name)}</h3>
-    <p class="kit-hint">${esc(item.capability)}</p>
+    <h3>${escapeHtml(item.name)}</h3>
+    <p class="kit-hint">${escapeHtml(item.capability)}</p>
     <div class="preview-grid">
-      ${subs.map((s) => `<div class="preview-card"><strong>${esc(s.name)}</strong><span>${esc(s.description)}</span></div>`).join("") || `<div class="preview-card"><strong>底層能力</strong><span>此 kit 提供後端或基礎設施能力，無獨立頁面。</span></div>`}
+      ${subs.map((s) => `<div class="preview-card"><strong>${escapeHtml(s.name)}</strong><span>${escapeHtml(s.description)}</span></div>`).join("") || `<div class="preview-card"><strong>底層能力</strong><span>此 kit 提供後端或基礎設施能力，無獨立頁面。</span></div>`}
     </div>
   `;
 }
@@ -1564,21 +1980,22 @@ const kitMockups = {
 
 function renderGeneration() {
   const recipe = buildRecipe();
-  elements.generationSummary.innerHTML = [
-    ["流程", recipe.selectedFlows.join("、") || "（未選擇）"],
-    ["Kit", recipe.enabledKits.join("、")],
+  if (elements.generationSummary) elements.generationSummary.innerHTML = [
+    ["客戶", recipe.clientName || "（尚未填寫）"],
+    ["流程", recipe.selectedFlows.map((id) => findFlow(id)?.name || id).join("、") || "（未選擇）"],
+    ["Kit", recipe.enabledKits.map((id) => findKit(id)?.name || id).join("、")],
     ["Database", recipe.database.engine],
     ["資料表", recipe.tableSchemas.length ? `${recipe.tableSchemas.length} 個（含欄位定義）` : "未上傳"],
   ].map(([title, body]) => `<div class="summary-item"><strong>${title}</strong><span>${body}</span></div>`).join("");
   const rn = recipeName();
-  elements.packageFileList.innerHTML = [
+  if (elements.packageFileList) elements.packageFileList.innerHTML = [
     [`assembly/${rn}.recipe.json`,        "recipe.json 的組裝輸入"],
     [`assembly/${rn}-resolved-plan.json`, "kit 依賴解析結果"],
     ["dist/generated-system",             "組裝後的系統目錄"],
     [`dist/client-deploy-${rn}.zip`,      "客戶部署套件（最終輸出）"],
   ].map(([item, desc]) => `<div class="dependency-item"><strong>${item}</strong><span>${desc}</span></div>`).join("");
-  elements.assemblyCommandList.innerHTML = assemblyCommands().map((command) => `<div class="dependency-item"><code>${command}</code></div>`).join("");
-  elements.recipeOutput.value = recipeJsonText();
+  if (elements.assemblyCommandList) elements.assemblyCommandList.innerHTML = assemblyCommands().map((command) => `<div class="dependency-item"><code>${command}</code></div>`).join("");
+  if (elements.recipeOutput) elements.recipeOutput.value = recipeJsonText();
 }
 
 // ── Recipe / 輸出 ─────────────────────────────────────────────────────────────
@@ -1591,6 +2008,30 @@ function recipeName() {
   };
   const parts = Array.from(state.selectedFlows).map(f => short[f] || f);
   return parts.length ? "form-system-" + parts.join("-") : "form-system";
+}
+
+function clientName() {
+  return document.querySelector("#client-name")?.value.trim() || "";
+}
+
+function clientCode() {
+  return clientName().normalize("NFKC").toLocaleLowerCase()
+    .replace(/[\s-]+/g, "_")
+    .replace(/[^\p{L}\p{N}_]/gu, "")
+    .replace(/^_+|_+$/g, "");
+}
+
+function clientTableCode(code) {
+  const prefix = clientCode();
+  const cleanCode = String(code || "").replace(/^_+/, "");
+  if (!cleanCode) return "";
+  return prefix && !cleanCode.startsWith(`${prefix}_`) ? `${prefix}_${cleanCode}` : cleanCode;
+}
+
+function tableCodeForId(tableId) {
+  const table = state.uploadedTables.find((item) => item.id === tableId);
+  const code = table?.tableName.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, "") || "";
+  return clientTableCode(code);
 }
 
 function buildRecipe() {
@@ -1609,19 +2050,40 @@ function buildRecipe() {
   return {
     recipeVersion: "0.2.0",
     name: recipeName(),
+    clientName: clientName(),
     sourceManifest: "kits/form-analysis.kit-manifest.json",
     selectedFlows: Array.from(state.selectedFlows),
     enabledKits: selected.map((item) => item.id),
     selectedSubfeatures: Object.fromEntries(selected.map((item) => [item.id, selectedSubfeatures(item).map((sub) => sub.id)])),
     selectedSubfeatureOptions: Object.fromEntries(state.subfeatureOptions.entries()),
     tableSchemas,
+    dataflows: state.dataflows.map((flow) => ({
+      code: flow.id,
+      name: flow.name,
+      nodes: flow.nodeOrder.map(tableCodeForId).filter(Boolean),
+      edges: flow.edges.map((edge) => ({
+        fromTableCode: tableCodeForId(edge.parentTableId),
+        toTableCode: tableCodeForId(edge.childTableId),
+        parentColumn: edge.parentCol || null,
+        childColumn: edge.childCol || null,
+      })).filter((edge) => edge.fromTableCode && edge.toTableCode),
+    })),
+    formSchemas: state.formDefs.map((f, i) => ({
+      code: clientTableCode(f.code),
+      name: f.name,
+      sort_order: i + 1,
+      fields: f.fields.map(({ name, fieldKey, type, label, required, is_key }) => ({
+        name, fieldKey, type, label, required, is_key,
+      })),
+    })),
     featureFlags: {},
     database: {
       engine: computeDbEngine().engine,
       connectionOwner: "platform-core-kit",
       autoGenerateConnection: true,
     },
-    ...(state.machineFingerprint ? { machineFingerprint: state.machineFingerprint } : {}),
+    deploymentMode: state.deploymentMode || "online",
+    ...(state.machinePubkey ? { machinePublicKey: state.machinePubkey } : {}),
   };
 }
 
@@ -2021,7 +2483,7 @@ function buildDeploySh(recipe, dateStr) {
     `echo "=== 部署完成 ==="`,
     `if [ "\${BACKGROUND}" -eq 1 ]; then`,
     `    mkdir -p "\${SYS_ROOT}/logs"`,
-    `    (cd "\${SYS_ROOT}/backend" && nohup "\${VENV}/bin/python" -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
+    `    (cd "\${SYS_ROOT}/backend" && nohup "\${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > "\${SYS_ROOT}/logs/backend.log" 2>&1 &`,
     `    echo "$!" > "\${SYS_ROOT}/logs/backend.pid")`,
     `    ok "後端已在背景啟動  port=8000"`,
     `    info "日誌：\${SYS_ROOT}/logs/backend.log"`,
@@ -2030,7 +2492,7 @@ function buildDeploySh(recipe, dateStr) {
     `    fi`,
     `else`,
     `    info "啟動後端："`,
-    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000"`,
+    `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"`,
     `    info "  cd \${SYS_ROOT}/backend && \${VENV}/bin/python -m uvicorn app.main:app --reload  # 開發模式"`,
     `    if [ -f "\${SYS_ROOT}/frontend/package.json" ]; then`,
     `        info "啟動前端："`,
@@ -2065,7 +2527,7 @@ function buildDeploySh(recipe, dateStr) {
 }
 
 function buildDeployReadme(recipe, dateStr) {
-  const flows = recipe.selectedFlows.join("、") || "（未選擇）";
+  const flows = recipe.selectedFlows.map((id) => findFlow(id)?.name || id).join("、") || "（未選擇）";
   const kits = recipe.enabledKits;
   const db = recipe.database.engine;
   const name = recipe.name;
@@ -2073,7 +2535,7 @@ function buildDeployReadme(recipe, dateStr) {
     ? recipe.tableSchemas.map((t) => `- \`${t.tableName}\`（${t.columns.length} 欄）`).join("\n")
     : "（未上傳）";
 
-  const kitLines = kits.map((k) => `- \`${k}\``).join("\n");
+  const kitLines = kits.map((k) => `- ${findKit(k)?.name || k}`).join("\n");
 
   return `# Form System 部署套件
 
@@ -2177,11 +2639,26 @@ ${tables}
 async function downloadPackage() {
   const btn = document.querySelector("#download-package");
   if (!btn || btn.disabled) return;
+  if (!clientCode()) {
+    alert("請先填寫客戶名稱，資料表會使用此名稱作為 namespace。");
+    document.querySelector("#client-name")?.focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = "打包中…";
 
   try {
     if (typeof JSZip === "undefined") throw new Error("JSZip 未載入");
+    const manifestResp = await fetch("/api/package-manifest");
+    if (manifestResp.ok) {
+      const manifest = await manifestResp.json();
+      if (manifest && manifest.ok === false) {
+        throw new Error(`Package incomplete: missing ${(manifest.missing || []).join(", ")}. Run tools/build-wizard-exe.ps1 before packaging.`);
+      }
+    } else if (manifestResp.status === 422) {
+      const manifest = await manifestResp.json().catch(() => ({}));
+      throw new Error(manifest.message || "Package incomplete. Run tools/build-wizard-exe.ps1 before packaging.");
+    }
     const recipe = buildRecipe();
     const dateStr = new Date().toISOString().slice(0, 16).replace("T", " ");
     const zip = new JSZip();
@@ -2196,8 +2673,8 @@ async function downloadPackage() {
     zip.file("phases/04-package.ps1", bom + buildDeployPhase4Ps1());
     zip.file("deploy.sh", buildDeploySh(recipe, dateStr));
     zip.file("README.md", buildDeployReadme(recipe, dateStr));
-    if (state.machineFingerprint) {
-      zip.file("machine-id.txt", state.machineFingerprint + "\n");
+    if (state.machinePubkey) {
+      zip.file("machine-pubkey.pem", state.machinePubkey + "\n");
     }
     // Include install-wizard files when served via serve-gui.cjs
     try {
@@ -2208,6 +2685,44 @@ async function downloadPackage() {
       const exeResp = await fetch("/api/wizard-exe");
       if (exeResp.ok) zip.file("install-wizard.exe", await exeResp.arrayBuffer());
     } catch (_) { /* exe not built yet or server not running, skip */ }
+
+    // ── system/ bundle（install-wizard 路徑驗證需要 system/backend/requirements.txt）──
+    try {
+      btn.textContent = "打包 system…";
+      const sysResp = await fetch("/api/system-bundle");
+      if (sysResp.ok) {
+        const data = await sysResp.json();
+        if (data.available && Array.isArray(data.files)) {
+          for (const f of data.files) {
+            // base64 → Uint8Array，放入 system/<relpath>
+            const bin = atob(f.b64);
+            const bytes = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+            zip.file("system/" + f.path, bytes);
+          }
+        }
+      }
+    } catch (_) { /* server not running or no system dir, skip */ }
+
+    // ── license.lic（偵測到 issuer 私鑰且已登錄 TPM 公鑰時自動簽發）──
+    if (state.machinePubkey) {
+      try {
+        btn.textContent = "簽發授權…";
+        const licResp = await fetch("/api/issue-license", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ pubkey: state.machinePubkey, days: 365 }),
+        });
+        if (licResp.ok) {
+          const data = await licResp.json();
+          if (data.ok && data.license) {
+            zip.file("system/license.lic", JSON.stringify(data.license, null, 2));
+          }
+        }
+      } catch (_) { /* issuer key not configured, skip — license can be added manually */ }
+    }
+
+    btn.textContent = "壓縮中…";
     const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE" });
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
@@ -2222,6 +2737,7 @@ async function downloadPackage() {
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   } catch (err) {
     console.error("downloadPackage failed:", err);
+    alert(err instanceof Error ? err.message : String(err));
     btn.textContent = "下載失敗";
     setTimeout(() => { btn.textContent = "下載 .zip"; btn.disabled = false; }, 2000);
   }
@@ -2268,6 +2784,10 @@ function parseSubfeatureKey(key) {
 
 function findKit(id) {
   return state.kits.find((item) => item.id === id);
+}
+
+function findFlow(id) {
+  return flows.find((item) => item.id === id);
 }
 
 function keepActivePreviewSelected() {

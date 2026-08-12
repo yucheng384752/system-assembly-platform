@@ -79,19 +79,10 @@ export async function runBatchValidation({
   let errorCount = 0;
   let failCount = 0;
 
-  for (let index = 0; index < targets.length; index++) {
-    const file = targets[index];
-    showToast(
-      "info",
-      t("upload.batchValidate.toast.progress", {
-        current: index + 1,
-        total: targets.length,
-        fileName: file.name,
-      }),
-      { key: "validateAll", durationMs: null }
-    );
-
-    const result = await handleValidate(file.id, { silentToast: true });
+  const results = await Promise.all(targets.map((file) =>
+    handleValidate(file.id, { silentToast: true })
+  ));
+  for (const result of results) {
     if (result.outcome === "passed") okCount += 1;
     else if (result.outcome === "errors") errorCount += 1;
     else failCount += 1;
@@ -129,19 +120,8 @@ export async function runBatchConversion({
   let okCount = 0;
   let failCount = 0;
 
-  for (let index = 0; index < targets.length; index++) {
-    const file = targets[index];
-    showToast(
-      "info",
-      t("upload.batchConvert.toast.progress", {
-        current: index + 1,
-        total: targets.length,
-        fileName: file.name,
-      }),
-      { key: "convertAll", durationMs: null }
-    );
-
-    const ok = await handlePdfConvert(file.id);
+  const convertResults = await Promise.all(targets.map((file) => handlePdfConvert(file.id)));
+  for (const ok of convertResults) {
     if (ok) okCount += 1; else failCount += 1;
   }
 

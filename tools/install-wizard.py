@@ -21,6 +21,7 @@ import secrets as _secrets_mod
 import socket
 import subprocess
 import sys
+import tempfile
 import threading
 import time
 import webbrowser
@@ -29,6 +30,214 @@ from pathlib import Path
 # ── Constants ─────────────────────────────────────────────────────────────────
 _DEFAULT_PORT = 9981
 _HERE = Path(__file__).parent.resolve()
+_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1wQ/q3fbmYmd8545NJk
+/qEyMwtmPRaJFpoALjvxEvrfVIe/H58X1UTkGCept4Ata20HUvr1D8LUsr3jxJUi
+48INzbau+HKxwq+fvEaaGPNdgIKZpLOM0TM/g/cdtIvneWsmn4ZEV6q8UTTql7Zp
+5mveUc6KY6QWtqEPOxFwVl7RXWxpF/yBu2S0itRdo5ZNkT/70BbJEuL/PAQbuMlw
+cb9f08cCqoCsARydnO2znpT6f5mMXodZY/5GJIm3UlcXpSFZWOm3T5Gds46SdRUk
+/4X9IffUlLFmHvV0y7sJmQ1WDquDJDuJydls5Y3ByvaokjNdbGhAr9k09QlXy7hy
+EwIDAQAB
+-----END PUBLIC KEY-----"""
+
+# ── Embedded persistent swtpm setup script ────────────────────────────────────
+# 當偵測到沒有硬體 TPM 時，由 _setup_swtpm_linux() 寫入磁碟並執行
+_SWTPM_SETUP_SCRIPT = r"""#!/usr/bin/env bash
+# 01_tpm_full_setup.sh — 持久化 swtpm 初始化（由 install-wizard 自動執行）
+set -uo pipefail
+
+GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+ok()   { echo -e "${GREEN}[TPM] ✓ $1${NC}"; }
+err()  { echo -e "${RED}[TPM] ✗ $1${NC}"; }
+info() { echo -e "${YELLOW}[TPM] ▸ $1${NC}"; }
+skip() { echo -e "${CYAN}[TPM] ↷ $1（已存在，跳過）${NC}"; }
+die()  { err "$1"; exit 1; }
+
+TPM_DIR="/var/lib/swtpm-hiba"
+TPM_STATE="${TPM_DIR}/swtpm-state"
+HANDLE="0x81000001"
+TCTI_ENV_FILE="/etc/profile.d/hiba-tpm.sh"
+SWTPM_SERVICE="/etc/systemd/system/swtpm.service"
+TCTI_CONF="${TPM_DIR}/tcti.conf"
+SWTPM_LOG="${TPM_DIR}/swtpm.log"
+TCTI_VALUE="swtpm:host=127.0.0.1,port=2321"
+
+REAL_USER="${SUDO_USER:-${USER:-$(logname 2>/dev/null || whoami)}}"
+
+info "STAGE 0：前置確認"
+[[ $EUID -eq 0 ]] || die "需要 root 權限（請以 sudo 執行安裝精靈）"
+for cmd in swtpm swtpm_setup tpm2_createprimary tpm2_create tpm2_load \
+           tpm2_evictcontrol tpm2_readpublic tpm2_flushcontext openssl; do
+  command -v "$cmd" >/dev/null 2>&1 && ok "$cmd" || die "$cmd 未找到"
+done
+
+mkdir -p "$TPM_DIR" "$TPM_STATE"
+chown -R root:root "$TPM_DIR"
+chmod 755 "$TPM_DIR" "$TPM_STATE"
+ok "目錄：$TPM_DIR"
+
+# AppArmor 相容性（Ubuntu 22.04 swtpm 套件附帶 profile）
+if command -v aa-status >/dev/null 2>&1 && aa-status --enabled 2>/dev/null; then
+  for _prof in /etc/apparmor.d/usr.bin.swtpm /etc/apparmor.d/swtpm \
+               /etc/apparmor.d/usr.sbin.swtpm; do
+    if [[ -f "$_prof" ]]; then
+      command -v aa-complain >/dev/null 2>&1 \
+        && aa-complain "$_prof" 2>/dev/null \
+        || apparmor_parser -R "$_prof" 2>/dev/null || true
+      break
+    fi
+  done
+fi
+
+info "STAGE 1：swtpm 狀態初始化（冪等）"
+STATE_MARKER="${TPM_STATE}/.initialized"
+if [[ -f "$STATE_MARKER" ]]; then
+  skip "swtpm 狀態已存在，指紋維持不變"
+else
+  swtpm_setup --tpm2 --tpmstate "$TPM_STATE" --allow-signing \
+    2>>"$SWTPM_LOG" || die "swtpm_setup 失敗，查看：$SWTPM_LOG"
+  touch "$STATE_MARKER"
+  ok "swtpm 狀態初始化完成"
+fi
+
+info "STAGE 2：swtpm systemd 服務"
+cat > "$TCTI_CONF" <<TCTIEOF
+TPM2TOOLS_TCTI=${TCTI_VALUE}
+TCTIEOF
+chmod 644 "$TCTI_CONF"
+ok "TCTI 設定：$TCTI_CONF"
+
+if [[ ! -f "$SWTPM_SERVICE" ]]; then
+  cat > "$SWTPM_SERVICE" <<SVCEOF
+[Unit]
+Description=Software TPM (swtpm) for HiBA-AB / Form System
+After=network.target
+Before=hiba-subweb.service
+
+[Service]
+Type=forking
+User=root
+ExecStartPre=/bin/mkdir -p ${TPM_STATE}
+ExecStart=/usr/bin/swtpm socket \\
+  --tpmstate dir=${TPM_STATE} \\
+  --ctrl type=tcp,port=2322 \\
+  --server type=tcp,port=2321 \\
+  --tpm2 --flags startup-clear --daemon \\
+  --log file=${SWTPM_LOG},level=5
+ExecStop=/usr/bin/pkill -f "swtpm socket"
+RemainAfterExit=yes
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+  ok "swtpm.service 建立完成"
+else
+  skip "swtpm.service"
+fi
+
+systemctl daemon-reload
+systemctl enable swtpm.service
+systemctl restart swtpm.service
+sleep 2
+systemctl is-active --quiet swtpm.service || { journalctl -u swtpm.service -n 10 --no-pager; die "swtpm.service 啟動失敗"; }
+ok "swtpm.service 運行中（開機自啟）"
+python3 -c "import socket,sys; s=socket.socket(); s.settimeout(3); s.connect(('127.0.0.1',2321)); s.close(); sys.exit(0)" 2>/dev/null \
+  || pgrep -x swtpm >/dev/null 2>&1 \
+  || die "swtpm port 2321 未就緒"
+ok "TCP port 2321 就緒"
+
+info "STAGE 3：全域環境變數"
+cat > "$TCTI_ENV_FILE" <<ENVEOF
+# HiBA-AB / Form System swtpm TCTI
+export TPM2TOOLS_TCTI="${TCTI_VALUE}"
+ENVEOF
+chmod 644 "$TCTI_ENV_FILE"
+export TPM2TOOLS_TCTI="$TCTI_VALUE"
+ok "環境變數：$TCTI_ENV_FILE"
+
+SUBWEB_ENV="/opt/hiba/subweb/.env"
+if [[ -f "$SUBWEB_ENV" ]]; then
+  sed -i '/^TPM2TOOLS_TCTI/d' "$SUBWEB_ENV"
+  echo "TPM2TOOLS_TCTI=${TCTI_VALUE}" >> "$SUBWEB_ENV"
+  ok "hiba-subweb .env 更新"
+fi
+
+info "STAGE 4：清空 TPM context"
+sudo -E tpm2_clear --hierarchy owner 2>/dev/null || \
+  sudo -E tpm2_clear -c o 2>/dev/null || \
+  sudo -E tpm2_clear 2>/dev/null || err "tpm2_clear 失敗（非致命）"
+
+info "STAGE 5：建立 Primary Key"
+rm -f "${TPM_DIR}/primary.ctx"
+tpm2_createprimary --hierarchy owner --key-algorithm rsa --hash-algorithm sha256 \
+  --key-context "${TPM_DIR}/primary.ctx" || die "tpm2_createprimary 失敗"
+[[ -s "${TPM_DIR}/primary.ctx" ]] && ok "primary.ctx" || die "primary.ctx 為空"
+
+info "STAGE 6：建立 RSA-2048 Signing Key"
+rm -f "${TPM_DIR}/signing.pub" "${TPM_DIR}/signing.priv"
+tpm2_create \
+  --parent-context "${TPM_DIR}/primary.ctx" \
+  --key-algorithm "rsa2048:rsassa:null" \
+  --hash-algorithm sha256 \
+  --public  "${TPM_DIR}/signing.pub" \
+  --private "${TPM_DIR}/signing.priv" || die "tpm2_create 失敗"
+[[ -s "${TPM_DIR}/signing.pub" ]]  && ok "signing.pub"  || die "signing.pub 不存在"
+[[ -s "${TPM_DIR}/signing.priv" ]] && ok "signing.priv" || die "signing.priv 不存在"
+
+info "STAGE 7：載入並持久化至 $HANDLE"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_flushcontext --saved-session    2>/dev/null || true
+rm -f "${TPM_DIR}/signing.ctx"
+tpm2_load \
+  --parent-context "${TPM_DIR}/primary.ctx" \
+  --public  "${TPM_DIR}/signing.pub" \
+  --private "${TPM_DIR}/signing.priv" \
+  --key-context "${TPM_DIR}/signing.ctx" || die "tpm2_load 失敗"
+[[ -s "${TPM_DIR}/signing.ctx" ]] && ok "signing.ctx" || die "signing.ctx 不存在"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_evictcontrol --hierarchy owner --object-context "$HANDLE" "$HANDLE" 2>/dev/null && \
+  echo "[TPM] (舊 Handle 已清除)" || true
+tpm2_evictcontrol --hierarchy owner --object-context "${TPM_DIR}/signing.ctx" \
+  "$HANDLE" || die "tpm2_evictcontrol 失敗"
+ok "持久化完成：$HANDLE"
+
+info "STAGE 8：匯出公鑰與 EK Fingerprint"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_readpublic --object-context "$HANDLE" \
+  --output "${TPM_DIR}/signing_public.pem" --format pem || die "tpm2_readpublic 失敗"
+ok "公鑰：${TPM_DIR}/signing_public.pem"
+EK_FP=$(openssl pkey -in "${TPM_DIR}/signing_public.pem" -pubin -outform DER 2>/dev/null \
+  | sha256sum | awk '{print $1}')
+echo "$EK_FP" > "${TPM_DIR}/ek_fingerprint.txt"
+chown "$REAL_USER":"$REAL_USER" "${TPM_DIR}/ek_fingerprint.txt"
+ok "EK Fingerprint：$EK_FP"
+
+info "STAGE 9：最終驗證 + 簽章測試"
+tpm2_flushcontext --transient-object 2>/dev/null || true
+tpm2_flushcontext --loaded-session   2>/dev/null || true
+tpm2_getcap handles-persistent 2>/dev/null | grep -q "$HANDLE" && \
+  ok "Handle $HANDLE 確認存在" || die "Handle 不在清單中"
+echo "hiba-test" > /tmp/_hiba_test.txt
+tpm2_sign --key-context "$HANDLE" --hash-algorithm sha256 --scheme rsassa \
+  --signature /tmp/_hiba_sig.bin /tmp/_hiba_test.txt 2>/dev/null && \
+  ok "簽章測試通過" || err "簽章測試失敗（非致命）"
+rm -f /tmp/_hiba_test.txt /tmp/_hiba_sig.bin
+
+systemctl is-enabled hiba-subweb.service 2>/dev/null | grep -q "enabled" && \
+  systemctl restart hiba-subweb.service && ok "hiba-subweb.service 已重啟" || true
+
+echo ""
+echo "========================================================"
+echo "[TPM] swtpm 持久化初始化完成"
+echo "  Fingerprint : $EK_FP"
+echo "  State       : $TPM_STATE（開機保留）"
+echo "  TCTI        : $TCTI_VALUE"
+echo "========================================================"
+"""
 
 # ── Global state ──────────────────────────────────────────────────────────────
 _lock = threading.Lock()
@@ -66,10 +275,420 @@ def _generate_secret() -> str:
     return _secrets_mod.token_urlsafe(48)
 
 
+_TPM_SIGNING_HANDLE  = "0x81000001"
+_TPM_SIGNING_PEM_PATH = Path("/var/lib/swtpm-hiba/signing_public.pem")
+_TPM_SIGNING_PEM_PATH_LEGACY = Path("/opt/hiba/tpm/signing_public.pem")  # backward compat
+
+
+def _ensure_swtpm_tcti() -> bool:
+    """
+    If TPM2TOOLS_TCTI is not set but swtpm is listening on 127.0.0.1:2321,
+    auto-set the env var so tpm2-tools can connect without a login shell.
+    Returns True if TCTI is available (pre-existing or auto-detected).
+    """
+    if os.environ.get("TPM2TOOLS_TCTI"):
+        return True
+    try:
+        import socket as _sock
+        s = _sock.create_connection(("127.0.0.1", 2321), timeout=2)
+        s.close()
+        os.environ["TPM2TOOLS_TCTI"] = "swtpm:host=127.0.0.1,port=2321"
+        return True
+    except OSError:
+        return False
+
+
+def _probe_tpm_signing_pubkey() -> dict:
+    """
+    Returns {'source': 'tpm2-signing-key'|'none', 'pubkey_pem': str|None}
+    Reads the TPM signing public key (RSA-2048 PEM). No machine-id fallback.
+    Priority:
+      1. /var/lib/swtpm-hiba/signing_public.pem  (pre-built by 01_tpm_full_setup.sh)
+      2. /opt/hiba/tpm/signing_public.pem  (legacy path, backward compat)
+      3. tpm2_readpublic on handle 0x81000001 (on-demand export, Linux only)
+    """
+    _ensure_swtpm_tcti()
+    # 1. Read pre-built signing_public.pem (try new path first, then legacy)
+    for _pem_path in (_TPM_SIGNING_PEM_PATH, _TPM_SIGNING_PEM_PATH_LEGACY):
+        if _pem_path.exists():
+            try:
+                pem = _pem_path.read_text("utf-8").strip()
+                if "BEGIN PUBLIC KEY" in pem:
+                    return {"source": "tpm2-signing-key", "pubkey_pem": pem}
+            except Exception:
+                pass
+
+    # 2. Export from TPM handle on-demand (Linux)
+    if platform.system() == "Linux":
+        try:
+            with tempfile.TemporaryDirectory() as tmpdir:
+                pem_path = Path(tmpdir) / "signing.pem"
+                r = subprocess.run(
+                    ["tpm2_readpublic", "--object-context", _TPM_SIGNING_HANDLE,
+                     "--output", str(pem_path), "--format", "pem"],
+                    capture_output=True, timeout=10,
+                )
+                if r.returncode == 0 and pem_path.exists():
+                    pem = pem_path.read_text("utf-8").strip()
+                    if "BEGIN PUBLIC KEY" in pem:
+                        return {"source": "tpm2-signing-key", "pubkey_pem": pem}
+        except Exception:
+            pass
+
+    return {"source": "none", "pubkey_pem": None}
+
+
+def _wizard_tpm_sign_nonce(nonce: bytes) -> bytes | None:
+    """
+    Ask TPM handle 0x81000001 to sign a nonce (RSASSA-PKCS1v15-SHA256).
+    Returns raw RSA signature bytes, or None if TPM is unavailable.
+    """
+    _ensure_swtpm_tcti()
+    with tempfile.TemporaryDirectory() as tmpdir:
+        nonce_path = Path(tmpdir) / "nonce.bin"
+        sig_path   = Path(tmpdir) / "sig.bin"
+        nonce_path.write_bytes(nonce)
+        base_cmd = [
+            "tpm2_sign",
+            "--key-context", _TPM_SIGNING_HANDLE,
+            "--hash-algorithm", "sha256",
+            "--scheme", "rsassa",
+            "--signature", str(sig_path),
+            str(nonce_path),
+        ]
+        # Try --format plain first (tpm2-tools >= 4.x)
+        for extra in (["--format", "plain"], []):
+            try:
+                r = subprocess.run(
+                    [*base_cmd[:6], *extra, *base_cmd[6:]],
+                    capture_output=True, timeout=10,
+                )
+            except (FileNotFoundError, subprocess.TimeoutExpired, Exception):
+                return None
+            if r.returncode == 0 and sig_path.exists():
+                raw = sig_path.read_bytes()
+                if extra:
+                    return raw
+                # Parse TPMT_SIGNATURE: [2B alg][2B hash][2B size][size bytes sig]
+                if len(raw) >= 6:
+                    sz = int.from_bytes(raw[4:6], "big")
+                    if len(raw) >= 6 + sz and sz > 0:
+                        return raw[6:6 + sz]
+            sig_path.unlink(missing_ok=True)
+    return None
+
+
+def _setup_tpm_linux(log_fn, sys_root: Path) -> None:
+    """Install tpm2-tools, provision TPM signing key, export machine-pubkey.pem. Best-effort."""
+    import shutil
+
+    # 提早偵測 root：TPM 佈建需寫入 /var/lib/swtpm-hiba 與 apt 安裝，皆需 root
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        log_fn("  WARN  未以 root 執行 — 跳過 TPM 機器綁定（授權將為浮動授權）")
+        log_fn("  INFO  若需 TPM 機器綁定，請以 sudo 重新執行安裝精靈：")
+        log_fn("  INFO    sudo python3 install-wizard.py")
+        log_fn("  INFO  或先在伺服器執行 sudo bash 01_tpm_full_setup.sh 再安裝")
+        return
+
+    # Install tpm2-tools if missing
+    if not shutil.which("tpm2_createek"):
+        log_fn("  INFO  tpm2-tools 未安裝，嘗試自動安裝 (apt-get)...")
+        rc = _run_cmd(["apt-get", "install", "-y", "tpm2-tools"], sys_root)
+        if rc != 0:
+            log_fn("  WARN  tpm2-tools 安裝失敗（非致命）— 跳過 TPM 機器綁定設定")
+            return
+        log_fn("  OK  tpm2-tools 安裝完成")
+    else:
+        log_fn("  OK  tpm2-tools 已存在")
+
+    # Check TPM device — fallback to swtpm if no hardware TPM found
+    has_hw_tpm = Path("/dev/tpmrm0").exists() or Path("/dev/tpm0").exists()
+    if not has_hw_tpm:
+        log_fn("  INFO  未偵測到硬體 TPM (/dev/tpmrm0, /dev/tpm0) — 嘗試安裝 swtpm 軟體 vTPM...")
+        if not _setup_swtpm_linux(log_fn, sys_root):
+            log_fn("  WARN  swtpm 設定失敗 — 跳過 TPM 機器綁定設定（授權將為浮動授權）")
+            return
+        log_fn("  OK   swtpm vTPM 就緒，繼續匯出公鑰...")
+    else:
+        log_fn("  OK   硬體 TPM 已偵測到")
+        # Add service user to tss group (硬體 TPM 才需要 — swtpm 使用 TCP 不需要此 group)
+        if os.getuid() == 0:
+            service_user = os.environ.get("SUDO_USER", "")
+            if not service_user:
+                env_path = sys_root / ".env"
+                if env_path.exists():
+                    for line in env_path.read_text().splitlines():
+                        if line.startswith("SERVICE_USER="):
+                            service_user = line.split("=", 1)[1].strip("'\"")
+                            break
+            if service_user:
+                rc = _run_cmd(["usermod", "-aG", "tss", service_user], sys_root)
+                log_fn(f"  {'OK' if rc == 0 else 'WARN'}  usermod -aG tss {service_user}" + ("" if rc == 0 else "（失敗，非致命）"))
+
+    # Export signing public key and save machine-pubkey.pem
+    probe = _probe_tpm_signing_pubkey()
+    if probe["pubkey_pem"]:
+        pubkey_file = sys_root / "machine-pubkey.pem"
+        pubkey_file.write_text(probe["pubkey_pem"] + "\n", encoding="utf-8")
+        log_fn(f"  OK  TPM 公鑰已儲存 → {pubkey_file.name}")
+        log_fn(f"  INFO  來源: {probe['source']}")
+        # 若部署包已含 license.lic，表示授權已綁定，不需再提供公鑰
+        lic_present = (sys_root / "license.lic").exists() or (sys_root.parent / "license.lic").exists()
+        if lic_present:
+            log_fn("  OK  偵測到 license.lic — 授權已綁定本機 TPM，啟動時將自動驗證")
+        else:
+            log_fn("  INFO  本機未含 license.lic（浮動授權）。")
+            log_fn("  INFO  若已於 Kit Composer 上傳此公鑰，授權應已記錄；否則請提供 machine-pubkey.pem 給授權方")
+    else:
+        log_fn("  WARN  無法取得 TPM 公鑰（handle 0x81000001 尚未佈建，請執行 01_tpm_full_setup.sh）")
+
+
+def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
+    """
+    安裝 swtpm 套件並執行持久化 swtpm 初始化腳本。
+    呼叫時機：_setup_tpm_linux() 偵測到沒有硬體 TPM (/dev/tpmrm0, /dev/tpm0) 時。
+    成功後設定 TPM2TOOLS_TCTI 環境變數，使 _probe_tpm_fingerprint() 透過 swtpm 取得指紋。
+    回傳 True 表示 swtpm 成功啟動且 TCTI 已設定。
+    """
+    import socket as _sock
+    import shutil
+
+    # 若 swtpm 已在 port 2321 運行（例如已先跑過 01_tpm_full_setup.sh），直接設 TCTI 返回
+    try:
+        _s = _sock.create_connection(("127.0.0.1", 2321), timeout=2)
+        _s.close()
+        tcti = "swtpm:host=127.0.0.1,port=2321"
+        os.environ["TPM2TOOLS_TCTI"] = tcti
+        _append_env_key(sys_root, "TPM2TOOLS_TCTI", tcti, log_fn)
+        log_fn("  OK   swtpm 已在 port 2321 運行（由 01_tpm_full_setup.sh 建立，跳過初始化）")
+        log_fn(f"  OK   TPM2TOOLS_TCTI={tcti}")
+        return True
+    except OSError:
+        pass
+
+    # 安裝 swtpm + swtpm-tools（若未安裝）
+    pkgs_needed: list[str] = []
+    if not shutil.which("swtpm"):
+        pkgs_needed.append("swtpm")
+    if not shutil.which("swtpm_setup"):
+        pkgs_needed.append("swtpm-tools")
+
+    if pkgs_needed:
+        log_fn(f"  INFO  安裝 swtpm 套件：{' '.join(pkgs_needed)}")
+        rc = _run_cmd(["apt-get", "install", "-y"] + pkgs_needed, sys_root)
+        if rc != 0:
+            log_fn("  WARN  swtpm 套件安裝失敗（apt-get 錯誤）")
+            return False
+        log_fn("  OK   swtpm 套件安裝完成")
+    else:
+        log_fn("  OK   swtpm 已安裝")
+
+    # 將內嵌腳本寫入暫存檔並執行
+    script_path = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".sh", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(_SWTPM_SETUP_SCRIPT)
+            script_path = f.name
+
+        os.chmod(script_path, 0o755)
+        log_fn("  INFO  執行 swtpm 持久化初始化（約 10–30 秒）...")
+        rc = _run_cmd(["bash", script_path], sys_root)
+        if rc != 0:
+            log_fn(f"  WARN  swtpm 初始化腳本結束碼 {rc}（可能部分步驟失敗）")
+            return False
+    finally:
+        if script_path and Path(script_path).exists():
+            try:
+                os.unlink(script_path)
+            except OSError:
+                pass
+
+    # 設定 TCTI 環境變數，使後續 tpm2_createek 透過 swtpm 運作
+    tcti = "swtpm:host=127.0.0.1,port=2321"
+    os.environ["TPM2TOOLS_TCTI"] = tcti
+    log_fn(f"  OK   TPM2TOOLS_TCTI={tcti}")
+    # 關鍵：寫入 form-system 後端 .env，使後端啟動時 license 挑戰-回應能連到 swtpm
+    # （否則 tpm2_sign 預設找 /dev/tpmrm0 硬體裝置，在 swtpm VM 上會失敗）
+    _append_env_key(sys_root, "TPM2TOOLS_TCTI", tcti, log_fn)
+    log_fn("  OK   swtpm vTPM 持久化完成（/var/lib/swtpm-hiba/swtpm-state）")
+    log_fn("  INFO  重開機後 swtpm 由 systemd 自動啟動，指紋不變")
+    return True
+
+
+def _append_env_key(sys_root: Path, key: str, value: str, log_fn) -> None:
+    """將 key=value 寫入 system/.env 與 system/backend/.env（若已存在則取代該行）。"""
+    line = f"{key}='{value}'"
+    targets = [sys_root / ".env"]
+    backend_dir = sys_root / "backend"
+    if backend_dir.is_dir():
+        targets.append(backend_dir / ".env")
+    for env_path in targets:
+        try:
+            existing = env_path.read_text(encoding="utf-8") if env_path.exists() else ""
+            kept = [ln for ln in existing.splitlines() if not ln.startswith(f"{key}=")]
+            kept.append(line)
+            env_path.write_text("\n".join(kept) + "\n", encoding="utf-8")
+        except OSError as e:
+            log_fn(f"  WARN  寫入 {key} 至 {env_path.name} 失敗：{e}")
+    log_fn(f"  OK   {key} 已寫入後端 .env")
+
+
 def _venv_bin(sys_root: Path, name: str) -> Path:
     if platform.system() == "Windows":
         return sys_root / ".venv" / "Scripts" / (name + ".exe")
     return sys_root / ".venv" / "bin" / name
+
+
+def _fs_supports_symlinks(d: Path) -> bool:
+    """偵測目錄所在檔案系統是否支援 symlink（VirtualBox 共享資料夾 vboxsf 不支援）。"""
+    if platform.system() == "Windows":
+        return True
+    test_target = d / ".__symlink_probe_target"
+    test_link = d / ".__symlink_probe_link"
+    try:
+        test_target.write_text("x", encoding="utf-8")
+        if test_link.is_symlink() or test_link.exists():
+            test_link.unlink()
+        os.symlink(test_target.name, test_link)
+        return test_link.is_symlink()
+    except (OSError, NotImplementedError):
+        return False
+    finally:
+        for p in (test_link, test_target):
+            try:
+                if p.is_symlink() or p.exists():
+                    p.unlink()
+            except OSError:
+                pass
+
+
+def _create_venv(sys_root: Path, log_fn) -> int:
+    """
+    建立 .venv。在不支援 symlink 的檔案系統（如 VirtualBox 共享資料夾）上，
+    Python venv 預設會嘗試建立 lib64 -> lib symlink 而失敗，故：
+      - 改用 --copies（bin/python 用複製而非 symlink）
+      - 預先建立 lib64 為真實目錄，讓 venv 跳過 symlink 建立
+    """
+    import shutil
+
+    venv_path = sys_root / ".venv"
+    # 手動清空（取代 --clear，因 --clear 會刪掉預建的 lib64）
+    if venv_path.exists():
+        shutil.rmtree(venv_path, ignore_errors=True)
+
+    cmd = [sys.executable, "-m", "venv"]
+    if not _fs_supports_symlinks(sys_root):
+        log_fn("  INFO  偵測到檔案系統不支援 symlink（如 VirtualBox 共享資料夾 /media/sf_*）")
+        log_fn("  INFO  改用 --copies 模式並預建 lib64 目錄以繞過 symlink 限制")
+        try:
+            (venv_path / "lib64").mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            log_fn(f"  WARN  預建 lib64 失敗：{e}")
+        cmd.append("--copies")
+    cmd.append(str(venv_path))
+    return _run_cmd(cmd, sys_root)
+
+
+def _pg_db_exists(name: str) -> bool:
+    """檢查本機 PostgreSQL 是否已有指定 database（以 postgres 帳號查詢）。"""
+    try:
+        out = subprocess.check_output(
+            ["sudo", "-u", "postgres", "psql", "-tAc",
+             f"SELECT 1 FROM pg_database WHERE datname='{name}';"],
+            text=True, stderr=subprocess.DEVNULL, timeout=15,
+        )
+        return out.strip() == "1"
+    except Exception:
+        return False
+
+
+def _print_manual_pg_sql(log_fn, name: str, user: str, pw: str) -> None:
+    log_fn("  INFO  請手動建立 PostgreSQL role 與 database（需 root）：")
+    log_fn(f"    sudo -u postgres psql -c \"CREATE ROLE \\\"{user}\\\" LOGIN PASSWORD '{pw}';\"")
+    log_fn(f"    sudo -u postgres createdb -O {user} {name}")
+
+
+def _provision_postgres_linux(env: dict, log_fn) -> bool:
+    """
+    為本機 PostgreSQL 自動建立 role + database（best-effort，需 root + peer auth）。
+    回傳 True 表示佈建成功或非必要（如 SQLite / 遠端 DB），False 表示需手動處理。
+    """
+    import shutil
+
+    db_url = str(env.get("DATABASE_URL", ""))
+    if "postgresql" not in db_url:
+        log_fn("  INFO  未使用 PostgreSQL（SQLite 模式），略過 DB 佈建")
+        return True
+
+    host = str(env.get("DB_HOST", "localhost")).strip()
+    if host not in ("localhost", "127.0.0.1", "::1", ""):
+        log_fn(f"  INFO  PostgreSQL 主機為 {host}（非本機），略過自動佈建")
+        return True
+
+    name = str(env.get("DB_NAME", "")).strip()
+    user = str(env.get("DB_USERNAME", "")).strip()
+    pw = str(env.get("DB_PASSWORD", ""))
+    if not (name and user):
+        log_fn("  WARN  缺少 DB_NAME / DB_USERNAME，略過 DB 佈建")
+        return True
+
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+
+    # 1. 確認 psql 存在，否則安裝 postgresql（需 root）
+    offline_mode = _read_recipe().get("deploymentMode") == "offline"
+    if not shutil.which("psql"):
+        if not is_root:
+            log_fn("  WARN  未安裝 PostgreSQL 且非 root，無法自動安裝")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        if offline_mode:
+            log_fn("  WARN  離線模式：未安裝 PostgreSQL，請手動安裝後重試")
+            log_fn("  INFO  離線安裝：sudo dpkg -i system/backend/apt-packages/postgresql*.deb")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        log_fn("  INFO  安裝 PostgreSQL（apt-get）...")
+        _run_cmd(["apt-get", "update", "-q"], Path("/tmp"))
+        rc = _run_cmd(["apt-get", "install", "-y", "postgresql"], Path("/tmp"))
+        if rc != 0:
+            log_fn("  WARN  PostgreSQL 安裝失敗")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+        _run_cmd(["service", "postgresql", "start"], Path("/tmp"))
+
+    if not is_root:
+        log_fn("  WARN  非 root，無法以 postgres 帳號建立 role/database")
+        _print_manual_pg_sql(log_fn, name, user, pw)
+        return False
+
+    # 2. 建立 / 更新 role（idempotent）
+    role_sql = (
+        f"DO $$ BEGIN "
+        f"IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{user}') THEN "
+        f"CREATE ROLE \"{user}\" LOGIN PASSWORD '{pw}'; "
+        f"ELSE ALTER ROLE \"{user}\" LOGIN PASSWORD '{pw}'; "
+        f"END IF; END $$;"
+    )
+    rc = _run_cmd(
+        ["sudo", "-u", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-c", role_sql],
+        Path("/tmp"),
+    )
+    if rc != 0:
+        log_fn("  WARN  建立 PostgreSQL role 失敗")
+        _print_manual_pg_sql(log_fn, name, user, pw)
+        return False
+    log_fn(f"  OK  PostgreSQL role '{user}' 就緒")
+
+    # 3. 建立 database（CREATE DATABASE 不可在 transaction 內，故先檢查再建）
+    if not _pg_db_exists(name):
+        rc = _run_cmd(["sudo", "-u", "postgres", "createdb", "-O", user, name], Path("/tmp"))
+        if rc != 0:
+            log_fn("  WARN  建立 PostgreSQL database 失敗")
+            _print_manual_pg_sql(log_fn, name, user, pw)
+            return False
+    log_fn(f"  OK  PostgreSQL database '{name}' 就緒（owner: {user}）")
+    return True
 
 
 def _write_env(sys_root: Path, values: dict) -> None:
@@ -77,7 +696,13 @@ def _write_env(sys_root: Path, values: dict) -> None:
     for k, v in values.items():
         safe = str(v).replace("\\", "\\\\").replace("'", "\\'")
         lines.append(f"{k}='{safe}'")
-    (sys_root / ".env").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    content = "\n".join(lines) + "\n"
+    # 寫到 system/.env（供 docker-compose / 參考）與 system/backend/.env
+    # （後端常從 backend/ 啟動，pydantic 依 cwd 找 .env）。雙寫確保兩種啟動方式皆可讀到。
+    (sys_root / ".env").write_text(content, encoding="utf-8")
+    backend_dir = sys_root / "backend"
+    if backend_dir.is_dir():
+        (backend_dir / ".env").write_text(content, encoding="utf-8")
 
 
 def _run_cmd(cmd: list[str], cwd: Path) -> int:
@@ -116,22 +741,42 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         _write_env(sys_root, env)
         log(f"  OK  {sys_root / '.env'}")
 
+        # Step 0.5: TPM setup (Linux only, best-effort — does not abort on failure)
+        if platform.system() == "Linux":
+            log(f"\n{'='*60}\n  TPM 2.0 機器公鑰設定\n{'='*60}")
+            _setup_tpm_linux(log, sys_root)
+
         # Step 1: Create venv
         step(1, "建立 Python 虛擬環境")
-        rc = _run_cmd(
-            [sys.executable, "-m", "venv", "--clear", str(sys_root / ".venv")],
-            sys_root,
-        )
+        rc = _create_venv(sys_root, log)
         if rc != 0:
-            raise RuntimeError(f"venv 建立失敗 (exit {rc})")
+            raise RuntimeError(
+                f"venv 建立失敗 (exit {rc})。"
+                f"若部署於 VirtualBox 共享資料夾，建議先複製到原生路徑（如 ~/form-system）再安裝。"
+            )
         log("  OK  .venv 建立完成")
 
         # Step 2: pip install
-        step(2, "安裝後端相依套件 (可能需要數分鐘)")
+        recipe = _read_recipe()
+        offline_mode = recipe.get("deploymentMode") == "offline"
+        step(2, "安裝後端相依套件" + (" (離線模式)" if offline_mode else " (可能需要數分鐘)"))
         pip = _venv_bin(sys_root, "pip")
         _run_cmd([str(pip), "install", "-q", "--upgrade", "pip"], sys_root)
         req = sys_root / "backend" / "requirements.txt"
-        rc = _run_cmd([str(pip), "install", "-r", str(req)], sys_root)
+        wheels_dir = sys_root / "backend" / "wheels"
+        if offline_mode and wheels_dir.is_dir():
+            log(f"  INFO  離線模式：使用本地 wheels 目錄 {wheels_dir}")
+            pip_cmd = [str(pip), "install",
+                       "--find-links", str(wheels_dir),
+                       "--no-index",
+                       "-r", str(req)]
+        elif offline_mode:
+            log("  WARN  離線模式但 wheels/ 目錄不存在，回退至聯網安裝")
+            log("  INFO  請先執行 tools/prepare-offline.ps1 預先下載依賴套件")
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        else:
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        rc = _run_cmd(pip_cmd, sys_root)
         if rc != 0:
             raise RuntimeError(f"pip install 失敗 (exit {rc})")
         log("  OK  相依套件安裝完成")
@@ -140,6 +785,12 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         step(3, "資料庫初始化")
         python = _venv_bin(sys_root, "python")
         bd = sys_root / "backend"
+
+        # 3a. PostgreSQL 佈建（本機 PostgreSQL 時自動建立 role + database）
+        if platform.system() == "Linux":
+            if not _provision_postgres_linux(env, log):
+                log("  WARN  PostgreSQL 未自動佈建 — 請依上方指令手動建立後重試")
+
         if (bd / "alembic.ini").exists():
             rc = _run_cmd([str(python), "-m", "alembic", "upgrade", "head"], bd)
         elif (bd / "app" / "core" / "generated_db_bootstrap.py").exists():
@@ -156,7 +807,7 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         log("  安裝完成！")
         log("="*60)
         log(f"\n  系統目錄  : {sys_root}")
-        log(f"  啟動指令  : {python} -m uvicorn app.main:app --host 0.0.0.0 --port 8000")
+        log(f"  啟動指令  : {python} -m uvicorn app.main:app --host 127.0.0.1 --port 8000")
         log(f"  工作目錄  : {bd}")
         with _lock:
             _install_state["success"] = True
@@ -247,15 +898,13 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 sr = _find_sys_root()
                 self._send_json({"found": sr is not None, "path": str(sr) if sr else None})
 
-        elif path == "/api/machine-id":
-            import hashlib as _hl
-            mid_path = Path("/etc/machine-id")
-            if mid_path.exists():
-                raw = mid_path.read_text("utf-8").strip().lower()
-                fp = _hl.sha256(raw.encode()).hexdigest()
-                self._send_json({"found": True, "fingerprint": fp})
-            else:
-                self._send_json({"found": False, "fingerprint": None})
+        elif path == "/api/machine-pubkey":
+            probe = _probe_tpm_signing_pubkey()
+            self._send_json({
+                "found": probe["pubkey_pem"] is not None,
+                "pubkey_pem": probe["pubkey_pem"],
+                "source": probe["source"],
+            })
 
         elif path == "/api/check-license":
             import hashlib as _hl, json as _json
@@ -269,7 +918,23 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 return
             try:
                 lic_data = _json.loads(lic_path.read_text("utf-8"))
-                payload = _json.loads(lic_data["payload"])
+                payload_str = lic_data["payload"]
+                sig_b64 = lic_data["signature"]
+                try:
+                    import base64 as _base64
+                    from cryptography.hazmat.primitives import hashes, serialization
+                    from cryptography.hazmat.primitives.asymmetric import padding as _pad
+                    pub_key = serialization.load_pem_public_key(_PUBLIC_KEY_PEM.encode())
+                    pub_key.verify(
+                        _base64.b64decode(sig_b64),
+                        payload_str.encode("utf-8"),
+                        _pad.PSS(mgf=_pad.MGF1(hashes.SHA256()), salt_length=32),
+                        hashes.SHA256(),
+                    )
+                except Exception:
+                    self._send_json({"valid": False, "reason": "invalid signature"})
+                    return
+                payload = _json.loads(payload_str)
                 # Expiry check
                 expires_at = payload.get("expiresAt", "")
                 if expires_at:
@@ -277,43 +942,53 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                     if datetime.now(timezone.utc) > datetime.fromisoformat(expires_at.replace("Z", "+00:00")):
                         self._send_json({"valid": False, "reason": "expired", "expires_at": expires_at})
                         return
-                # Machine fingerprint check
-                expected_fp = payload.get("machineFingerprint")
-                if expected_fp:
-                    mid_path = Path("/etc/machine-id")
-                    if not mid_path.exists():
-                        self._send_json({"valid": False, "reason": "no_machine_id"})
+                # TPM machine binding via challenge-response
+                expected_pubkey = payload.get("machinePublicKey")
+                machine_bound = bool(expected_pubkey)
+                if expected_pubkey:
+                    import os as _os
+                    nonce = _os.urandom(32)
+                    sig = _wizard_tpm_sign_nonce(nonce)
+                    if sig is None:
+                        self._send_json({"valid": False, "reason": "tpm_unavailable",
+                                         "detail": f"TPM handle {_TPM_SIGNING_HANDLE} not responding"})
                         return
-                    raw = mid_path.read_text("utf-8").strip().lower()
-                    current_fp = _hl.sha256(raw.encode()).hexdigest()
-                    if current_fp != expected_fp:
-                        self._send_json({"valid": False, "reason": "fingerprint_mismatch", "current_fp": current_fp})
+                    try:
+                        from cryptography.hazmat.primitives import hashes, serialization
+                        from cryptography.hazmat.primitives.asymmetric import padding as _pad
+                        pub = serialization.load_pem_public_key(expected_pubkey.encode())
+                        pub.verify(sig, nonce, _pad.PKCS1v15(), hashes.SHA256())
+                    except Exception as _ve:
+                        self._send_json({"valid": False, "reason": "tpm_mismatch",
+                                         "detail": "challenge-response failed — different TPM"})
                         return
                 licensee = payload.get("licensee", {})
+
+                # Compare license machinePublicKey against local TPM signing_public.pem
+                pem_match = None
+                local_pubkey_source = None
+                if expected_pubkey:
+                    def _norm_pem(pem_str):
+                        return "\n".join(
+                            line.strip() for line in pem_str.strip().splitlines() if line.strip()
+                        )
+                    local_probe = _probe_tpm_signing_pubkey()
+                    local_pem = local_probe.get("pubkey_pem") or ""
+                    local_pubkey_source = local_probe.get("source")
+                    if local_pem:
+                        pem_match = _norm_pem(local_pem) == _norm_pem(expected_pubkey)
+                    else:
+                        pem_match = None  # local key not found, cannot compare
+
                 self._send_json({"valid": True, "licensee": licensee, "expires_at": expires_at,
-                                 "machine_bound": bool(expected_fp)})
+                                 "machine_bound": machine_bound,
+                                 "binding_method": "tpm2-challenge-response" if machine_bound else "none",
+                                 "pem_match": pem_match,
+                                 "local_pubkey_source": local_pubkey_source})
             except Exception as exc:
                 self._send_json({"valid": False, "reason": str(exc)})
 
-        elif path == "/api/check-machine-id":
-            import hashlib as _hl
-            mid_file = Path(__file__).parent / "machine-id.txt"
-            if not mid_file.exists():
-                self._send_json({"status": "no_file"})
-                return
-            expected = mid_file.read_text("utf-8").strip().lower()
-            mid_path = Path("/etc/machine-id")
-            if not mid_path.exists():
-                self._send_json({"status": "no_machine_id"})
-                return
-            raw = mid_path.read_text("utf-8").strip().lower()
-            current = _hl.sha256(raw.encode()).hexdigest()
-            if current == expected:
-                self._send_json({"status": "match", "fingerprint": current[:16] + "…"})
-            else:
-                self._send_json({"status": "mismatch",
-                                 "expected": expected[:16] + "…",
-                                 "current": current[:16] + "…"})
+        # /api/check-machine-id removed — replaced by TPM challenge-response in /api/check-license
 
         elif path == "/api/ls":
             from urllib.parse import unquote_plus
@@ -672,12 +1347,13 @@ a { color: var(--primary); }
       <div id="sysroot-status" style="font-size:12px;margin-top:5px;display:none"></div>
     </div>
     <div class="field" style="margin-bottom:20px" id="machine-id-panel" style="display:none">
-      <label>本機機器碼（Fingerprint）</label>
-      <div class="input-btn-row">
-        <input id="machine-id-display" type="text" readonly style="font-family:monospace;font-size:12px;background:#f5f5f5">
-        <button class="btn btn-outline btn-sm" onclick="copyMachineId()">複製</button>
+      <label>本機 TPM 公鑰 <span id="fp-source-badge" class="badge badge-green" style="margin-left:8px;font-size:11px;vertical-align:middle">TPM 硬體綁定</span></label>
+      <textarea id="machine-id-display" readonly rows="5" style="font-family:monospace;font-size:11px;background:#f5f5f5;width:100%;resize:vertical;border:1px solid #e5e7eb;border-radius:6px;padding:8px;box-sizing:border-box"></textarea>
+      <div style="display:flex;gap:8px;margin-top:6px">
+        <button class="btn btn-outline btn-sm" onclick="copyMachinePubkey()">複製公鑰</button>
+        <button class="btn btn-outline btn-sm" onclick="downloadMachinePubkey()">下載 .pem</button>
       </div>
-      <div class="hint">若授權需要機器綁定，請將此值提供給授權方以取得機器綁定授權。</div>
+      <div class="hint">若授權需要機器綁定，請將此 RSA 公鑰提供給授權方（可複製或下載 .pem）。<br>授權方以此公鑰簽發 license.lic，系統啟動時透過 TPM 挑戰-回應驗證綁定。</div>
     </div>
     <div class="nav-row">
       <span></span>
@@ -872,68 +1548,84 @@ const S = {
   pollTimer: null,
 };
 
-// ── Machine-id display & license pre-check ───────────────────────────────────
+// ── TPM 公鑰顯示 ─────────────────────────────────────────────────────────────
 async function loadMachineId() {
   try {
-    const data = await fetch('/api/machine-id').then(r => r.json());
+    const data = await fetch('/api/machine-pubkey').then(r => r.json());
     const panel = document.getElementById('machine-id-panel');
     const disp  = document.getElementById('machine-id-display');
-    if (data.found && data.fingerprint) {
-      disp.value = data.fingerprint;
+    if (data.found && data.pubkey_pem) {
+      disp.value = data.pubkey_pem;
       panel.style.display = 'block';
     }
   } catch (_) {}
 }
 
-function copyMachineId() {
+function copyMachinePubkey() {
   const v = document.getElementById('machine-id-display')?.value;
   if (v) navigator.clipboard?.writeText(v).catch(() => {});
 }
 
+function downloadMachinePubkey() {
+  const v = document.getElementById('machine-id-display')?.value;
+  if (!v) return;
+  const a = document.createElement('a');
+  a.href = 'data:application/x-pem-file;charset=utf-8,' + encodeURIComponent(v);
+  a.download = 'machine-pubkey.pem';
+  a.click();
+}
+
+// ── License 驗證（TPM 挑戰-回應）────────────────────────────────────────────
 async function checkMachineId() {
-  const resultEl = document.getElementById('license-check-result');
+  const resultEl  = document.getElementById('license-check-result');
   const btnInstall = document.getElementById('btn-start-install');
   if (!resultEl) return;
   resultEl.style.display = 'block';
   resultEl.style.color = '';
   resultEl.style.background = '#f0f9ff';
   resultEl.style.border = '1px solid #bae6fd';
-  resultEl.textContent = '機器碼驗證中…';
+  resultEl.textContent = '授權驗證中…';
   try {
-    const data = await fetch('/api/check-machine-id').then(r => r.json());
-    if (data.status === 'match') {
+    const data = await fetch('/api/check-license').then(r => r.json());
+    if (data.valid) {
+      const bound = data.machine_bound
+        ? ' | 機器綁定：TPM 挑戰-回應 通過'
+        : ' | 浮動授權（未綁定機器）';
       resultEl.style.background = '#f0fdf4';
       resultEl.style.border = '1px solid #86efac';
       resultEl.style.color = '#166534';
-      resultEl.textContent = '✓ 機器碼驗證通過，此機器已授權安裝。';
+      resultEl.textContent = '✓ 授權有效' + bound;
       if (btnInstall) btnInstall.disabled = false;
-    } else if (data.status === 'mismatch') {
+    } else if (data.reason === 'no_license_file') {
+      resultEl.style.background = '#fffbeb';
+      resultEl.style.border = '1px solid #fcd34d';
+      resultEl.style.color = '#92400e';
+      resultEl.textContent = '⚠ 未找到 license.lic，可繼續安裝（無授權限制）。';
+      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'tpm_mismatch') {
       resultEl.style.background = '#fef2f2';
       resultEl.style.border = '1px solid #fca5a5';
       resultEl.style.color = '#991b1b';
-      resultEl.innerHTML =
-        '<strong>❌ 機器碼不符</strong><br>' +
-        '授權機器：<code>' + data.expected + '</code>&nbsp;&nbsp;本機：<code>' + data.current + '</code><br>' +
-        '此套件只能在授權機器上安裝。';
+      resultEl.innerHTML = '<strong>TPM 機器綁定驗證失敗</strong><br>此授權僅限授權機器使用（TPM 挑戰-回應不符）。';
       if (btnInstall) btnInstall.disabled = true;
-    } else if (data.status === 'no_file') {
-      resultEl.style.background = '#fffbeb';
-      resultEl.style.border = '1px solid #fcd34d';
-      resultEl.style.color = '#92400e';
-      resultEl.textContent = '⚠ 此套件未綁定機器，可繼續安裝。';
-      if (btnInstall) btnInstall.disabled = false;
+    } else if (data.reason === 'tpm_unavailable') {
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.innerHTML = '<strong>TPM 無法使用</strong><br>授權需要 TPM，但 handle 0x81000001 無回應。請先執行 01_tpm_full_setup.sh。';
+      if (btnInstall) btnInstall.disabled = true;
     } else {
-      resultEl.style.background = '#fffbeb';
-      resultEl.style.border = '1px solid #fcd34d';
-      resultEl.style.color = '#92400e';
-      resultEl.textContent = '⚠ 無法取得本機機器碼（非 Linux 環境），可繼續安裝。';
-      if (btnInstall) btnInstall.disabled = false;
+      resultEl.style.background = '#fef2f2';
+      resultEl.style.border = '1px solid #fca5a5';
+      resultEl.style.color = '#991b1b';
+      resultEl.textContent = '授權驗證失敗：' + (data.reason || '未知錯誤');
+      if (btnInstall) btnInstall.disabled = true;
     }
   } catch (_) {
     resultEl.style.background = '#fffbeb';
     resultEl.style.border = '1px solid #fcd34d';
     resultEl.style.color = '#92400e';
-    resultEl.textContent = '⚠ 機器碼驗證失敗，可繼續安裝。';
+    resultEl.textContent = '⚠ 無法連線至本地授權服務，可繼續安裝。';
     if (btnInstall) btnInstall.disabled = false;
   }
 }
@@ -1291,9 +1983,11 @@ function showDone(success) {
   document.getElementById('done-error').style.display   = success ? 'none'  : 'block';
   if (success && S.sysRoot) {
     const py = S.sysRoot + (navigator.platform.toLowerCase().includes('win') ? '\\.venv\\Scripts\\python.exe' : '/.venv/bin/python');
-    document.getElementById('start-cmd').textContent =
-      'cd ' + S.sysRoot + '/backend\n' +
-      py + ' -m uvicorn app.main:app --host 0.0.0.0 --port 8000';
+    const frontendCmd = '# 首次需建置前端（一次性）\n' +
+      'cd ' + S.sysRoot + '/frontend && npm install && npm run build\n\n' +
+      '# 啟動後端（前端建置完成後即可看到登入頁面）\n' +
+      'cd ' + S.sysRoot + '/backend && ' + py + ' -m uvicorn app.main:app --host 127.0.0.1 --port 8000';
+    document.getElementById('start-cmd').textContent = frontendCmd;
   }
 }
 

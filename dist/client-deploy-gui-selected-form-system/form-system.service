@@ -1,0 +1,17 @@
+[Unit]
+Description=Form System Backend
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+User=form-system
+WorkingDirectory=__SYS_ROOT__/backend
+ExecStart=__SYS_ROOT__/.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+EnvironmentFile=__SYS_ROOT__/.env
+StandardOutput=append:__SYS_ROOT__/logs/backend.log
+StandardError=append:__SYS_ROOT__/logs/backend.log
+
+[Install]
+WantedBy=multi-user.target

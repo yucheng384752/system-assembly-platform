@@ -306,9 +306,7 @@ export function UploadPage() {
           f.file.lastModified === file.lastModified
       );
       if (isLikelyDuplicate) {
-        const proceed = window.confirm(
-          `偵測到疑似重複檔案：${file.name}\n是否仍要加入上傳清單？`
-        );
+        const proceed = window.confirm(t('upload.confirm.likelyDuplicate').replace('{{fileName}}', file.name));
         if (!proceed) {
           showToast('info', `已略過疑似重複檔案：${file.name}`);
           return;

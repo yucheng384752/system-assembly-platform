@@ -1,0 +1,13 @@
+{
+  "kit": "query-traceability-kit",
+  "provides": {
+    "api": [
+      { "capability": "query.records.search", "method": "GET", "path": "/api/v2/query/records" }
+    ],
+    "db": []
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.records.search", "db.forms.list"]
+  }
+}

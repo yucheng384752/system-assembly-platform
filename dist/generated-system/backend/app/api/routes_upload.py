@@ -7,7 +7,7 @@
 import hashlib
 import time
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import (
@@ -53,6 +53,7 @@ from app.schemas.upload import (
     UpdateUploadContentRequest,
     UploadErrorResponse,
 )
+from app.core.monitoring import report_user_action
 from app.services.audit_events import write_audit_event_best_effort
 from app.services.pdf_conversion import (
     process_pdf_conversion_job_background,
@@ -123,7 +124,7 @@ async def _create_upload_job_from_csv_bytes(
         tenant_id=tenant_id,
         actor_api_key_id=actor_api_key_id,
         actor_label_snapshot=actor_api_key_label,
-        last_status_changed_at=datetime.now(UTC),
+        last_status_changed_at=datetime.now(timezone.utc),
         last_status_actor_kind="user",
         last_status_actor_api_key_id=actor_api_key_id,
         last_status_actor_label_snapshot=actor_api_key_label,
@@ -149,7 +150,7 @@ async def _create_upload_job_from_csv_bytes(
     validation_result = file_validation_service.validate_file(file_content, filename)
 
     upload_job.status = JobStatus.VALIDATED
-    upload_job.last_status_changed_at = datetime.now(UTC)
+    upload_job.last_status_changed_at = datetime.now(timezone.utc)
     upload_job.last_status_actor_kind = "user"
     upload_job.last_status_actor_api_key_id = actor_api_key_id
     upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -259,7 +260,7 @@ async def _create_v2_import_job_from_upload_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -384,7 +385,7 @@ async def validate_upload_job(
     )
 
     upload_job.status = JobStatus.VALIDATED
-    upload_job.last_status_changed_at = datetime.now(UTC)
+    upload_job.last_status_changed_at = datetime.now(timezone.utc)
     upload_job.last_status_actor_kind = "user"
     upload_job.last_status_actor_api_key_id = actor_api_key_id
     upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -522,7 +523,7 @@ async def update_upload_content(
         )
 
         upload_job.status = JobStatus.VALIDATED
-        upload_job.last_status_changed_at = datetime.now(UTC)
+        upload_job.last_status_changed_at = datetime.now(timezone.utc)
         upload_job.last_status_actor_kind = "user"
         upload_job.last_status_actor_api_key_id = actor_api_key_id
         upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -579,6 +580,13 @@ async def update_upload_content(
         await db.commit()
         await db.refresh(upload_job)
 
+        _ip = http_request.client.host if http_request.client else "unknown"
+        report_user_action(
+            action="update_upload_content",
+            state="success",
+            describe=f"process_id={process_id} rows={upload_job.total_rows} invalid={upload_job.invalid_rows} ip={_ip}",
+        )
+
         sample_errors = [
             UploadErrorResponse(
                 row_index=error["row_index"],
@@ -624,7 +632,7 @@ async def update_upload_content(
                 getattr(http_request, "state", None), "auth_api_key_label", None
             )
             upload_job.status = JobStatus.PENDING
-            upload_job.last_status_changed_at = datetime.now(UTC)
+            upload_job.last_status_changed_at = datetime.now(timezone.utc)
             upload_job.last_status_actor_kind = "user"
             upload_job.last_status_actor_api_key_id = actor_api_key_id
             upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -867,7 +875,7 @@ async def upload_file(
             tenant_id=tenant_id,
             actor_api_key_id=actor_api_key_id,
             actor_label_snapshot=actor_api_key_label,
-            last_status_changed_at=datetime.now(UTC),
+            last_status_changed_at=datetime.now(timezone.utc),
             last_status_actor_kind="user",
             last_status_actor_api_key_id=actor_api_key_id,
             last_status_actor_label_snapshot=actor_api_key_label,
@@ -893,7 +901,7 @@ async def upload_file(
 
             # 5. 更新上傳工作統計資訊
             upload_job.status = JobStatus.VALIDATED
-            upload_job.last_status_changed_at = datetime.now(UTC)
+            upload_job.last_status_changed_at = datetime.now(timezone.utc)
             upload_job.last_status_actor_kind = "user"
             upload_job.last_status_actor_api_key_id = actor_api_key_id
             upload_job.last_status_actor_label_snapshot = actor_api_key_label
@@ -917,6 +925,13 @@ async def upload_file(
                 db.add_all(upload_errors)
 
             await db.commit()
+
+            _ip = http_request.client.host if http_request.client else "unknown"
+            report_user_action(
+                action="upload_file",
+                state="success",
+                describe=f"file={file.filename} rows={validation_result['total_rows']} invalid={validation_result['invalid_rows']} ip={_ip}",
+            )
 
             # 7. 準備回應資料
             sample_errors = [
@@ -1127,6 +1142,13 @@ async def upload_pdf(
         processing_time=time.time() - start_time,
     )
 
+    _ip = http_request.client.host if http_request and http_request.client else "unknown"
+    report_user_action(
+        action="upload_pdf",
+        state="success",
+        describe=f"file={file.filename} size={file_size} process_id={process_id} ip={_ip}",
+    )
+
     return FileUploadResponse(
         process_id=process_id,
         total_rows=0,
@@ -1227,6 +1249,13 @@ async def trigger_pdf_convert(
     db.add(job)
     await db.commit()
     await db.refresh(job)
+
+    _ip = http_request.client.host if http_request.client else "unknown"
+    report_user_action(
+        action="trigger_pdf_convert",
+        state="queued",
+        describe=f"process_id={process_id} job={job.id} ip={_ip}",
+    )
 
     # Background processing only when global session factory is available.
     if database.async_session_factory:
@@ -1506,6 +1535,13 @@ async def ingest_pdf_converted_csvs(
 
     latest_job.ingested_upload_jobs = created
     await db.commit()
+
+    _ip = http_request.client.host if http_request.client else "unknown"
+    report_user_action(
+        action="ingest_pdf_csvs",
+        state="success",
+        describe=f"process_id={process_id} files={len(uploads)} ip={_ip}",
+    )
 
     return PdfConvertIngestResponse(uploads=uploads)
 

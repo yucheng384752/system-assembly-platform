@@ -183,7 +183,7 @@ export async function commitCsvValidationResult({
 
 interface ValidateWorkflowOptions {
   fileId: string;
-  filesRef: { current: UploadedFile[] | null };
+  filesRef: { current: UploadedFile[] };
   silentToast?: boolean;
   editEnabled: boolean;
   uploadPdf: (file: File, filename: string) => Promise<{ process_id?: string }>;
@@ -210,65 +210,91 @@ interface ValidateWorkflowOptions {
   t: any;
 }
 
-export async function runValidateWorkflow(opts: ValidateWorkflowOptions): Promise<ValidateOutcome> {
-  const { fileId, filesRef, silentToast, editEnabled } = opts;
+export async function runValidateWorkflow({
+  fileId,
+  filesRef,
+  silentToast,
+  editEnabled,
+  uploadPdf,
+  createImportJob,
+  fetchImportJob,
+  fetchImportErrors,
+  parseCsv,
+  toValidateProgress,
+  sleep,
+  confirmDuplicate,
+  beginPdfValidation,
+  completePdfUpload,
+  failPdfValidation,
+  beginCsvValidation,
+  setValidationUploadSource,
+  setValidationProgress,
+  prepareCsvValidationJob,
+  updateValidationPoll,
+  completeValidationFailure,
+  completeValidationWithErrors,
+  completeValidationPassed,
+  failCsvValidation,
+  showToast,
+  t,
+}: ValidateWorkflowOptions): Promise<ValidateOutcome> {
+  const target = filesRef.current.find((f) => f.id === fileId);
+  if (!target) return { outcome: 'failed', message: t('upload.errors.fileNotFound') };
 
-  const target = filesRef.current?.find((f) => f.id === fileId);
-  if (!target) return { outcome: "failed", message: opts.t("upload.errors.fileNotFound") };
-
-  if (target.type === "PDF") {
+  if (target.type === 'PDF') {
     const result = await runPdfValidation({
       file: target,
-      uploadPdf: opts.uploadPdf,
-      beginPdfValidation: opts.beginPdfValidation,
-      completePdfUpload: opts.completePdfUpload,
-      failPdfValidation: opts.failPdfValidation,
-      fallbackErrorText: opts.t("upload.errors.pdfUploadFailed"),
+      uploadPdf,
+      beginPdfValidation,
+      completePdfUpload,
+      failPdfValidation,
+      fallbackErrorText: t('upload.errors.pdfUploadFailed'),
     });
-    showValidationResultToast({ kind: "pdf", silent: silentToast, result, showToast: opts.showToast, t: opts.t });
+    showValidationResultToast({ kind: "pdf", silent: silentToast, result, showToast, t });
     return result;
   }
 
   if (!editEnabled && target.hasUnsavedChanges) {
-    showValidationResultToast({ kind: "edit-disabled", silent: silentToast, showToast: opts.showToast, t: opts.t });
-    return { outcome: "failed", message: opts.t("upload.editDisabledNotice") };
+    showValidationResultToast({ kind: "edit-disabled", silent: silentToast, showToast, t });
+    return { outcome: 'failed', message: t('upload.editDisabledNotice') };
   }
 
   try {
-    const { lastJob } = await runCsvValidationJob({
+    const { jobId, lastJob } = await runCsvValidationJob({
       file: target,
-      createImportJob: opts.createImportJob,
-      parseCsv: opts.parseCsv,
-      confirmDuplicate: (duplicateOf) => opts.confirmDuplicate(target.name, duplicateOf),
-      sleep: opts.sleep,
-      beginCsvValidation: opts.beginCsvValidation,
-      setValidationUploadSource: opts.setValidationUploadSource,
-      setValidationProgress: opts.setValidationProgress,
-      prepareCsvValidationJob: opts.prepareCsvValidationJob,
-      updateValidationPoll: opts.updateValidationPoll,
-      fetchImportJob: opts.fetchImportJob,
-      toValidateProgress: opts.toValidateProgress,
-      validationTimeoutText: opts.t("upload.errors.validationTimeout"),
+      createImportJob,
+      parseCsv,
+      confirmDuplicate: (duplicateOf) => confirmDuplicate(target.name, duplicateOf),
+      sleep,
+      beginCsvValidation,
+      setValidationUploadSource,
+      setValidationProgress,
+      prepareCsvValidationJob,
+      updateValidationPoll,
+      fetchImportJob,
+      toValidateProgress,
+      validationTimeoutText: t('upload.errors.validationTimeout'),
     });
 
     return await commitCsvValidationResult({
       fileId,
       target,
       lastJob,
-      fetchImportErrors: opts.fetchImportErrors,
-      completeValidationFailure: opts.completeValidationFailure,
-      completeValidationWithErrors: opts.completeValidationWithErrors,
-      completeValidationPassed: opts.completeValidationPassed,
+      fetchImportErrors,
+      completeValidationFailure,
+      completeValidationWithErrors,
+      completeValidationPassed,
       showValidationResultToast,
-      showToast: opts.showToast,
-      t: opts.t,
+      showToast,
+      t,
       silent: silentToast,
     });
+
   } catch (err) {
-    console.error("Validation error:", err);
-    const errorMessage = err instanceof Error ? err.message : opts.t("upload.errors.validationProcessError");
-    showValidationResultToast({ kind: "csv-exception", silent: silentToast, message: errorMessage, showToast: opts.showToast, t: opts.t });
-    opts.failCsvValidation(fileId);
-    return { outcome: "failed", message: errorMessage };
+    console.error('Validation error:', err);
+    const errorMessage = err instanceof Error ? err.message : t('upload.errors.validationProcessError');
+    showValidationResultToast({ kind: "csv-exception", silent: silentToast, message: errorMessage, showToast, t });
+    failCsvValidation(fileId);
+    return { outcome: 'failed', message: errorMessage };
   }
 }

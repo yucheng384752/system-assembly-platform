@@ -1,4 +1,4 @@
-// src/App.tsx
+﻿// src/App.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UploadPage } from "./pages/UploadPage";
@@ -7,8 +7,8 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { DeveloperLogsPage } from "./pages/DeveloperLogsPage";
 import { ToastContainer } from "./components/common/ToastContainer";
-import LogViewer from "./components/SimpleLogViewer";
 import "./styles/app.css";
 
 import { getAdminApiKeyValue, isAdminUnlockedInSession } from "./services/adminAuth";
@@ -37,6 +37,7 @@ function App() {
     const r = String(actorRole || '').trim();
     return r === 'manager';
   }, [actorRole]);
+  const canShowDeveloperLogs = useMemo(() => canShowAdmin || canShowManager, [canShowAdmin, canShowManager]);
 
   useEffect(() => {
     // If admin key is cleared, force-exit admin tab.
@@ -51,6 +52,12 @@ function App() {
       setTab("register");
     }
   }, [canShowManager, tab]);
+
+  useEffect(() => {
+    if (!canShowDeveloperLogs && tab === "logs") {
+      setTab("register");
+    }
+  }, [canShowDeveloperLogs, tab]);
 
   return (
     <div className="app-root">
@@ -144,18 +151,14 @@ function App() {
               {t('tabs.admin')}
             </button>
           ) : null}
-          {/* <button
-            className={`app-main-tab ${tab === "logs" ? "is-active" : ""}`}
-            onClick={() => setTab("logs")}
-          >
-            系統日誌
-          </button> */}
-          {/* <button
-            className={`app-main-tab ${tab === "analysis" ? "is-active" : ""}`}
-            onClick={() => setTab("analysis")}
-          >
-            系統日誌
-          </button> */}
+          {canShowDeveloperLogs ? (
+            <button
+              className={`app-main-tab ${tab === "logs" ? "is-active" : ""}`}
+              onClick={() => setTab("logs")}
+            >
+              Developer Logs
+            </button>
+          ) : null}
         </div>
       </header>
 
@@ -176,7 +179,7 @@ function App() {
         ) : tab === "admin" ? (
           <AdminPage onAdminLocked={() => setAdminUnlocked(false)} onAdminUnlocked={() => setAdminUnlocked(true)} />
         ) : (
-          <LogViewer />
+          <DeveloperLogsPage />
         )}
       </main>
 

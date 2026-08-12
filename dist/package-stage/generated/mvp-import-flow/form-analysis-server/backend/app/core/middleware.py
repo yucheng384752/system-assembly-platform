@@ -15,6 +15,23 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+_SENSITIVE_QUERY_KEYS = frozenset({
+    "token", "access_token", "id_token", "refresh_token",
+    "key", "api_key", "apikey",
+    "password", "passwd", "pwd",
+    "secret",
+    "signature", "sig",
+    "auth", "authorization",
+})
+
+
+def _redact_query_params(params) -> str:
+    parts = [
+        f"{k}=***" if k.lower() in _SENSITIVE_QUERY_KEYS else f"{k}={v}"
+        for k, v in params.multi_items()
+    ]
+    return "&".join(parts)
+
 
 class RequestLoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -62,7 +79,7 @@ class RequestLoggingMiddleware(BaseHTTPMiddleware):
             request_id=request_id,
             method=request.method,
             path=request.url.path,
-            query_params=str(request.query_params),
+            query_params=_redact_query_params(request.query_params),
             client_host=request.client.host if request.client else None,
             user_agent=request.headers.get("user-agent"),
             tenant_id=str(tenant_id) if tenant_id else None,

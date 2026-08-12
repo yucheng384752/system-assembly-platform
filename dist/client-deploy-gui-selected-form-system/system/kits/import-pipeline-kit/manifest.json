@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "import-pipeline-kit",
+    "displayName":  "資料匯入流程",
+    "installOrder":  50,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

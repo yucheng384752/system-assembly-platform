@@ -1,7 +1,8 @@
-from fastapi import Depends, Header, Request
+from fastapi import Depends, Header, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
+from app.core.config import get_settings
 from app.core.tenant_resolver import resolve_tenant_or_raise
 from app.models.core.tenant import Tenant
 
@@ -22,6 +23,7 @@ async def get_current_tenant(
        - If exactly one default tenant exists, use it.
          - Otherwise, raise 400 error requiring explicit tenant ID.
     """
+    settings = get_settings()
     if request is not None:
         state = getattr(request, "state", None)
         auth_tenant_id = getattr(state, "auth_tenant_id", None)
@@ -45,6 +47,13 @@ async def get_current_tenant(
             request.state.tenant_id = tenant.id
             request.state.tenant_code = tenant.code
             return tenant
+
+        auth_mode = (getattr(settings, "auth_mode", "api_key") or "api_key").lower()
+        if auth_mode == "api_key":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Unauthorized",
+            )
 
     tenant = await resolve_tenant_or_raise(db=db, x_tenant_id=x_tenant_id)
     if request is not None:

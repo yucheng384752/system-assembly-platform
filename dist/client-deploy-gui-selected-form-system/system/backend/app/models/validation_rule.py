@@ -4,11 +4,10 @@ import uuid
 from typing import Any
 
 from sqlalchemy import Boolean, ForeignKey, String, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
-from app.core.db_types import JsonBColumn
 
 
 class ValidationRule(Base):
@@ -41,5 +40,5 @@ class ValidationRule(Base):
     )
     field_name: Mapped[str] = mapped_column(String(100), nullable=False)
     rule_type: Mapped[str] = mapped_column(String(30), nullable=False)
-    rule_config: Mapped[dict[str, Any]] = mapped_column(JsonBColumn(), nullable=False)
+    rule_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)

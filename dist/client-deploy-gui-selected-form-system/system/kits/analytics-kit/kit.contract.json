@@ -1,0 +1,13 @@
+{
+  "kit": "analytics-kit",
+  "provides": {
+    "api": [
+      { "capability": "analytics.summary", "method": "GET", "path": "/api/analytics/summary" }
+    ],
+    "db": []
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.records.search", "db.forms.list"]
+  }
+}

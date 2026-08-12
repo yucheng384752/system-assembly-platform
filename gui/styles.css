@@ -206,6 +206,58 @@ button {
   gap: 18px;
 }
 
+.flow-layout {
+  grid-template-columns: 1fr;
+}
+
+.database-layout {
+  align-items: start;
+  grid-template-columns: 1fr;
+}
+
+.database-card-stage {
+  display: grid;
+}
+
+.upload-source-card,
+.form-schema-card {
+  grid-area: 1 / 1;
+  opacity: 0;
+  transform: translateX(18px);
+  pointer-events: none;
+  transition: transform 280ms ease, opacity 220ms ease;
+}
+
+.upload-source-card.is-active,
+.form-schema-card.is-active {
+  opacity: 1;
+  transform: translateX(0);
+  pointer-events: auto;
+}
+
+.card-indicators {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.card-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: var(--line-2);
+  cursor: pointer;
+  transition: background 280ms ease, transform 280ms ease;
+}
+
+.card-dot.is-active {
+  background: var(--teal);
+  transform: scale(1.25);
+}
+
 .panel {
   padding: 18px;
   border: 1px solid var(--line);
@@ -270,6 +322,8 @@ button {
 }
 
 input[type="search"],
+input[type="text"],
+input[type="number"],
 select {
   width: 100%;
   min-height: 40px;
@@ -281,6 +335,8 @@ select {
 }
 
 input[type="search"]:focus,
+input[type="text"]:focus,
+input[type="number"]:focus,
 select:focus {
   outline: 3px solid rgba(20, 184, 166, 0.18);
   border-color: var(--teal);
@@ -1523,6 +1579,57 @@ select:focus {
 
 .generate-info-panel h3 { margin-bottom: 12px; color: var(--ink-2); font-size: 14px; }
 
+.deploy-mode-card {
+  padding: 20px 24px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background: white;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deploy-mode-card h3 {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+  margin: 0 0 4px;
+}
+
+.deploy-mode-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--r-md);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.deploy-mode-option:has(input:checked) {
+  border-color: var(--accent);
+  background: hsl(220 90% 97%);
+}
+
+.deploy-mode-option input[type="radio"] {
+  margin-top: 3px;
+  accent-color: var(--accent);
+  flex-shrink: 0;
+}
+
+.deploy-mode-option div strong {
+  font-size: 13px;
+  color: var(--ink-1);
+}
+
+.deploy-mode-option div p {
+  font-size: 11px;
+  color: var(--ink-3);
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
 .deploy-cta-card {
   padding: 28px 24px;
   border: 1px solid var(--line);
@@ -1574,6 +1681,23 @@ select:focus {
   color: var(--ink-4, var(--ink-3));
   font-size: 11px;
   margin: 0;
+}
+
+.pem-verify-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  min-height: 34px;
+  color: var(--ink-3);
+  font-size: 13px;
+}
+
+.pem-verify-row .ghost-action {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
 }
 
 .deploy-btn {
@@ -2148,6 +2272,142 @@ select:focus {
   max-width: 160px;
 }
 
+/* ═══════════════════════════════════════════════════════════════════════════
+   FORM DEFINITION LIST & FIELD EDITOR（表單 Schema 設定）
+   ═══════════════════════════════════════════════════════════════════════════ */
+.form-defs-list {
+  display: grid;
+  gap: 8px;
+}
+
+.form-def-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--surface-2);
+  transition: border-color 0.12s;
+}
+
+.form-def-row:hover {
+  border-color: var(--line-2);
+}
+
+.form-def-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.form-def-info strong {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-1);
+}
+
+.form-def-info code {
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 11px;
+  color: var(--ink-4);
+}
+
+.form-def-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.ghost-action.danger-action {
+  border-color: var(--line-2);
+  color: var(--red);
+}
+
+.ghost-action.danger-action:hover {
+  border-color: var(--red);
+  background: #fef2f2;
+  color: var(--red);
+}
+
+.form-field-editor-wrap {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 16px;
+  padding: 20px 28px;
+  overflow-y: auto;
+}
+
+.form-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.form-meta-label {
+  display: grid;
+  gap: 6px;
+}
+
+.field-def-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.field-def-table th {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--line);
+  background: var(--surface-3);
+  color: var(--ink-3);
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+}
+
+.field-def-table td {
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--line);
+  vertical-align: middle;
+}
+
+.field-def-table tr:last-child td {
+  border-bottom: none;
+}
+
+.field-def-table tr:hover td {
+  background: var(--surface-2);
+}
+
+.field-cell-check {
+  text-align: center;
+}
+
+.field-def-table input[type="text"],
+.field-def-table select {
+  width: 100%;
+  min-height: auto;
+  padding: 4px 6px;
+  border: 1px solid var(--line-2);
+  border-radius: 4px;
+  background: var(--surface);
+  color: var(--ink-1);
+  font-size: 12px;
+}
+
+.field-def-table input[type="text"]:focus,
+.field-def-table select:focus {
+  outline: none;
+  border-color: var(--teal);
+}
+
+.field-def-table select {
+  max-width: 110px;
+}
+
 /* hint-text */
 .hint-text {
   font-size: 12px;
@@ -2500,6 +2760,23 @@ select:focus {
   box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28);
 }
 
+.node-flow-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 28px;
+  border-bottom: 1px solid var(--line);
+  background: white;
+}
+
+.node-flow-toolbar select {
+  min-width: 180px;
+  padding: 7px 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: white;
+}
+
 .node-canvas-wrap {
   flex: 1;
   overflow-x: auto;
@@ -2584,6 +2861,23 @@ select:focus {
   flex-shrink: 0;
 }
 
+.node-standalone-btn {
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border: 1px dashed var(--line-2);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--ink-4);
+  font-size: 11px;
+  white-space: nowrap;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.node-standalone-btn:hover {
+  border-color: var(--teal);
+  color: var(--teal);
+}
+
 .node-card-body {
   padding: 10px 12px;
 }
@@ -2600,6 +2894,31 @@ select:focus {
   gap: 5px;
   font-size: 12px;
   color: var(--ink-3);
+}
+
+.node-col-item.is-fk {
+  color: #0f766e;
+  background: #ccfbf1;
+  border: 1px solid #5eead4;
+  border-radius: 6px;
+  padding: 3px 5px;
+  font-weight: 700;
+}
+
+.node-col-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.fk-badge {
+  margin-left: auto;
+  padding: 1px 5px;
+  border-radius: 999px;
+  background: #0f766e;
+  color: white;
+  font-size: 10px;
+  font-weight: 800;
 }
 
 .node-col-item .col-type {
@@ -3310,3 +3629,4 @@ select:focus {
 .log-table tr:last-child td {
   border-bottom: none;
 }
+

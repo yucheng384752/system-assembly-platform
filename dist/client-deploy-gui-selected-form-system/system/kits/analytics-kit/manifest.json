@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "analytics-kit",
+    "displayName":  "分析與報表",
+    "installOrder":  70,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

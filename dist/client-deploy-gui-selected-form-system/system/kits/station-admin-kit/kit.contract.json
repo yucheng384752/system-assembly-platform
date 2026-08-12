@@ -1,0 +1,13 @@
+{
+  "kit": "station-admin-kit",
+  "provides": {
+    "api": [
+      { "capability": "stations.manage", "method": "GET", "path": "/api/stations" }
+    ],
+    "db": []
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.forms.list", "db.records.search"]
+  }
+}

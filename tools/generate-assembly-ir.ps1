@@ -227,6 +227,7 @@ $ir = [ordered]@{
             strategy = "hybrid-physical-first"
             decisions = $storageDecisions.ToArray()
         }
+        dataFlowDefinition = if ($daihuiSchemaBaseline) { (Get-ObjectPropertyValue $daihuiSchemaBaseline "dataFlowDefinition") } else { $null }
         baselines = [ordered]@{
             defaultDbSchema = $dbSchemaBaseline
             daihuiFormSchema = $daihuiSchemaBaseline

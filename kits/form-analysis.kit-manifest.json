@@ -31,7 +31,8 @@
                                                      ],
                                       "services":  [
                                                        "frontend/src/services/fetchWrapper.ts",
-                                                       "frontend/src/services/a11y.ts"
+                                                       "frontend/src/services/a11y.ts",
+                                                       "frontend/src/services/kitClient.ts"
                                                    ],
                                       "shellFiles":  [
                                                          "frontend/src/App.tsx",
@@ -42,7 +43,8 @@
                                   },
                      "backend":  {
                                      "routers":  [
-                                                     "backend/app/api/routes_health.py"
+                                                     "backend/app/api/routes_health.py",
+                                                     "backend/app/api/routes_kit_broker.py"
                                                  ],
                                      "core":  [
                                                   "backend/app/main.py",
@@ -50,6 +52,9 @@
                                                   "backend/app/core/database.py",
                                                   "backend/app/core/logging.py",
                                                   "backend/app/core/middleware.py",
+                                                  "backend/app/core/kit_contracts.py",
+                                                  "backend/app/core/kit_broker.py",
+                                                  "backend/app/core/db_capabilities.py",
                                                   "backend/app/api/deps.py"
                                               ],
                                      "services":  [
@@ -59,16 +64,25 @@
 
                                                 ],
                                      "routerRegistrations":  [
-                                                                 {
-                                                                     "module":  "app.api.routes_health",
-                                                                     "symbol":  "router",
-                                                                     "prefix":  "/healthz",
-                                                                     "tags":  [
-                                                                                  "Health Check"
-                                                                              ],
-                                                                     "tenantScoped":  false
-                                                                 }
-                                                             ]
+                                                                {
+                                                                    "module":  "app.api.routes_health",
+                                                                    "symbol":  "router",
+                                                                    "prefix":  "/healthz",
+                                                                    "tags":  [
+                                                                                 "Health Check"
+                                                                             ],
+                                                                    "tenantScoped":  false
+                                                                },
+                                                                {
+                                                                    "module":  "app.api.routes_kit_broker",
+                                                                    "symbol":  "router",
+                                                                    "prefix":  "/api/kit",
+                                                                    "tags":  [
+                                                                                 "Kit Broker"
+                                                                             ],
+                                                                    "tenantScoped":  false
+                                                                }
+                                                            ]
                                  },
                      "database":  {
                                       "models":  [

@@ -3,9 +3,9 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-06-08 15:12 |
+| Built   | 2026-07-01 18:11 |
 | DB      | postgresql |
-| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, mod-subscription-kit |
+| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit |
 
 ## Package contents
 
@@ -107,7 +107,7 @@ The script automatically:
 
 ```bash
 cd system/backend
-../.venv/bin/python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+../.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 ```
 
 **Option B - background (recommended for servers):**

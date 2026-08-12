@@ -7,8 +7,16 @@ export function getAdminApiKeyHeaderName(): string {
 
 export function getAdminApiKeyValue(): string {
   try {
+    const sessionValue = window.sessionStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) || ''
+    if (sessionValue.trim()) return sessionValue.trim()
+
     const stored = window.localStorage.getItem(ADMIN_API_KEY_STORAGE_KEY) || ''
-    return stored.trim()
+    if (!stored.trim()) return ''
+
+    const migrated = stored.trim()
+    window.sessionStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, migrated)
+    window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
+    return migrated
   } catch {
     return ''
   }
@@ -18,10 +26,12 @@ export function setAdminApiKeyValue(rawKey: string): void {
   const value = String(rawKey || '').trim()
   try {
     if (!value) {
+      window.sessionStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
       window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
       return
     }
-    window.localStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, value)
+    window.sessionStorage.setItem(ADMIN_API_KEY_STORAGE_KEY, value)
+    window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
   } catch {
     // ignore
   }
@@ -29,6 +39,7 @@ export function setAdminApiKeyValue(rawKey: string): void {
 
 export function clearAdminApiKeyValue(): void {
   try {
+    window.sessionStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
     window.localStorage.removeItem(ADMIN_API_KEY_STORAGE_KEY)
   } catch {
     // ignore

@@ -12,7 +12,11 @@ import structlog
 from structlog.typing import FilteringBoundLogger
 
 
-def setup_logging(level: str = "INFO", format_type: str = "json") -> None:
+def setup_logging(
+    level: str = "INFO",
+    format_type: str = "json",
+    monitor_min_level: str = "WARNING",
+) -> None:
     """
     Configure structured logging for the application.
 
@@ -95,6 +99,12 @@ def setup_logging(level: str = "INFO", format_type: str = "json") -> None:
     # Add request ID processor if enabled
     if os.getenv("ENABLE_REQUEST_ID", "true").lower() == "true":
         processors.append(structlog.contextvars.merge_contextvars)
+
+    # Remote monitor forwarding: always attach the processor; it self-gates
+    # on whether the monitoring client has been initialised (done later in lifespan).
+    from app.core.monitoring import make_structlog_processor
+
+    processors.append(make_structlog_processor(monitor_min_level))
 
     if log_format == "json":
         # Production: JSON formatting

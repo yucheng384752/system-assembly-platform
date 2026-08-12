@@ -1,0 +1,159 @@
+.traceability-container {
+  background-color: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  padding: 20px;
+  margin-top: 15px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.traceability-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+  border-bottom: 1px solid #e9ecef;
+  padding-bottom: 10px;
+}
+
+.traceability-header h3 {
+  margin: 0;
+  color: #495057;
+  font-size: 1.1rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #adb5bd;
+}
+
+.close-btn:hover {
+  color: #495057;
+}
+
+.trace-flow {
+  display: flex;
+  align-items: flex-start;
+  /* 改為 flex-start 以避免在內容溢出時左側被截斷 (justify-content: center 的副作用) */
+  justify-content: flex-start; 
+  gap: 20px;
+  padding: 10px 0;
+  overflow-x: auto;
+  /* 確保內容置中但可滾動 */
+  min-width: 100%; 
+}
+
+/* 當內容寬度小於容器時，讓內容置中 */
+.trace-flow::before,
+.trace-flow::after {
+  content: '';
+  margin: auto;
+}
+
+.trace-card {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  width: 240px;
+  min-width: 240px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  transition: transform 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.trace-card.clickable {
+  cursor: pointer;
+}
+
+.trace-card.clickable:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 6px 12px rgba(0,0,0,0.1);
+  border-color: #339af0;
+}
+
+.trace-card-header {
+  padding: 10px;
+  border-bottom: 1px solid #f1f3f5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  border-radius: 6px 6px 0 0;
+}
+
+.trace-card-p1 .trace-card-header { background-color: #e3f2fd; color: #1565c0; }
+.trace-card-p2 .trace-card-header { background-color: #fff3e0; color: #e65100; }
+.trace-card-p3 .trace-card-header { background-color: #e8f5e9; color: #2e7d32; }
+.trace-card.missing .trace-card-header { background-color: #ffebee; color: #c62828; }
+
+.trace-card-body {
+  padding: 12px;
+  font-size: 0.9rem;
+}
+
+.trace-row {
+  display: flex;
+  margin-bottom: 8px;
+  align-items: baseline;
+}
+
+.trace-row:last-child {
+  margin-bottom: 0;
+}
+
+.trace-row label {
+  color: #868e96;
+  font-size: 0.85rem;
+  width: 60px;
+  flex-shrink: 0;
+}
+
+.trace-row span {
+  font-weight: 500;
+  color: #212529;
+  word-break: break-all;
+}
+
+.trace-arrow {
+  font-size: 1.5rem;
+  color: #adb5bd;
+  font-weight: bold;
+  padding-top: 40px;
+}
+
+.trace-arrow.broken {
+  color: #ffc9c9;
+  border-bottom: 2px dashed #ffc9c9;
+  height: 2px;
+  line-height: 0;
+  width: 30px;
+  text-align: center;
+  content: '';
+}
+
+.trace-warning {
+  margin-top: 15px;
+  padding: 10px;
+  background-color: #fff5f5;
+  border: 1px solid #ffc9c9;
+  border-radius: 4px;
+  color: #c92a2a;
+  font-size: 0.9rem;
+  text-align: center;
+}
+
+.trace-loading, .trace-error {
+  padding: 20px;
+  text-align: center;
+  color: #868e96;
+}
+
+.trace-error {
+  color: #fa5252;
+}

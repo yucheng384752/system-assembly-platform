@@ -1,5 +1,5 @@
 ﻿import type { UploadedFile } from "./uploadTypes";
-import { MAX_SIZE_BYTES, deriveLotNoFromFilename, detectFileType } from "./uploadFileUtils";
+import { MAX_SIZE_BYTES, deriveLotNoFromFilename, detectFileType, detectTableCode } from "./uploadFileUtils";
 
 export type AddUploadFileNotice =
   | { type: "unsupported"; fileName: string }
@@ -11,6 +11,7 @@ interface BuildUploadFilesToAddOptions {
   fileList: FileList | null;
   existingFiles: UploadedFile[];
   confirmLikelyDuplicate: (file: File) => boolean;
+  availableCodes?: string[];
 }
 
 function isSupportedUploadFile(file: File): boolean {
@@ -27,8 +28,11 @@ function isLikelyDuplicateFile(file: File, files: UploadedFile[]): boolean {
   );
 }
 
-function buildUploadedFile(file: File): UploadedFile {
-  const type = detectFileType(file.name);
+function buildUploadedFile(file: File, availableCodes: string[] = []): UploadedFile {
+  const detected = availableCodes.length > 0
+    ? detectTableCode(file.name, availableCodes)
+    : detectFileType(file.name);
+  const type = detected ?? "UNKNOWN";
   const lotNo = type === "P1" || type === "P2" ? deriveLotNoFromFilename(file.name) : "";
   const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
@@ -61,6 +65,7 @@ export function buildUploadFilesToAdd({
   fileList,
   existingFiles,
   confirmLikelyDuplicate,
+  availableCodes = [],
 }: BuildUploadFilesToAddOptions): { files: UploadedFile[]; notices: AddUploadFileNotice[] } {
   if (!fileList) return { files: [], notices: [] };
 
@@ -93,7 +98,7 @@ export function buildUploadFilesToAdd({
       return;
     }
 
-    files.push(buildUploadedFile(file));
+    files.push(buildUploadedFile(file, availableCodes));
   });
 
   return { files, notices };

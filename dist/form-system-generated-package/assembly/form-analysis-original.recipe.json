@@ -13,7 +13,7 @@
       "needsBackgroundJobs": true
     },
     "engine": "postgresql",
-    "reasonForNonTechnicalUser": "這套系統會保存多租戶製程資料、支援多人使用、匯入工作、查詢追溯與分析報表，因此建議使用正式資料庫 PostgreSQL。"
+    "reasonForNonTechnicalUser": "這套系統會長期保存製程資料、匯入紀錄、批號追溯、使用者權限與分析結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。"
   },
   "enabledKits": [
     "platform-core-kit",

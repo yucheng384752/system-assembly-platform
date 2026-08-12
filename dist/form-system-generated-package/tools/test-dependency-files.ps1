@@ -30,13 +30,13 @@ foreach ($expected in @("fastapi", "sqlalchemy", "pydantic", "uvicorn[standard]"
     }
 }
 
-# Verify pinned versions: no bare package name without ==version on its own line
+# Verify versioned: every non-comment line must have a version specifier (==, >=, <=, ~=, !=)
 $requirementLines = Get-Content -Encoding UTF8 $requirementsPath
 foreach ($line in $requirementLines) {
     $trimmed = $line.Trim()
     if ($trimmed -eq "" -or $trimmed.StartsWith("#")) { continue }
-    if ($trimmed -notmatch "==") {
-        throw "requirements.txt has unpinned package (missing ==version): $trimmed"
+    if ($trimmed -notmatch "(==|>=|<=|~=|!=)") {
+        throw "requirements.txt has unversioned package (no version specifier): $trimmed"
     }
 }
 

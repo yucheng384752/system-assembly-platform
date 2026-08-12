@@ -38,12 +38,10 @@ type WhoAmI = {
 }
 
 type BootstrapStatus = {
-  auth_mode: string
-  auth_api_key_header: string
-  auth_protect_prefixes: string[]
-  auth_exempt_paths: string[]
-  admin_api_key_header: string
+  auth_mode_enabled: boolean
   admin_keys_configured: boolean
+  bootstrap_manager_enabled?: boolean
+  bootstrap_manager_configured?: boolean
 }
 
 type TenantUserRow = {
@@ -658,12 +656,12 @@ export function AdminPage(props: { onAdminUnlocked?: () => void; onAdminLocked?:
             {bootstrapStatus && (
               <div className="admin-kv-block">
                 <div className="admin-kv">
-                  <span className="admin-k">auth_mode</span>
-                  <span className="admin-v">{bootstrapStatus.auth_mode}</span>
+                  <span className="admin-k">auth_mode_enabled</span>
+                  <span className="admin-v">{String(bootstrapStatus.auth_mode_enabled)}</span>
                 </div>
                 <div className="admin-kv">
-                  <span className="admin-k">admin_header</span>
-                  <span className="admin-v">{bootstrapStatus.admin_api_key_header}</span>
+                  <span className="admin-k">bootstrap_manager_configured</span>
+                  <span className="admin-v">{String(Boolean(bootstrapStatus.bootstrap_manager_configured))}</span>
                 </div>
                 <div className="admin-kv">
                   <span className="admin-k">admin_keys_configured</span>

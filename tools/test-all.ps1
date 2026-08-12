@@ -1,8 +1,23 @@
 param(
-    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path
+    [string]$ProjectRoot = (Resolve-Path "$PSScriptRoot\..").Path,
+    [switch]$SkipFrontendBuild
 )
 
 $ErrorActionPreference = "Stop"
+
+function Assert-WizardFresh([string]$Root) {
+    $wizardPy = Join-Path $Root "tools\install-wizard.py"
+    $wizardExe = Join-Path $Root "tools\install-wizard.exe"
+    if ((Test-Path $wizardPy) -and (Test-Path $wizardExe)) {
+        $pyTime = (Get-Item $wizardPy).LastWriteTime
+        $exeTime = (Get-Item $wizardExe).LastWriteTime
+        if ($pyTime -gt $exeTime) {
+            throw "install-wizard.py is newer than install-wizard.exe. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+    }
+}
+
+Assert-WizardFresh $ProjectRoot
 
 function Run-Step([string]$Name, [scriptblock]$Script) {
     Write-Host "== $Name =="
@@ -69,8 +84,22 @@ Run-Step "Baseline contracts" {
     $db = Get-Content -Raw -Encoding UTF8 $dbBaseline | ConvertFrom-Json
     if ($db.tables.PSObject.Properties.Name.Count -eq 0) { throw "db schema baseline has no tables" }
 }
-Run-Step "Assemble generated system" { & (Join-Path $ProjectRoot "tools\assemble-system.ps1") -ProjectRoot $ProjectRoot -CreateZip }
+Run-Step "Assemble generated system" {
+    $assembleArgs = @{
+        ProjectRoot = $ProjectRoot
+        CreateZip = $true
+    }
+    if ($SkipFrontendBuild) {
+        $assembleArgs.SkipFrontendBuild = $true
+    }
+    & (Join-Path $ProjectRoot "tools\assemble-system.ps1") @assembleArgs
+}
 Run-Step "Frontend production build" {
+    if ($SkipFrontendBuild) {
+        Write-Host "  SKIPPED frontend production build because -SkipFrontendBuild was provided"
+        return
+    }
+
     $distIndex = Join-Path $ProjectRoot "dist\generated-system\frontend\dist\index.html"
     if (-not (Test-Path $distIndex)) { throw "Frontend build missing: dist\generated-system\frontend\dist\index.html" }
     Write-Host "  OK dist\generated-system\frontend\dist\index.html present"
@@ -119,5 +148,7 @@ Run-Step "Generated system zip" {
 }
 Run-Step "Package folder" { & (Join-Path $ProjectRoot "tools\package-system.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Validate package folder" { & (Join-Path $ProjectRoot "tools\validate-package-folder.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "Client deploy package" { & (Join-Path $ProjectRoot "tools\package-client-deploy.ps1") -ProjectRoot $ProjectRoot -RecipeName gui-all-kits -SkipZip }
+Run-Step "Client deploy variants" { & (Join-Path $ProjectRoot "tools\test-client-deploy-variants.ps1") -ProjectRoot $ProjectRoot }
 
 Write-Host "ALL TESTS PASSED"

@@ -438,6 +438,10 @@
       "title": "Confirm import",
       "confirmText": "Import",
       "body": "After importing into the database, data cannot be easily reverted. Please confirm the content is correct."
+    },
+    "confirm": {
+      "likelyDuplicate": "Suspected duplicate file: {{fileName}}\nDo you still want to add it to the upload list?",
+      "duplicateFile": "Duplicate content detected: {{filename}}\nMatches existing file \"{{duplicateOf}}\". Continue with validation?"
     }
   },
   "query": {

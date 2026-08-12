@@ -49,6 +49,20 @@ if (-not [string]::IsNullOrWhiteSpace($irFullPath) -and (Test-Path $irFullPath))
     $registrations = @($plan.backendRouterRegistrations)
 }
 
+$hasPlatformCore = @($registrations | Where-Object { [string]$_.kit -eq "platform-core-kit" }).Count -gt 0
+$hasKitBroker = @($registrations | Where-Object { [string]$_.module -eq "app.api.routes_kit_broker" }).Count -gt 0
+if ($hasPlatformCore -and -not $hasKitBroker) {
+    $registrations += [pscustomobject]@{
+        kit = "platform-core-kit"
+        module = "app.api.routes_kit_broker"
+        symbol = "router"
+        prefix = "/api/kit"
+        tags = @("Kit Broker")
+        tenantScoped = $false
+        featureFlag = $null
+    }
+}
+
 if (-not (Test-Path $outputFullPath)) {
     New-Item -ItemType Directory -Force $outputFullPath | Out-Null
 }

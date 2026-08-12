@@ -9,6 +9,21 @@ export function detectFileType(name: string): FileType {
   return "P3";
 }
 
+export function detectTableCode(name: string, availableCodes: string[]): string | null {
+  if (name.toLowerCase().endsWith(".pdf")) return "PDF";
+  const nameLower = name.toLowerCase();
+  for (const code of availableCodes) {
+    const codeLower = code.toLowerCase();
+    if (nameLower.startsWith(codeLower + "_") || nameLower.startsWith(codeLower + "-")) {
+      return code;
+    }
+  }
+  if (name.startsWith("P1_")) return "P1";
+  if (name.startsWith("P2_")) return "P2";
+  if (name.startsWith("P3_")) return "P3";
+  return null;
+}
+
 export function deriveLotNoFromFilename(name: string): string {
   const base = name.replace(/\.csv$/i, "");
   const parts = base.split("_");
@@ -102,46 +117,46 @@ export async function buildUploadedCsvFilesFromPdfOutputs(
   outputs: any[],
   existingNames: string[]
 ): Promise<UploadedFile[]> {
-  const newCsvFiles: UploadedFile[] = [];
   const usedNames = new Set(existingNames);
 
-  for (const output of outputs) {
+  // Resolve unique names synchronously (order matters for deduplication)
+  const intermediates = outputs.map((output) => {
     const filename = String(output.filename || "output.csv");
     const csvText = typeof output.csv_text === "string" ? output.csv_text : "";
     const safeName = usedNames.has(filename)
       ? `${filename.replace(/\.csv$/i, "")}__${Date.now().toString().slice(-6)}.csv`
       : filename;
     usedNames.add(safeName);
-
     const file = new File([csvText], safeName, { type: "text/csv" });
     const type = detectFileType(safeName);
     const lotNo = type === "P1" || type === "P2" ? deriveLotNoFromFilename(safeName) : "";
-    const csvData = await parseCsv(file);
+    return { safeName, file, type, lotNo };
+  });
 
-    newCsvFiles.push({
-      id: `${safeName}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-      file,
-      name: safeName,
-      size: file.size,
-      type,
-      lotNo,
-      status: "uploaded",
-      jobBackend: "import_v2",
-      uploadProgress: 100,
-      validateProgress: 0,
-      importProgress: 0,
-      expanded: false,
-      csvData,
-      hasUnsavedChanges: false,
-      processId: undefined,
-      isValidated: false,
-      validationErrors: undefined,
-      pdfConvertStatus: undefined,
-      pdfConvertJobId: undefined,
-      pdfConvertProgress: undefined,
-      pdfConvertError: undefined,
-    });
-  }
+  // Parse all CSVs in parallel (each file is independent)
+  const csvDatas = await Promise.all(intermediates.map(({ file }) => parseCsv(file)));
 
-  return newCsvFiles;
+  return intermediates.map(({ safeName, file, type, lotNo }, i) => ({
+    id: `${safeName}-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    file,
+    name: safeName,
+    size: file.size,
+    type,
+    lotNo,
+    status: "uploaded",
+    jobBackend: "import_v2",
+    uploadProgress: 100,
+    validateProgress: 0,
+    importProgress: 0,
+    expanded: false,
+    csvData: csvDatas[i],
+    hasUnsavedChanges: false,
+    processId: undefined,
+    isValidated: false,
+    validationErrors: undefined,
+    pdfConvertStatus: undefined,
+    pdfConvertJobId: undefined,
+    pdfConvertProgress: undefined,
+    pdfConvertError: undefined,
+  }));
 }

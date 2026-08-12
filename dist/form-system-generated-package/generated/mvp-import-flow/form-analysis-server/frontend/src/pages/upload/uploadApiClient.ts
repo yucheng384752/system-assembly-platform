@@ -125,5 +125,12 @@ export function createUploadApiClient({ t, getTenantHeaders }: UploadApiClientOp
       }
       return response.json();
     },
+
+    async fetchAvailableForms(): Promise<{ code: string; name: string }[]> {
+      const response = await fetch("/api/forms", { headers: getTenantHeaders() });
+      if (!response.ok) return [];
+      const data = await response.json().catch(() => []);
+      return Array.isArray(data) ? data : (data.forms ?? data.items ?? []);
+    },
   };
 }

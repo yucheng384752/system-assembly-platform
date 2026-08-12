@@ -5,7 +5,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from pydantic import Field, field_validator
+from pydantic import AliasChoices, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -29,10 +29,11 @@ class Settings(BaseSettings):
     database_url: str = Field(
         default="postgresql+asyncpg://app:app_secure_password@localhost:5432/form_analysis_db",
         description="PostgreSQL database connection URL (固定使用PostgreSQL)",
+        validation_alias=AliasChoices("database_url", "DATABASE_URL"),
     )
 
     # API server settings
-    api_host: str = Field(default="0.0.0.0", description="API server host")
+    api_host: str = Field(default="127.0.0.1", description="API server host")
     api_port: int = Field(default=8000, ge=1, le=65535, description="API server port")
 
     # File upload settings

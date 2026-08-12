@@ -3,15 +3,15 @@ import json
 import logging
 import re
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.models.core.schema_registry import TableRegistry
+from app.models.core.schema_registry import SchemaVersion, TableRegistry
 from app.models.import_job import ImportJob, ImportJobStatus, StagingRow
 from app.services.audit_events import write_audit_event_best_effort
 from app.services.csv_field_mapper import CSVFieldMapper, csv_field_mapper
@@ -23,6 +23,89 @@ logger = logging.getLogger(__name__)
 class ImportService:
     def __init__(self, db: AsyncSession):
         self.db = db
+
+    async def _get_schema_version_for_table(self, table_id: uuid.UUID) -> SchemaVersion | None:
+        result = await self.db.execute(
+            select(SchemaVersion)
+            .where(SchemaVersion.table_id == table_id)
+            .order_by(SchemaVersion.created_at.desc())
+            .limit(1)
+        )
+        return result.scalar_one_or_none()
+
+    def _schema_fields(self, schema: SchemaVersion) -> list[dict[str, Any]]:
+        schema_json = schema.schema_json or {}
+        fields = schema_json.get("fields") or schema_json.get("columns") or []
+        return [field for field in fields if isinstance(field, dict)]
+
+    def _schema_column_names(self, schema: SchemaVersion) -> list[str]:
+        columns: list[str] = []
+        for field in self._schema_fields(schema):
+            column = field.get("fieldKey") or field.get("name")
+            if column:
+                column = str(column)
+                if not column.replace("_", "").isalnum():
+                    raise ValueError(f"Unsafe schema column name: {column}")
+                columns.append(column)
+        return columns
+
+    def _schema_row_data(
+        self, schema: SchemaVersion, row: dict[str, Any]
+    ) -> dict[str, Any]:
+        data: dict[str, Any] = {}
+        for field in self._schema_fields(schema):
+            column = field.get("fieldKey") or field.get("name")
+            if not column:
+                continue
+            column = str(column)
+            source = field.get("sourceName") or field.get("name") or column
+            data[column] = row.get(str(source), row.get(column))
+        return data
+
+    async def _commit_schema_target_rows(
+        self,
+        *,
+        table_code: str,
+        table_id: uuid.UUID,
+        rows: list[dict[str, Any]],
+        tenant_id: uuid.UUID,
+        import_job_id: uuid.UUID,
+    ) -> int:
+        if not table_code.replace("_", "").isalnum():
+            raise ValueError(f"Unsafe table_code={table_code}")
+        schema = await self._get_schema_version_for_table(table_id)
+        if schema is None:
+            raise ValueError(f"No schema found for table_code={table_code}")
+
+        columns = self._schema_column_names(schema)
+        if not columns:
+            raise ValueError(f"No schema columns found for table_code={table_code}")
+
+        all_columns = columns + ["_tenant_id", "_import_job_id", "_row_index", "_imported_at"]
+        quoted_columns = ", ".join(f'"{c}"' for c in all_columns)
+        placeholders = ", ".join(f":{c}" for c in all_columns)
+        update_set = ", ".join(f'"{c}" = EXCLUDED."{c}"' for c in columns)
+        stmt = text(
+            f'INSERT INTO "{table_code}" ({quoted_columns}) VALUES ({placeholders}) '
+            f'ON CONFLICT ("_tenant_id", "_import_job_id", "_row_index") '
+            f'DO UPDATE SET {update_set}'
+        )
+
+        now = datetime.now(timezone.utc)
+        inserted_count = 0
+        for row_index, row in enumerate(rows):
+            if not isinstance(row, dict):
+                continue
+            row_data = self._schema_row_data(schema, row)
+            row_data["_tenant_id"] = str(tenant_id)
+            row_data["_import_job_id"] = str(import_job_id)
+            row_data["_row_index"] = row_index
+            row_data["_imported_at"] = now
+            await self.db.execute(stmt, row_data)
+            inserted_count += 1
+
+        await self.db.flush()
+        return inserted_count
 
     def _extract_lot_no_from_row_dict(self, row: dict[str, Any]) -> str | None:
         if not row or not isinstance(row, dict):
@@ -96,7 +179,7 @@ class ImportService:
         actor_kind: str = "system",
     ) -> None:
         job.status = status
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = actor_kind
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_label_snapshot
@@ -517,39 +600,40 @@ class ImportService:
                     row.errors_json = []
                     continue
 
-                # LOT NO validation (all tables): extract from row content
-                lot_no_val = self._extract_lot_no_from_row_dict(
-                    data if isinstance(data, dict) else {}
-                )
-                if not lot_no_val:
-                    errors.append(
-                        {
-                            "field": "lot_no",
-                            "message": "Missing lot_no in row content",
-                        }
+                # LOT NO validation — P1/P2/P3 only; generic forms use schema-defined key fields
+                if table.table_code in ("P1", "P2", "P3"):
+                    lot_no_val = self._extract_lot_no_from_row_dict(
+                        data if isinstance(data, dict) else {}
                     )
-                else:
-                    m = lot_no_flexible_pattern.match(str(lot_no_val).strip())
-                    canonical = f"{m.group(1)}_{m.group(2).zfill(2)}" if m else None
+                    if not lot_no_val:
+                        errors.append(
+                            {
+                                "field": "lot_no",
+                                "message": "Missing lot_no in row content",
+                            }
+                        )
+                    else:
+                        m = lot_no_flexible_pattern.match(str(lot_no_val).strip())
+                        canonical = f"{m.group(1)}_{m.group(2).zfill(2)}" if m else None
 
-                    if table.table_code in ("P1", "P2"):
-                        # P1/P2 enforce strict 7+2 format
-                        if not canonical or not lot_no_pattern.match(canonical):
-                            errors.append(
-                                {
-                                    "field": "lot_no",
-                                    "message": f"Invalid lot_no format: {lot_no_val}",
-                                }
-                            )
-                    elif table.table_code == "P3":
-                        # P3 allows suffixes (e.g. 2507173_02_18) but must still start with 7+2
-                        if not canonical:
-                            errors.append(
-                                {
-                                    "field": "lot_no",
-                                    "message": f"Invalid lot_no format: {lot_no_val}",
-                                }
-                            )
+                        if table.table_code in ("P1", "P2"):
+                            # P1/P2 enforce strict 7+2 format
+                            if not canonical or not lot_no_pattern.match(canonical):
+                                errors.append(
+                                    {
+                                        "field": "lot_no",
+                                        "message": f"Invalid lot_no format: {lot_no_val}",
+                                    }
+                                )
+                        elif table.table_code == "P3":
+                            # P3 allows suffixes (e.g. 2507173_02_18) but must still start with 7+2
+                            if not canonical:
+                                errors.append(
+                                    {
+                                        "field": "lot_no",
+                                        "message": f"Invalid lot_no format: {lot_no_val}",
+                                    }
+                                )
 
                 # Check required fields
                 for field in required_fields:
@@ -696,6 +780,9 @@ class ImportService:
 
             p2_rows_by_key: dict[tuple[int, int], list[dict[str, Any]]] = {}
             p2_lot_raw_by_norm: dict[int, str] = {}
+
+            # Collection for generic forms (non-P1/P2/P3)
+            generic_rows_list: list[dict[str, Any]] = []
 
             # Process by file
             for file_record in job.files:
@@ -1040,6 +1127,10 @@ class ImportService:
                             )
                             self.db.add(p3_item)
 
+                else:
+                    # Generic form: collect valid staging rows for post-loop commit
+                    generic_rows_list.extend(row_data)
+
             # Apply merged + deduped rows to DB (P1/P2).
             if table.table_code == "P1":
                 from app.models.p1_record import P1Record
@@ -1168,6 +1259,78 @@ class ImportService:
 
                     self.db.add(p2_item)
 
+            if table.table_code.startswith("daihui_"):
+                inserted_count = await self._commit_schema_target_rows(
+                    table_code=table.table_code,
+                    table_id=table.id,
+                    rows=generic_rows_list,
+                    tenant_id=job.tenant_id,
+                    import_job_id=job.id,
+                )
+                if inserted_count == 0:
+                    raise ValueError(
+                        f"Commit wrote zero target rows for table_code={table.table_code}"
+                    )
+                logger.info(
+                    f"Daihui commit: wrote {inserted_count} rows to {table.table_code}"
+                )
+            # Generic form commit → GenericRecord (for non-P1/P2/P3 table codes)
+            if table.table_code not in ("P1", "P2", "P3") and generic_rows_list:
+                from app.models.generic_record import GenericRecord
+                from app.models.station import Station, StationSchema
+
+                station = await self._get_generic_station(table.table_code, job.tenant_id)
+                if station is None:
+                    raise ValueError(
+                        f"Station not found for table_code={table.table_code!r}, "
+                        f"tenant_id={job.tenant_id}"
+                    )
+
+                schema = await self._get_active_station_schema_for_station(station.id)
+                unique_key_fields: list[str] = []
+                if schema and schema.unique_key_fields:
+                    unique_key_fields = list(schema.unique_key_fields)
+
+                for idx, row_data_dict in enumerate(generic_rows_list):
+                    if not row_data_dict or not isinstance(row_data_dict, dict):
+                        continue
+                    if unique_key_fields:
+                        lot_no_raw = "_".join(
+                            str(row_data_dict.get(f, "")) for f in unique_key_fields
+                        ).strip("_") or str(idx)
+                    else:
+                        lot_no_raw = str(idx)
+                    lot_no_norm = self._generic_lot_no_norm(lot_no_raw)
+
+                    existing_stmt = select(GenericRecord).where(
+                        GenericRecord.tenant_id == job.tenant_id,
+                        GenericRecord.station_id == station.id,
+                        GenericRecord.lot_no_raw == lot_no_raw,
+                    )
+                    existing_result = await self.db.execute(existing_stmt)
+                    existing_rec = existing_result.scalar_one_or_none()
+
+                    if existing_rec:
+                        existing_rec.data = row_data_dict
+                        existing_rec.updated_at = datetime.now(timezone.utc)
+                    else:
+                        self.db.add(
+                            GenericRecord(
+                                id=uuid.uuid4(),
+                                tenant_id=job.tenant_id,
+                                station_id=station.id,
+                                schema_version_id=schema.id if schema else None,
+                                lot_no_raw=lot_no_raw,
+                                lot_no_norm=lot_no_norm,
+                                data=row_data_dict,
+                            )
+                        )
+                await self.db.flush()
+                logger.info(
+                    f"Generic commit: wrote {len(generic_rows_list)} rows to generic_records "
+                    f"(table_code={table.table_code}, tenant={job.tenant_id})"
+                )
+
             self._touch_status(
                 job,
                 ImportJobStatus.COMPLETED,
@@ -1240,6 +1403,43 @@ class ImportService:
                 },
             )
             raise e
+
+    async def _get_generic_station(
+        self, table_code: str, tenant_id: uuid.UUID
+    ) -> Any | None:
+        """Look up a Station by code for a given tenant."""
+        from app.models.station import Station
+
+        stmt = select(Station).where(
+            Station.tenant_id == tenant_id,
+            Station.code == table_code,
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    async def _get_active_station_schema_for_station(
+        self, station_id: uuid.UUID
+    ) -> Any | None:
+        """Return the active StationSchema for a station (highest version, is_active=True)."""
+        from app.models.station import StationSchema
+
+        stmt = (
+            select(StationSchema)
+            .where(
+                StationSchema.station_id == station_id,
+                StationSchema.is_active == True,  # noqa: E712
+            )
+            .order_by(StationSchema.version.desc())
+            .limit(1)
+        )
+        result = await self.db.execute(stmt)
+        return result.scalar_one_or_none()
+
+    @staticmethod
+    def _generic_lot_no_norm(raw: str) -> int:
+        """Stable numeric value for a generic lot_no_raw (digits only, or 0)."""
+        digits = "".join(c for c in str(raw) if c.isdigit())
+        return int(digits) if digits else 0
 
     def _extract_lot_no(self, filename: str) -> str:
         stem = Path(filename).stem

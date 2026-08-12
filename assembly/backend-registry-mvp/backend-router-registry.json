@@ -75,5 +75,16 @@
                  ],
         "tenantScoped":  true,
         "featureFlag":  null
+    },
+    {
+        "kit":  "platform-core-kit",
+        "module":  "app.api.routes_kit_broker",
+        "symbol":  "router",
+        "prefix":  "/api/kit",
+        "tags":  [
+                     "Kit Broker"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
     }
 ]

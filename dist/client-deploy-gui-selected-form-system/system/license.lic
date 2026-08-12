@@ -1,0 +1,5 @@
+{
+  "payload": "{\"schemaVersion\":\"1.0\",\"issuedAt\":\"2026-07-01T10:11:21Z\",\"expiresAt\":\"2027-07-01T10:11:21Z\",\"licensee\":{\"name\":\"__none__\",\"email\":\"__none__\"},\"recipe\":\"gui-selected-form-system\",\"enabledKits\":[\"platform-core-kit\",\"tenant-auth-kit\",\"station-data-link-kit\",\"upload-validation-kit\",\"import-pipeline-kit\",\"query-traceability-kit\",\"analytics-kit\",\"station-admin-kit\",\"audit-edit-kit\",\"logs-ops-kit\"]}",
+  "signature": "jCa851cd94K/1VsKwjDR9EfWiDC+1zaqjl9GRjVSrsrb/0Ef3dTT4hxwzBqe0V+7hN8xk6DbMXeTYf7F5Dr7GkNj2wgZnUSEKbYk3b8RhlDnRoRYrvZZBAc58Kx1W6iy8ugG2X66R0HKVtC5jajei6ygPU7eDkEsehSdW4hmPNqG59CytknHWPQuHIWTIcql6EgdD/bKk49hJuA7bOpLo0kHieQa50T+kBVqSxNKR0T2toGAzA0TNnrB0+yKOFZd2o6XRLVtX4AQKwttIBrZfNVcJ2ZEsSnUEvp0na7RSTdrNLqQL7A2SKIGNjRujaJQVHD3cgYGdyBsy53wSpY8bQ==",
+  "algorithm": "RSA-PSS-SHA256"
+}
