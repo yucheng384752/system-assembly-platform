@@ -2639,6 +2639,11 @@ ${tables}
 async function downloadPackage() {
   const btn = document.querySelector("#download-package");
   if (!btn || btn.disabled) return;
+  if (!clientCode()) {
+    alert("請先填寫客戶名稱，資料表會使用此名稱作為 namespace。");
+    document.querySelector("#client-name")?.focus();
+    return;
+  }
   btn.disabled = true;
   btn.textContent = "打包中…";
 
