@@ -63,6 +63,18 @@ if ($hasPlatformCore -and -not $hasKitBroker) {
     }
 }
 
+# Filter out registrations whose Python source file does not exist in the assembled backend.
+# By the time this script runs, kit src overlays have already been applied, so the check is reliable.
+$assembledBackendDir = Join-Path (Split-Path (Split-Path $outputFullPath -Parent) -Parent) "backend"
+$registrations = @($registrations | Where-Object {
+    $moduleRelPath = ([string]$_.module).Replace('.', '\') + '.py'
+    $exists = Test-Path (Join-Path $assembledBackendDir $moduleRelPath)
+    if (-not $exists) {
+        Write-Host "generate-backend-registry: skipping $([string]$_.module) (source not found in assembled backend)"
+    }
+    $exists
+})
+
 if (-not (Test-Path $outputFullPath)) {
     New-Item -ItemType Directory -Force $outputFullPath | Out-Null
 }

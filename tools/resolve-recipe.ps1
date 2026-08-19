@@ -111,8 +111,9 @@ $featureFlags = [ordered]@{}
 foreach ($kitId in $resolved) {
     $kit = $kitMap[$kitId]
     foreach ($api in @($kit.api)) {
-        if (-not $enabledApis.Contains($api)) {
-            $enabledApis.Add($api)
+        $apiName = [string]$api
+        if (-not [string]::IsNullOrWhiteSpace($apiName) -and -not $enabledApis.Contains($apiName)) {
+            $enabledApis.Add($apiName)
         }
     }
     if ($kit.database -and $kit.database.models) {
@@ -254,6 +255,7 @@ foreach ($kitId in $resolved) {
 $plan = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
     recipe = $recipe.name
+    clientName = $recipe.clientName
     sourceManifest = $manifest.name
     database = $recipe.database
     resolvedKitOrder = $resolved.ToArray()
@@ -271,6 +273,8 @@ $plan = [ordered]@{
     featureFlags = $featureFlags
     frontendNavigation = $recipe.frontendNavigation
     previewScenarios = $recipe.previewScenarios
+    dataflows = @($recipe.dataflows | Where-Object { $null -ne $_ })
+    formSchemas = @($recipe.formSchemas | Where-Object { $null -ne $_ })
 }
 
 $outDir = Split-Path -Parent $outputFullPath

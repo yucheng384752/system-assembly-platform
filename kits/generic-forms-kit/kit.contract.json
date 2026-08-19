@@ -1,0 +1,14 @@
+{
+  "kit": "generic-forms-kit",
+  "provides": {
+    "api": [
+      { "capability": "forms.list", "method": "GET", "path": "/api/forms" },
+      { "capability": "forms.records.list", "method": "GET", "path": "/api/forms/{code}/records" }
+    ],
+    "db": ["db.forms.list", "db.records.search"]
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.tenants.read"]
+  }
+}

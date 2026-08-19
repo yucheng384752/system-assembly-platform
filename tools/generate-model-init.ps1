@@ -50,6 +50,7 @@ Add-Export "upload_error.py" "from .upload_error import UploadError" @("UploadEr
 Add-Export "pdf_upload.py" "from .pdf_upload import PdfUpload" @("PdfUpload")
 Add-Export "pdf_conversion_job.py" "from .pdf_conversion_job import PdfConversionJob" @("PdfConversionJob")
 Add-Export "import_job.py" "from .import_job import ImportFile, ImportJob, StagingRow" @("ImportFile", "ImportJob", "StagingRow")
+Add-Export "flow_trace.py" "from .flow_trace import FlowKeyAlias, FlowRun, TraceChain, TraceChainStep" @("FlowKeyAlias", "FlowRun", "TraceChain", "TraceChainStep")
 
 $script:lines.Add('')
 $script:lines.Add('__all__ = [')

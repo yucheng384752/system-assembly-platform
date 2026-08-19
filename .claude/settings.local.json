@@ -24,7 +24,32 @@
       "Bash(start *)",
       "Bash(node *)",
       "PowerShell(python -m py_compile \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\generated\\\\mvp-import-flow\\\\form-analysis-server\\\\backend\\\\app\\\\main.py\" 2>&1; if \\($LASTEXITCODE -eq 0\\) { \"OK main.py\" } else { \"FAIL\" })",
-      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\dist\\\\generated-system\" -Recurse -Name | Where-Object { $_ -match '\\\\.\\(py|ts\\)$' } | Sort-Object)"
+      "PowerShell(Get-ChildItem \"C:\\\\Users\\\\gslab\\\\Documents\\\\New project\\\\form-system-kit-composer\\\\dist\\\\generated-system\" -Recurse -Name | Where-Object { $_ -match '\\\\.\\(py|ts\\)$' } | Sort-Object)",
+      "Bash(powershell -ExecutionPolicy Bypass -File tools/test-dataflow-runtime.ps1)",
+      "Bash(python -m py_compile kits/generic-forms-kit/src/backend/app/api/routes_generic_forms.py)",
+      "Bash(python -m py_compile kits/query-traceability-kit/src/backend/app/api/routes_query_v2.py kits/query-traceability-kit/src/backend/app/core/seed_stations.py)",
+      "Bash(powershell -ExecutionPolicy Bypass -File tools/test-gui-static.ps1)",
+      "Bash(powershell -ExecutionPolicy Bypass -File tools/test-resolver.ps1)",
+      "Read(//c/Users/gslab/**)",
+      "Read(//c/Users/gslab/.claude/**)",
+      "Bash(grep -n \"generic-forms-kit\\\\|resolvedKitOrder\\\\|kits\\\\\\\\\\\\\\\\\" tools/assemble-system.ps1)",
+      "Bash(timeout 300 powershell -ExecutionPolicy Bypass -File tools/package-client-deploy.ps1 -PackageName gui-selected-form-system -SkipZip)",
+      "Bash(python *)",
+      "Bash(timeout 240 powershell -ExecutionPolicy Bypass -File tools/build-wizard-exe.ps1)",
+      "Bash(timeout 400 powershell -ExecutionPolicy Bypass -File tools/package-client-deploy.ps1 -PackageName gui-selected-form-system -SkipZip)",
+      "Bash(timeout 120 powershell -ExecutionPolicy Bypass -File tools/validate-package-folder.ps1 -PackagePath \"dist\\\\client-deploy-gui-selected-form-system\")",
+      "Bash(timeout 300 powershell -ExecutionPolicy Bypass -File tools/test-client-deploy-variants.ps1)",
+      "Bash(curl -sv http://127.0.0.1:8934/index.html)",
+      "Bash(pkill -f \"http.server 8934\")",
+      "Bash(python3 -c ' *)",
+      "Bash(awk '/^@@ -1,6/{print NR; exit}' /tmp/full2.diff)",
+      "Bash(sed -n '1,38p' /tmp/full2.diff)",
+      "Bash(sed -n '1074,1085p' /tmp/full2.diff)",
+      "Bash(echo \"diff exit: $?\")",
+      "Bash(git status *)",
+      "Bash(git add *)",
+      "Bash(git reset *)",
+      "Bash(git checkout *)"
     ]
   }
 }

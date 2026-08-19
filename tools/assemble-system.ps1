@@ -574,11 +574,16 @@ $frontendDir = Join-Path $outputPath "frontend"
 if ($SkipFrontendBuild) {
     Write-Host "Skipping frontend production build."
 } elseif (Test-Path (Join-Path $frontendDir "package.json")) {
-    Write-Host "Building frontend (npm install + npm run build)..."
+    Write-Host "Building frontend (npm ci/install + npm run build)..."
     Push-Location $frontendDir
     try {
-        & npm install --silent
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        if (Test-Path (Join-Path $frontendDir "package-lock.json")) {
+            & npm ci --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed in $frontendDir" }
+        } else {
+            & npm install --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        }
         & npm run build
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed in $frontendDir" }
     } finally {
@@ -640,10 +645,21 @@ foreach ($entry in @($plan | Sort-Object order)) {
 Write-Host "Kit install plan completed."
 '@ | Set-Content -Encoding UTF8 (Join-Path $scriptsPath "run-kit-installs.ps1")
 
+$dbPlanDirectory = "build\db-plan-$($plan.recipe)"
+& (Join-Path $ProjectRoot "tools\generate-db-plan.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputDirectory $dbPlanDirectory
+
 & (Join-Path $ProjectRoot "tools\generate-db-bootstrap.ps1") `
     -ProjectRoot $ProjectRoot `
     -SystemDirectory $OutputDirectory `
-    -BaselinePath (Join-Path $ProjectRoot "assembly\baselines\default-db-schema.baseline.json")
+    -DbPlanPath (Join-Path $dbPlanDirectory "db-assembly-plan.json")
+
+& (Join-Path $ProjectRoot "tools\generate-form-schema.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -SystemDirectory $OutputDirectory
 
 $dependencyManifest = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
@@ -659,7 +675,7 @@ $dependencyManifest = [ordered]@{
     frontend = [ordered]@{
         sourceDirectory = "frontend"
         packageJson = Test-RelativePath $outputPath "frontend\package.json"
-        installCommand = "npm install"
+        installCommand = "npm ci"
         startCommand = "npm run dev"
     }
     notes = @(
@@ -1395,6 +1411,14 @@ VALID_SLITTING_MACHINES_CSV=
 ENTITLEMENT_MODE=local
 ENVIRONMENT=production
 "@ | Set-Content -Encoding UTF8 (Join-Path $outputPath ".env.example")
+
+if (@($plan.resolvedKitOrder) -contains "generic-forms-kit") {
+    $envExamplePath = Join-Path $outputPath ".env.example"
+    $envContent = Get-Content -Raw -Encoding UTF8 $envExamplePath
+    $envContent = $envContent -replace "(?m)^USE_GENERIC_SCHEMA=false", "USE_GENERIC_SCHEMA=true"
+    [System.IO.File]::WriteAllText($envExamplePath, $envContent, (New-Object System.Text.UTF8Encoding $false))
+    Write-Host "generate-form-schema: USE_GENERIC_SCHEMA=true set in .env.example"
+}
 
 $manifest = [ordered]@{
     generatedAt = (Get-Date).ToString("s")

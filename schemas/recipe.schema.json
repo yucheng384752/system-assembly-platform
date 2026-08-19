@@ -21,6 +21,10 @@
     "displayName": {
       "type": "string"
     },
+    "clientName": {
+      "type": "string",
+      "minLength": 1
+    },
     "description": {
       "type": "string"
     },
@@ -101,6 +105,11 @@
       },
       "default": {}
     },
+    "dataflows": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dataflow" },
+      "default": []
+    },
     "licensee": {
       "type": "object",
       "properties": {
@@ -132,6 +141,28 @@
     }
   },
   "$defs": {
+    "dataflow": {
+      "type": "object",
+      "required": ["code", "name", "nodes", "edges"],
+      "properties": {
+        "code": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "nodes": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+        "edges": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["fromTableCode", "toTableCode"],
+            "properties": {
+              "fromTableCode": { "type": "string", "minLength": 1 },
+              "toTableCode": { "type": "string", "minLength": 1 },
+              "parentColumn": { "type": ["string", "null"] },
+              "childColumn": { "type": ["string", "null"] }
+            }
+          }
+        }
+      }
+    },
     "frontendNavigationItem": {
       "type": "object",
       "required": [

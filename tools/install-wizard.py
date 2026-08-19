@@ -1038,7 +1038,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 s.close()
                 self._send_json({"ok": True, "msg": f"已連線到 {host}:{port}"})
             except Exception as e:
-                self._send_json({"ok": False, "msg": str(e)})
+                msg = str(e)
+                if host in ("localhost", "127.0.0.1", "::1"):
+                    msg = (
+                        f"{msg}｜{host}:{port} 沒有 PostgreSQL 在監聽。"
+                        f"安裝步驟會在 Linux 上自動安裝 PostgreSQL 並建立資料庫"
+                        f"（需以 sudo 執行本精靈）；若只是測試，可將密碼留空改用 SQLite。"
+                    )
+                self._send_json({"ok": False, "msg": msg})
 
         elif path == "/api/install":
             with _lock:

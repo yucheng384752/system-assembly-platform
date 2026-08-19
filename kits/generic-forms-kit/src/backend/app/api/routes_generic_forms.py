@@ -2,20 +2,22 @@
 from __future__ import annotations
 
 import io
+import os
 import uuid
+from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import delete as sql_delete, func, select
+from sqlalchemy import delete as sql_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tenant
-from app.core.database import get_db
+from app.core.database import get_db, get_db_context
 from app.models.core.tenant import Tenant
 from app.models.generic_record import GenericRecord
-from app.models.station import Station, StationSchema
+from app.models.station import Station, StationLink, StationSchema
 
 router = APIRouter(tags=["Generic Forms"])
 
@@ -49,11 +51,51 @@ class StationRead(BaseModel):
     fields: list[dict] | None = None
 
 
+class DataflowLinkIn(BaseModel):
+    flow_code: str = "default"
+    from_station_code: str
+    to_station_code: str
+    parent_column: str | None = None
+    child_column: str | None = None
+    sort_order: int = 0
+
+
+class DataflowLinkRead(DataflowLinkIn):
+    id: str
+
+
 class UploadResult(BaseModel):
     total: int
     imported: int
     skipped: int
     errors: list[dict]
+
+
+class PreviewResult(BaseModel):
+    total: int
+    preview_rows: list[dict]
+    errors: list[dict]
+    duplicate_count: int
+    valid_count: int
+
+
+class CommitResult(BaseModel):
+    total: int
+    imported: int
+    skipped: int
+    error_count: int
+    job_id: str | None = None
+
+
+class JobStatus(BaseModel):
+    job_id: str
+    status: str
+    total: int
+    imported: int
+    skipped: int
+    error_count: int
+    created_at: str
+    finished_at: str | None = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -99,6 +141,105 @@ def _lot_no_norm(raw: str) -> int:
         return 0
 
 
+# ── Import helpers ────────────────────────────────────────────────────────────
+
+def _threshold_bytes() -> int:
+    try:
+        return int(float(os.environ.get("GENERIC_FORMS_ASYNC_THRESHOLD_MB", "1")) * 1024 * 1024)
+    except (ValueError, TypeError):
+        return 1048576
+
+
+def _parse_csv_content(content: bytes) -> tuple["pd.DataFrame | None", "HTTPException | None"]:
+    try:
+        df = pd.read_csv(io.BytesIO(content), encoding="utf-8-sig", dtype=str)
+    except Exception as exc:
+        return None, HTTPException(status_code=422, detail=f"Cannot read CSV: {exc}")
+    df = df.replace(r"^\s*$", pd.NA, regex=True).dropna(how="all")
+    return df, None
+
+
+def _map_row(row_dict: dict, fields: list[dict]) -> tuple[dict, list[str]]:
+    row_data: dict[str, Any] = {}
+    row_errors: list[str] = []
+    for field in fields:
+        field_key = field.get("fieldKey") or field.get("name")
+        source_name = field.get("sourceName") or field_key
+        ftype = field.get("type", "string")
+        coerced = _coerce(row_dict.get(source_name), ftype)
+        if field.get("required") and coerced is None:
+            row_errors.append(f"'{source_name}' 為必填欄位")
+        else:
+            row_data[field_key] = coerced
+    return row_data, row_errors
+
+
+def _key_val_for(row_data: dict, key_fields: list[str]) -> str:
+    if key_fields:
+        val = "_".join(str(row_data.get(k) or "") for k in key_fields)
+        return val if val.strip("_") else str(uuid.uuid4())
+    return str(uuid.uuid4())
+
+
+# ponytail: in-memory, single-process only — upgrade to DB model if multi-worker/restart-safe needed
+_import_jobs: dict[str, dict] = {}
+
+
+async def _do_commit(
+    job_id: str,
+    content: bytes,
+    station_id: uuid.UUID,
+    schema_id: uuid.UUID,
+    tenant_id: uuid.UUID,
+    fields: list[dict],
+    key_fields: list[str],
+) -> None:
+    _import_jobs[job_id]["status"] = "running"
+    total = imported = skipped = error_count = 0
+    try:
+        df, exc = _parse_csv_content(content)
+        if exc or df is None or df.empty:
+            _import_jobs[job_id].update(status="done", finished_at=datetime.now(timezone.utc).isoformat())
+            return
+        total = len(df)
+        async with get_db_context() as db:
+            for row in df.itertuples(index=False):
+                row_data, row_errors = _map_row(row._asdict(), fields)
+                if row_errors:
+                    error_count += 1
+                    continue
+                key_val = _key_val_for(row_data, key_fields)
+                exists = (
+                    await db.execute(
+                        select(GenericRecord.id).where(
+                            GenericRecord.tenant_id == tenant_id,
+                            GenericRecord.station_id == station_id,
+                            GenericRecord.lot_no_raw == key_val[:50],
+                        )
+                    )
+                ).scalar_one_or_none()
+                if exists:
+                    skipped += 1
+                    continue
+                db.add(GenericRecord(
+                    tenant_id=tenant_id,
+                    station_id=station_id,
+                    schema_version_id=schema_id,
+                    lot_no_raw=key_val[:50],
+                    lot_no_norm=_lot_no_norm(key_val),
+                    data=row_data,
+                ))
+                imported += 1
+        _import_jobs[job_id].update(
+            status="done",
+            total=total, imported=imported, skipped=skipped, error_count=error_count,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+        )
+    except Exception:
+        _import_jobs[job_id].update(status="failed", finished_at=datetime.now(timezone.utc).isoformat())
+        raise
+
+
 async def _get_station(code: str, tenant_id: uuid.UUID, db: AsyncSession) -> Station:
     station = (
         await db.execute(
@@ -124,7 +265,120 @@ async def _active_schema(station_id: uuid.UUID, db: AsyncSession) -> StationSche
     ).scalar_one_or_none()
 
 
+def _flow_codes(link: StationLink) -> list[str]:
+    codes = (link.link_config or {}).get("flowCodes")
+    return [str(code) for code in codes] if isinstance(codes, list) else ["default"]
+
+
+def _would_create_cycle(links: list[StationLink], flow_code: str, from_id: uuid.UUID, to_id: uuid.UUID) -> bool:
+    graph: dict[uuid.UUID, list[uuid.UUID]] = {}
+    for link in links:
+        if flow_code in _flow_codes(link):
+            graph.setdefault(link.from_station_id, []).append(link.to_station_id)
+    graph.setdefault(from_id, []).append(to_id)
+    stack = [to_id]
+    seen: set[uuid.UUID] = set()
+    while stack:
+        current = stack.pop()
+        if current == from_id:
+            return True
+        if current not in seen:
+            seen.add(current)
+            stack.extend(graph.get(current, []))
+    return False
+
+
+def _to_dataflow_link(link: StationLink, stations: dict[uuid.UUID, Station], flow_code: str) -> DataflowLinkRead:
+    mappings = (link.link_config or {}).get("keyMappings", {})
+    mapping = mappings.get(flow_code, {}) if isinstance(mappings, dict) else {}
+    return DataflowLinkRead(
+        id=str(link.id), flow_code=flow_code,
+        from_station_code=stations[link.from_station_id].code,
+        to_station_code=stations[link.to_station_id].code,
+        parent_column=mapping.get("parentColumn"), child_column=mapping.get("childColumn"),
+        sort_order=link.sort_order,
+    )
+
+
 # ── Routes ───────────────────────────────────────────────────────────────────
+
+@router.get("/dataflows/links", response_model=list[DataflowLinkRead])
+async def list_dataflow_links(
+    flow_code: str = "default",
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    stations = (await db.execute(select(Station).where(Station.tenant_id == tenant.id))).scalars().all()
+    station_map = {station.id: station for station in stations}
+    links = (await db.execute(select(StationLink).where(StationLink.tenant_id == tenant.id))).scalars().all()
+    return [_to_dataflow_link(link, station_map, flow_code) for link in links if flow_code in _flow_codes(link)]
+
+
+@router.post("/dataflows/links", response_model=DataflowLinkRead)
+@router.put("/dataflows/links", response_model=DataflowLinkRead)
+async def upsert_dataflow_link(
+    body: DataflowLinkIn,
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    flow_code = body.flow_code.strip()
+    if not flow_code:
+        raise HTTPException(status_code=422, detail="flow_code is required")
+    from_station = await _get_station(body.from_station_code, tenant.id, db)
+    to_station = await _get_station(body.to_station_code, tenant.id, db)
+    if from_station.id == to_station.id:
+        raise HTTPException(status_code=422, detail="A dataflow link cannot point to itself")
+    links = (await db.execute(select(StationLink).where(StationLink.tenant_id == tenant.id))).scalars().all()
+    existing = next((link for link in links if link.from_station_id == from_station.id and link.to_station_id == to_station.id), None)
+    already_in_flow = existing is not None and flow_code in _flow_codes(existing)
+    if not already_in_flow and _would_create_cycle(links, flow_code, from_station.id, to_station.id):
+        raise HTTPException(status_code=409, detail=f"Link would create a cycle in dataflow '{flow_code}'")
+    link = existing or StationLink(
+        tenant_id=tenant.id, from_station_id=from_station.id, to_station_id=to_station.id,
+        link_type="sequential", link_config={}, sort_order=body.sort_order,
+    )
+    config = dict(link.link_config or {})
+    config["flowCodes"] = sorted(set(_flow_codes(link) if existing else []) | {flow_code})
+    mappings = dict(config.get("keyMappings") or {})
+    mappings[flow_code] = {"parentColumn": body.parent_column, "childColumn": body.child_column}
+    config["keyMappings"] = mappings
+    link.link_config = config
+    link.sort_order = body.sort_order
+    if not existing:
+        db.add(link)
+    await db.commit()
+    await db.refresh(link)
+    return _to_dataflow_link(link, {from_station.id: from_station, to_station.id: to_station}, flow_code)
+
+
+@router.delete("/dataflows/links/{from_code}/{to_code}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_dataflow_link(
+    from_code: str,
+    to_code: str,
+    flow_code: str = "default",
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    from_station = await _get_station(from_code, tenant.id, db)
+    to_station = await _get_station(to_code, tenant.id, db)
+    link = (await db.execute(select(StationLink).where(
+        StationLink.tenant_id == tenant.id,
+        StationLink.from_station_id == from_station.id,
+        StationLink.to_station_id == to_station.id,
+    ))).scalar_one_or_none()
+    if not link or flow_code not in _flow_codes(link):
+        raise HTTPException(status_code=404, detail="Dataflow link not found")
+    remaining = [code for code in _flow_codes(link) if code != flow_code]
+    if not remaining:
+        await db.delete(link)
+    else:
+        config = dict(link.link_config or {})
+        config["flowCodes"] = remaining
+        mappings = dict(config.get("keyMappings") or {})
+        mappings.pop(flow_code, None)
+        config["keyMappings"] = mappings
+        link.link_config = config
+    await db.commit()
 
 @router.get("/forms", response_model=list[StationRead])
 async def list_forms(
@@ -198,6 +452,12 @@ async def delete_form(
     # Delete schemas
     await db.execute(
         sql_delete(StationSchema).where(StationSchema.station_id == station.id)
+    )
+    await db.execute(
+        sql_delete(StationLink).where(
+            StationLink.tenant_id == tenant.id,
+            or_(StationLink.from_station_id == station.id, StationLink.to_station_id == station.id),
+        )
     )
     # Delete station
     await db.execute(sql_delete(Station).where(Station.id == station.id))
@@ -509,3 +769,160 @@ async def delete_record(
     if deleted.rowcount == 0:
         raise HTTPException(status_code=404, detail="Record not found")
     await db.commit()
+
+
+@router.post("/forms/{code}/import/preview", response_model=PreviewResult)
+async def import_preview(
+    code: str,
+    file: UploadFile = File(...),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Dry-run CSV import: validate rows and report duplicates without writing to DB."""
+    station = await _get_station(code, tenant.id, db)
+    schema = await _active_schema(station.id, db)
+    if not schema:
+        raise HTTPException(422, "No schema defined. Use PUT /api/forms/{code}/schema first.")
+
+    content = await file.read()
+    df, exc = _parse_csv_content(content)
+    if exc:
+        raise exc
+    if df.empty:
+        return PreviewResult(total=0, preview_rows=[], errors=[], duplicate_count=0, valid_count=0)
+
+    fields: list[dict] = schema.record_fields or []
+    key_fields = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("is_key") or f.get("role") == "lot"
+    ]
+
+    valid_rows: list[tuple[dict, str]] = []
+    errors: list[dict] = []
+    for row_idx, row in enumerate(df.itertuples(index=False)):
+        row_data, row_errors = _map_row(row._asdict(), fields)
+        if row_errors:
+            errors.append({"row": row_idx + 1, "errors": row_errors})
+        else:
+            valid_rows.append((row_data, _key_val_for(row_data, key_fields)))
+
+    duplicate_count = 0
+    for _, key_val in valid_rows:
+        exists = (
+            await db.execute(
+                select(GenericRecord.id).where(
+                    GenericRecord.tenant_id == tenant.id,
+                    GenericRecord.station_id == station.id,
+                    GenericRecord.lot_no_raw == key_val[:50],
+                )
+            )
+        ).scalar_one_or_none()
+        if exists:
+            duplicate_count += 1
+
+    return PreviewResult(
+        total=len(df),
+        preview_rows=[r for r, _ in valid_rows[:10]],
+        errors=errors,
+        duplicate_count=duplicate_count,
+        valid_count=len(valid_rows) - duplicate_count,
+    )
+
+
+@router.post("/forms/{code}/import/commit", response_model=CommitResult)
+async def import_commit(
+    code: str,
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Commit CSV import. Sync for files < GENERIC_FORMS_ASYNC_THRESHOLD_MB (default 1 MB), async otherwise."""
+    station = await _get_station(code, tenant.id, db)
+    schema = await _active_schema(station.id, db)
+    if not schema:
+        raise HTTPException(422, "No schema defined. Use PUT /api/forms/{code}/schema first.")
+
+    content = await file.read()
+    fields: list[dict] = schema.record_fields or []
+    key_fields = [
+        f.get("fieldKey") or f.get("name")
+        for f in fields
+        if f.get("is_key") or f.get("role") == "lot"
+    ]
+
+    if len(content) >= _threshold_bytes():
+        job_id = str(uuid.uuid4())
+        _import_jobs[job_id] = {
+            "status": "pending",
+            "total": 0, "imported": 0, "skipped": 0, "error_count": 0,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "finished_at": None,
+        }
+        background_tasks.add_task(
+            _do_commit, job_id, content, station.id, schema.id, tenant.id, fields, key_fields
+        )
+        return CommitResult(total=0, imported=0, skipped=0, error_count=0, job_id=job_id)
+
+    df, exc = _parse_csv_content(content)
+    if exc:
+        raise exc
+    if df.empty:
+        return CommitResult(total=0, imported=0, skipped=0, error_count=0)
+
+    imported = skipped = error_count = 0
+    for row in df.itertuples(index=False):
+        row_data, row_errors = _map_row(row._asdict(), fields)
+        if row_errors:
+            error_count += 1
+            continue
+        key_val = _key_val_for(row_data, key_fields)
+        exists = (
+            await db.execute(
+                select(GenericRecord.id).where(
+                    GenericRecord.tenant_id == tenant.id,
+                    GenericRecord.station_id == station.id,
+                    GenericRecord.lot_no_raw == key_val[:50],
+                )
+            )
+        ).scalar_one_or_none()
+        if exists:
+            skipped += 1
+            continue
+        db.add(GenericRecord(
+            tenant_id=tenant.id,
+            station_id=station.id,
+            schema_version_id=schema.id,
+            lot_no_raw=key_val[:50],
+            lot_no_norm=_lot_no_norm(key_val),
+            data=row_data,
+        ))
+        imported += 1
+    await db.commit()
+    return CommitResult(total=len(df), imported=imported, skipped=skipped, error_count=error_count)
+
+
+@router.get("/forms/{code}/import-jobs/{job_id}", response_model=JobStatus)
+async def get_import_job(
+    code: str,
+    job_id: str,
+    tenant: Tenant = Depends(get_current_tenant),
+    db: AsyncSession = Depends(get_db),
+):
+    """Get status of an async import job."""
+    # Verify the station exists and belongs to this tenant
+    await _get_station(code, tenant.id, db)
+    job = _import_jobs.get(job_id)
+    if not job:
+        raise HTTPException(404, f"Import job '{job_id}' not found")
+    return JobStatus(
+        job_id=job_id,
+        status=job["status"],
+        total=job.get("total", 0),
+        imported=job.get("imported", 0),
+        skipped=job.get("skipped", 0),
+        error_count=job.get("error_count", 0),
+        created_at=job["created_at"],
+        finished_at=job.get("finished_at"),
+    )

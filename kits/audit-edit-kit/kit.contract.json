@@ -1,0 +1,16 @@
+{
+  "kit": "audit-edit-kit",
+  "provides": {
+    "api": [
+      { "capability": "audit.events.list", "method": "GET", "path": "/api/audit/events" },
+      { "capability": "records.edit", "method": "POST", "path": "/api/edit" }
+    ],
+    "db": [
+      { "capability": "db.audit.events" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.records.search"]
+  }
+}

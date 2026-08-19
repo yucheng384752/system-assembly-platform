@@ -1,120 +1,146 @@
-#Requires -Version 5.1
-<#
-.SYNOPSIS
-    離線部署套件準備工具 — Form System Kit Composer
-
-.DESCRIPTION
-    在打包「離線版」客戶部署套件之前，預先下載所有需要網路連線的依賴：
-      - Python pip wheels (system/backend/wheels/)
-    執行此腳本後，再至 Kit Composer GUI 下載「離線版」.zip。
-
-    install-wizard.py 在離線模式下會偵測 system/backend/wheels/ 目錄，
-    並使用 pip install --find-links wheels/ --no-index 取代聯網安裝。
-
-.NOTES
-    前置條件：
-      1. Python 3.10+ 已安裝
-      2. system/ 目錄已存在（執行過 tools/assemble-system.ps1）
-
-.EXAMPLE
-    powershell -ExecutionPolicy Bypass -File tools\prepare-offline.ps1
-    powershell -ExecutionPolicy Bypass -File tools\prepare-offline.ps1 -SystemDir "dist\generated-system"
-#>
 param(
-    [string]$SystemDir = ""
+    [string]$SystemDir = "",
+    [string]$PythonVersion = "3.11.9"
 )
 
 $ErrorActionPreference = "Stop"
 $ScriptDir = $PSScriptRoot
-$RepoRoot  = Split-Path $ScriptDir -Parent
+$RepoRoot = Split-Path $ScriptDir -Parent
 
-function Write-OK   ([string]$msg) { Write-Host "  [OK]   $msg" -ForegroundColor Green }
-function Write-Info ([string]$msg) { Write-Host "  [INFO] $msg" -ForegroundColor Yellow }
-function Write-Warn ([string]$msg) { Write-Host "  [WARN] $msg" -ForegroundColor DarkYellow }
-function Die        ([string]$msg) { Write-Host "  [ERR]  $msg" -ForegroundColor Red; exit 1 }
+function Write-OK([string]$Message) { Write-Host "  [OK]   $Message" -ForegroundColor Green }
+function Write-Info([string]$Message) { Write-Host "  [INFO] $Message" -ForegroundColor Yellow }
+function Write-Warn([string]$Message) { Write-Host "  [WARN] $Message" -ForegroundColor DarkYellow }
+function Die([string]$Message) { Write-Host "  [ERR]  $Message" -ForegroundColor Red; exit 1 }
 
 Write-Host "======================================================"
-Write-Host "  Form System Kit Composer — 離線套件準備"
+Write-Host "  Form System Kit Composer offline dependency prep"
 Write-Host "======================================================"
 
-# ── 1. 找 system 目錄 ────────────────────────────────────────────────────────
 if (-not $SystemDir) {
     $candidates = @(
         (Join-Path $RepoRoot "dist\client-deploy-gui-selected-form-system\system"),
         (Join-Path $RepoRoot "dist\generated-system"),
         (Join-Path $RepoRoot "generated\mvp-import-flow\form-analysis-server")
     )
-    foreach ($c in $candidates) {
-        if (Test-Path (Join-Path $c "backend\requirements.txt")) {
-            $SystemDir = $c
+    foreach ($candidate in $candidates) {
+        if (Test-Path (Join-Path $candidate "backend\requirements.txt")) {
+            $SystemDir = $candidate
             break
         }
     }
 }
 
 if (-not $SystemDir -or -not (Test-Path (Join-Path $SystemDir "backend\requirements.txt"))) {
-    Die "找不到 system 目錄（需包含 backend/requirements.txt）。`n請先執行 tools/assemble-system.ps1，或指定 -SystemDir 參數。"
+    Die "System directory not found. Run tools\assemble-system.ps1 first or pass -SystemDir."
 }
-Write-OK "system 目錄: $SystemDir"
+Write-OK "system dir: $SystemDir"
 
 $BackendDir = Join-Path $SystemDir "backend"
-$ReqFile    = Join-Path $BackendDir "requirements.txt"
-$WheelsDir  = Join-Path $BackendDir "wheels"
+$ReqFile = Join-Path $BackendDir "requirements.txt"
+$WheelsDir = Join-Path $BackendDir "wheels"
 
-# ── 2. 建立 wheels 目錄 ──────────────────────────────────────────────────────
 if (-not (Test-Path $WheelsDir)) {
     New-Item -ItemType Directory -Force $WheelsDir | Out-Null
-    Write-OK "建立 wheels 目錄: $WheelsDir"
+    Write-OK "created wheels dir: $WheelsDir"
 } else {
-    Write-Info "wheels 目錄已存在，將更新: $WheelsDir"
+    Write-Info "wheels dir exists, updating: $WheelsDir"
 }
 
-# ── 3. 下載 pip wheels ────────────────────────────────────────────────────────
-Write-Info "開始下載 pip wheels（需要網路）..."
+Write-Info "Downloading backend pip wheels..."
 Write-Info "requirements.txt: $ReqFile"
 
-$pip = (Get-Command python -ErrorAction SilentlyContinue)?.Source
-if (-not $pip) { Die "找不到 python，請確認 Python 3.10+ 已安裝並在 PATH 中" }
+if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
+    Die "python not found. Install Python 3.10+ and retry."
+}
 
-Write-Info "使用 Python: $pip"
-Write-Info "下載至: $WheelsDir"
-Write-Host ""
-
-$result = & python -m pip download `
+& python -m pip download `
     --dest "$WheelsDir" `
     --platform linux_x86_64 `
     --python-version "310" `
     --only-binary=:all: `
-    -r "$ReqFile" 2>&1
+    -r "$ReqFile"
 
 if ($LASTEXITCODE -ne 0) {
-    Write-Warn "部分套件無法取得 linux_x86_64 預編譯版本，嘗試下載 any 平台..."
-    $result2 = & python -m pip download `
+    Write-Warn "linux_x86_64 wheel download failed, retrying without platform pin..."
+    & python -m pip download `
         --dest "$WheelsDir" `
-        -r "$ReqFile" 2>&1
+        -r "$ReqFile"
     if ($LASTEXITCODE -ne 0) {
-        Die "pip download 失敗。請確認網路連線，或手動執行：`n  pip download --dest $WheelsDir -r $ReqFile"
+        Die "pip download failed. Check network access and requirements.txt."
     }
 }
 
 $wheelCount = (Get-ChildItem $WheelsDir -Filter "*.whl" -ErrorAction SilentlyContinue).Count
-$tarCount   = (Get-ChildItem $WheelsDir -Filter "*.tar.gz" -ErrorAction SilentlyContinue).Count
-Write-OK "wheels 下載完成：$wheelCount .whl + $tarCount .tar.gz"
+$tarCount = (Get-ChildItem $WheelsDir -Filter "*.tar.gz" -ErrorAction SilentlyContinue).Count
+Write-OK "backend wheels prepared: $wheelCount .whl + $tarCount .tar.gz"
 
-# ── 4. 摘要 ──────────────────────────────────────────────────────────────────
+$FrontendDir = Join-Path $SystemDir "frontend"
+$PackageJson = Join-Path $FrontendDir "package.json"
+$PackageLock = Join-Path $FrontendDir "package-lock.json"
+$NpmCacheDir = Join-Path $FrontendDir ".npm-cache"
+
+if ((Test-Path $PackageJson) -and (Test-Path $PackageLock)) {
+    if (-not (Get-Command npm -ErrorAction SilentlyContinue)) {
+        Die "npm not found. Install Node.js/npm before preparing frontend offline dependencies."
+    }
+
+    Write-Info "Downloading frontend npm cache from package-lock.json..."
+    Push-Location $FrontendDir
+    try {
+        New-Item -ItemType Directory -Force $NpmCacheDir | Out-Null
+        & npm ci --cache "$NpmCacheDir" --ignore-scripts --silent
+        if ($LASTEXITCODE -ne 0) {
+            Die "npm ci failed while preparing frontend npm cache."
+        }
+    } finally {
+        Pop-Location
+    }
+
+    $nodeModulesPath = Join-Path $FrontendDir "node_modules"
+    if (Test-Path $nodeModulesPath) {
+        Remove-Item -LiteralPath $nodeModulesPath -Recurse -Force
+    }
+    Write-OK "frontend npm cache prepared: $NpmCacheDir"
+} elseif (Test-Path $PackageJson) {
+    Write-Warn "frontend package-lock.json missing; skipping npm offline cache."
+}
+
+# ── Bundle Windows Python installer for offline bootstrap ──────────────────
+$DeployRoot = Split-Path $SystemDir -Parent
+$InstallersDir = Join-Path $DeployRoot "installers"
+if (Test-Path (Join-Path $DeployRoot "bootstrap.ps1")) {
+    New-Item -ItemType Directory -Force $InstallersDir | Out-Null
+    $existing = Get-ChildItem $InstallersDir -Include *.exe, *.msi -File -Recurse -ErrorAction SilentlyContinue
+    if ($existing) {
+        Write-Info "Python installer already bundled: $($existing[0].Name)"
+    } else {
+        $pyUrl = "https://www.python.org/ftp/python/$PythonVersion/python-$PythonVersion-amd64.exe"
+        $pyOut = Join-Path $InstallersDir "python-$PythonVersion-amd64.exe"
+        Write-Info "Downloading Windows Python installer: $pyUrl"
+        try {
+            Invoke-WebRequest -Uri $pyUrl -OutFile $pyOut -UseBasicParsing
+            Write-OK "bundled Python installer: $pyOut"
+        } catch {
+            Write-Warn "Could not download Python installer ($($_.Exception.Message)). Drop python-$PythonVersion-amd64.exe into installers/ manually."
+        }
+    }
+    Write-Info "Linux offline target: place python3 .deb/.rpm into installers/ (see installers/README.txt)"
+} else {
+    Write-Info "No bootstrap.ps1 at deploy root; skipping Python installer bundling (run package-client-deploy.ps1 first)."
+}
+
 Write-Host ""
 Write-Host "======================================================"
-Write-Host "  離線套件準備完成！" -ForegroundColor Green
+Write-Host "  Offline dependency preparation complete" -ForegroundColor Green
 Write-Host "======================================================"
-Write-Host "  wheels 目錄   : $WheelsDir"
-Write-Host "  套件數量      : $($wheelCount + $tarCount) 個"
+Write-Host "  wheels dir    : $WheelsDir"
+if (Test-Path $NpmCacheDir) {
+    Write-Host "  npm cache     : $NpmCacheDir"
+}
+Write-Host "  python files  : $($wheelCount + $tarCount)"
 Write-Host ""
-Write-Host "  下一步："
-Write-Host "    1. 至 Kit Composer GUI (http://localhost:4174)"
-Write-Host "    2. Step 3 選擇「離線版」"
-Write-Host "    3. 點擊「下載 .zip」"
-Write-Host "    4. 將 ZIP 交給部署人員（無需網路即可安裝）"
-Write-Host ""
-Write-Host "  install-wizard.py 在離線模式下會自動使用："
+Write-Host "  Backend offline install:"
 Write-Host "    pip install --find-links wheels/ --no-index -r requirements.txt"
+Write-Host "  Frontend offline install:"
+Write-Host "    npm ci --cache .npm-cache --offline"
 Write-Host "======================================================"
