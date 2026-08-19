@@ -171,6 +171,7 @@ $env = [ordered]@{
     AUTH_MODE = $plan.featureFlags.AUTH_MODE
     MULTI_TENANT_ENABLED = $plan.featureFlags.MULTI_TENANT_ENABLED
     USE_GENERIC_SCHEMA = $plan.featureFlags.USE_GENERIC_SCHEMA
+    LEGACY_TABLE_CODES_CSV = $plan.featureFlags.LEGACY_TABLE_CODES_CSV
     AUDIT_EVENTS_ENABLED = $plan.featureFlags.AUDIT_EVENTS_ENABLED
 }
 foreach ($service in @($plan.selectedExternalServices)) {

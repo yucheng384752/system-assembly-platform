@@ -1,6 +1,7 @@
 ﻿{
-    "generatedAt":  "2026-06-23T17:23:19",
+    "generatedAt":  "2026-08-19T17:20:33",
     "recipe":  "form-analysis-original-recomposition",
+    "clientName":  null,
     "sourceManifest":  "form-analysis-kit-suite",
     "database":  {
                      "selectedByUserIntent":  {
@@ -109,7 +110,6 @@
 
                 ],
     "enabledApis":  [
-                        "",
                         "GET /api/auth/whoami",
                         "POST /api/auth/login",
                         "POST /api/auth/me/password",
@@ -156,13 +156,11 @@
                            "Tenant",
                            "TenantUser",
                            "TenantApiKey",
-                           "P1Record",
-                           "P2Record",
-                           "P2ItemV2",
-                           "P3Record",
-                           "P3ItemV2",
                            "GenericRecord",
                            "GenericRecordItem",
+                           "Station",
+                           "StationSchema",
+                           "StationLink",
                            "UploadJob",
                            "UploadError",
                            "PdfUpload",
@@ -172,18 +170,25 @@
                            "StagingRow",
                            "TableRegistry",
                            "SchemaVersion",
-                           "Station",
-                           "StationSchema",
-                           "StationLink",
                            "ValidationRule",
                            "AnalyticsMapping",
                            "EditReason",
                            "RowEdit",
-                           "AuditEvent"
+                           "AuditEvent",
+                           "DataType",
+                           "Record",
+                           "P1Record",
+                           "P2Item",
+                           "P2Record",
+                           "P2ItemV2",
+                           "P3Item",
+                           "P3Record",
+                           "P3ItemV2"
                        ],
     "frontendSources":  [
                             "frontend/src/services/fetchWrapper.ts",
                             "frontend/src/services/a11y.ts",
+                            "frontend/src/services/kitClient.ts",
                             "frontend/src/App.tsx",
                             "frontend/src/main.tsx",
                             "frontend/src/i18n.ts",
@@ -220,11 +225,15 @@
                         ],
     "backendSources":  [
                            "backend/app/api/routes_health.py",
+                           "backend/app/api/routes_kit_broker.py",
                            "backend/app/main.py",
                            "backend/app/core/config.py",
                            "backend/app/core/database.py",
                            "backend/app/core/logging.py",
                            "backend/app/core/middleware.py",
+                           "backend/app/core/kit_contracts.py",
+                           "backend/app/core/kit_broker.py",
+                           "backend/app/core/db_capabilities.py",
                            "backend/app/api/deps.py",
                            "backend/app/api/routes_auth.py",
                            "backend/app/api/routes_tenants.py",
@@ -237,13 +246,6 @@
                            "backend/app/models/core/tenant_api_key.py",
                            "backend/app/utils/normalization.py",
                            "backend/app/services/product_id_generator.py",
-                           "backend/app/services/production_date_extractor.py",
-                           "backend/app/models/base_record.py",
-                           "backend/app/models/p1_record.py",
-                           "backend/app/models/p2_record.py",
-                           "backend/app/models/p3_record.py",
-                           "backend/app/models/p2_item_v2.py",
-                           "backend/app/models/p3_item_v2.py",
                            "backend/app/models/generic_record.py",
                            "backend/app/models/station.py",
                            "backend/app/models/validation_rule.py",
@@ -256,7 +258,6 @@
                            "backend/app/models/upload_error.py",
                            "backend/app/models/pdf_upload.py",
                            "backend/app/models/pdf_conversion_job.py",
-                           "backend/app/api/routes_import.py",
                            "backend/app/api/routes_import_v2.py",
                            "backend/app/services/import_v2.py",
                            "backend/app/services/csv_field_mapper.py",
@@ -279,7 +280,18 @@
                            "backend/app/api/routes_audit_events.py",
                            "backend/app/services/audit_events.py",
                            "backend/app/models/core/audit_event.py",
-                           "backend/app/api/routes_logs.py"
+                           "backend/app/api/routes_logs.py",
+                           "backend/app/api/routes_import.py",
+                           "backend/app/services/production_date_extractor.py",
+                           "backend/app/models/base_record.py",
+                           "backend/app/models/record.py",
+                           "backend/app/models/p1_record.py",
+                           "backend/app/models/p2_item.py",
+                           "backend/app/models/p2_record.py",
+                           "backend/app/models/p2_item_v2.py",
+                           "backend/app/models/p3_item.py",
+                           "backend/app/models/p3_record.py",
+                           "backend/app/models/p3_item_v2.py"
                        ],
     "templateSources":  [
 
@@ -292,6 +304,17 @@
                                            "prefix":  "/healthz",
                                            "tags":  [
                                                         "Health Check"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "platform-core-kit",
+                                           "module":  "app.api.routes_kit_broker",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/kit",
+                                           "tags":  [
+                                                        "Kit Broker"
                                                     ],
                                            "tenantScoped":  false,
                                            "featureFlag":  null
@@ -336,17 +359,6 @@
                                            "prefix":  "/api",
                                            "tags":  [
                                                         "驗證結果查詢"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "import-pipeline-kit",
-                                           "module":  "app.api.routes_import",
-                                           "symbol":  "router",
-                                           "prefix":  "/api",
-                                           "tags":  [
-                                                        "資料匯入"
                                                     ],
                                            "tenantScoped":  true,
                                            "featureFlag":  null
@@ -449,6 +461,18 @@
                                                     ],
                                            "tenantScoped":  true,
                                            "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "station-data-link-kit",
+                                           "subfeature":  "p123-compatibility-adapter",
+                                           "module":  "app.api.routes_import",
+                                           "symbol":  "router",
+                                           "prefix":  "/api",
+                                           "tags":  [
+                                                        "資料匯入（P1/P2/P3 相容）"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
                                        }
                                    ],
     "externalServices":  [
@@ -472,7 +496,9 @@
                          "MULTI_TENANT_ENABLED":  true,
                          "AUTH_MODE":  "api_key",
                          "AUDIT_EVENTS_ENABLED":  true,
-                         "PDF_SERVER_URL":  "required"
+                         "PDF_SERVER_URL":  "required",
+                         "LEGACY_TABLE_CODES_CSV":  "P1,P2,P3",
+                         "PDF_WINDER_TABLE_CODES_CSV":  "P2"
                      },
     "frontendNavigation":  [
                                {
@@ -541,5 +567,11 @@
                                                "顯示圖表與異常資訊"
                                            ]
                              }
-                         ]
+                         ],
+    "dataflows":  [
+
+                  ],
+    "formSchemas":  [
+
+                    ]
 }

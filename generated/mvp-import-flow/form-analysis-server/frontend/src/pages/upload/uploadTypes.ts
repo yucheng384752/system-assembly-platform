@@ -1,4 +1,4 @@
-﻿export type FileType = "P1" | "P2" | "P3" | "PDF" | "UNKNOWN" | (string & {});
+﻿export type FileType = "PDF" | "UNKNOWN" | (string & {});
 
 export interface CsvData {
   headers: string[];

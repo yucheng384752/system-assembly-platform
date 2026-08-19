@@ -1,55 +1,65 @@
 ﻿{
-    "generatedAt":  "2026-07-01T18:09:44",
-    "recipe":  "gui-selected-form-system",
+    "generatedAt":  "2026-08-19T17:20:33",
+    "recipe":  "mvp-import-flow",
+    "clientName":  null,
     "sourceManifest":  "form-analysis-kit-suite",
     "database":  {
+                     "selectedByUserIntent":  {
+                                                  "usageScale":  "team",
+                                                  "dataCriticality":  "production",
+                                                  "needsTenantIsolation":  true,
+                                                  "needsAnalytics":  false,
+                                                  "needsBackgroundJobs":  true
+                                              },
                      "engine":  "postgresql",
-                     "connectionOwner":  "platform-core-kit",
-                     "autoGenerateConnection":  true
+                     "reasonForNonTechnicalUser":  "這個系統會保存正式匯入紀錄、使用者權限與背景處理結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。"
                  },
     "resolvedKitOrder":  [
                              "platform-core-kit",
                              "tenant-auth-kit",
                              "station-data-link-kit",
                              "upload-validation-kit",
-                             "import-pipeline-kit",
-                             "query-traceability-kit",
-                             "analytics-kit",
-                             "station-admin-kit",
-                             "audit-edit-kit",
-                             "logs-ops-kit"
+                             "import-pipeline-kit"
                          ],
     "selectedSubfeatures":  {
                                 "platform-core-kit":  [
-
+                                                          "app-shell",
+                                                          "configuration-management",
+                                                          "database-connection",
+                                                          "health-check",
+                                                          "api-client-foundation"
                                                       ],
                                 "tenant-auth-kit":  [
-
+                                                        "tenant-list-and-create",
+                                                        "user-login",
+                                                        "api-key-issue",
+                                                        "user-management",
+                                                        "admin-unlock"
                                                     ],
                                 "station-data-link-kit":  [
-
+                                                              "station-data-model",
+                                                              "p123-compatibility-adapter",
+                                                              "new-station-definition",
+                                                              "lot-normalization",
+                                                              "product-id-generation",
+                                                              "generic-record"
                                                           ],
                                 "upload-validation-kit":  [
-
+                                                              "csv-excel-upload-validation",
+                                                              "csv-excel-error-summary",
+                                                              "csv-content-correction",
+                                                              "pdf-upload-option",
+                                                              "pdf-to-csv-binding",
+                                                              "converted-result-ingest-upload-job"
                                                           ],
                                 "import-pipeline-kit":  [
-
-                                                        ],
-                                "query-traceability-kit":  [
-
-                                                           ],
-                                "analytics-kit":  [
-
-                                                  ],
-                                "station-admin-kit":  [
-
-                                                      ],
-                                "audit-edit-kit":  [
-
-                                                   ],
-                                "logs-ops-kit":  [
-
-                                                 ]
+                                                            "create-import-job",
+                                                            "create-import-job-from-upload-job",
+                                                            "staging-row-validation",
+                                                            "import-error-query",
+                                                            "commit-production-records",
+                                                            "cancel-import"
+                                                        ]
                             },
     "selectedSubfeatureOptions":  {
 
@@ -58,7 +68,6 @@
 
                 ],
     "enabledApis":  [
-                        "",
                         "GET /api/auth/whoami",
                         "POST /api/auth/login",
                         "POST /api/auth/me/password",
@@ -78,40 +87,17 @@
                         "GET /api/v2/import/jobs/{job_id}",
                         "GET /api/v2/import/jobs/{job_id}/errors",
                         "POST /api/v2/import/jobs/{job_id}/commit",
-                        "POST /api/v2/import/jobs/{job_id}/cancel",
-                        "GET /api/v2/query/lots",
-                        "POST /api/v2/query/advanced",
-                        "POST /api/v2/query/records/dynamic",
-                        "GET /api/v2/query/records/stats",
-                        "GET /api/v2/query/trace/{trace_key}",
-                        "GET /product/{product_id}",
-                        "GET /lot/{lot_no}",
-                        "GET /winder/{lot_no}/{winder_number}",
-                        "GET /api/v2/analytics/flatten/monthly",
-                        "GET /api/v2/analytics/flatten",
-                        "POST /api/v2/analytics/analyze",
-                        "GET /api/v2/analytics/artifacts",
-                        "POST /api/v2/analytics/realtime-analysis",
-                        "POST /api/v2/analytics/complaint-analysis",
-                        "POST /api/v2/analytics/extraction-analysis",
-                        "GET /api/logs/files",
-                        "GET /api/logs/view/{log_type}",
-                        "GET /api/logs/stats",
-                        "GET /api/logs/search",
-                        "DELETE /api/logs/cleanup",
-                        "GET /api/logs/download/{log_type}"
+                        "POST /api/v2/import/jobs/{job_id}/cancel"
                     ],
     "requiredModels":  [
                            "Tenant",
                            "TenantUser",
                            "TenantApiKey",
-                           "P1Record",
-                           "P2Record",
-                           "P2ItemV2",
-                           "P3Record",
-                           "P3ItemV2",
                            "GenericRecord",
                            "GenericRecordItem",
+                           "Station",
+                           "StationSchema",
+                           "StationLink",
                            "UploadJob",
                            "UploadError",
                            "PdfUpload",
@@ -121,14 +107,15 @@
                            "StagingRow",
                            "TableRegistry",
                            "SchemaVersion",
-                           "Station",
-                           "StationSchema",
-                           "StationLink",
-                           "ValidationRule",
-                           "AnalyticsMapping",
-                           "EditReason",
-                           "RowEdit",
-                           "AuditEvent"
+                           "DataType",
+                           "Record",
+                           "P1Record",
+                           "P2Item",
+                           "P2Record",
+                           "P2ItemV2",
+                           "P3Item",
+                           "P3Record",
+                           "P3ItemV2"
                        ],
     "frontendSources":  [
                             "frontend/src/services/fetchWrapper.ts",
@@ -149,24 +136,7 @@
                             "frontend/src/components/FileUpload.tsx",
                             "frontend/src/components/CSVEditor.tsx",
                             "frontend/src/hooks/useUpload.ts",
-                            "frontend/src/services/api.ts",
-                            "frontend/src/pages/QueryPage.tsx",
-                            "frontend/src/components/AdvancedSearch.tsx",
-                            "frontend/src/components/DataQuery.tsx",
-                            "frontend/src/components/TraceabilityFlow.tsx",
-                            "frontend/src/components/GenericTraceabilityFlow.tsx",
-                            "frontend/src/pages/AnalyticsPage.tsx",
-                            "frontend/src/components/analytics",
-                            "frontend/src/services/analyticsArtifacts.ts",
-                            "frontend/src/components/admin/StationManager.tsx",
-                            "frontend/src/components/admin/StationLinkManager.tsx",
-                            "frontend/src/components/admin/ValidationRuleManager.tsx",
-                            "frontend/src/components/admin/AnalyticsMappingManager.tsx",
-                            "frontend/src/services/stationApi.ts",
-                            "frontend/src/components/EditRecordModal.tsx",
-                            "frontend/src/components/SimpleLogViewer.tsx",
-                            "frontend/src/components/LogViewer.tsx",
-                            "frontend/src/services/logService.ts"
+                            "frontend/src/services/api.ts"
                         ],
     "backendSources":  [
                            "backend/app/api/routes_health.py",
@@ -191,13 +161,6 @@
                            "backend/app/models/core/tenant_api_key.py",
                            "backend/app/utils/normalization.py",
                            "backend/app/services/product_id_generator.py",
-                           "backend/app/services/production_date_extractor.py",
-                           "backend/app/models/base_record.py",
-                           "backend/app/models/p1_record.py",
-                           "backend/app/models/p2_record.py",
-                           "backend/app/models/p3_record.py",
-                           "backend/app/models/p2_item_v2.py",
-                           "backend/app/models/p3_item_v2.py",
                            "backend/app/models/generic_record.py",
                            "backend/app/models/station.py",
                            "backend/app/models/validation_rule.py",
@@ -210,30 +173,23 @@
                            "backend/app/models/upload_error.py",
                            "backend/app/models/pdf_upload.py",
                            "backend/app/models/pdf_conversion_job.py",
-                           "backend/app/api/routes_import.py",
                            "backend/app/api/routes_import_v2.py",
                            "backend/app/services/import_v2.py",
                            "backend/app/services/csv_field_mapper.py",
                            "backend/app/services/generic_validator.py",
                            "backend/app/models/import_job.py",
                            "backend/app/models/core/schema_registry.py",
-                           "backend/app/api/routes_query_v2.py",
-                           "backend/app/api/traceability.py",
-                           "backend/app/services/traceability_flattener.py",
-                           "backend/app/services/ut_flattener.py",
-                           "backend/app/api/routes_analytics.py",
-                           "backend/app/api/routes_ut.py",
-                           "backend/app/services/analytics_external.py",
-                           "backend/app/services/analytics_data_fetcher.py",
-                           "backend/app/services/analytical_four_adapter.py",
-                           "backend/app/api/routes_stations.py",
-                           "backend/app/services/schema_service.py",
-                           "backend/app/core/seed_stations.py",
-                           "backend/app/api/routes_edit.py",
-                           "backend/app/api/routes_audit_events.py",
-                           "backend/app/services/audit_events.py",
-                           "backend/app/models/core/audit_event.py",
-                           "backend/app/api/routes_logs.py"
+                           "backend/app/api/routes_import.py",
+                           "backend/app/services/production_date_extractor.py",
+                           "backend/app/models/base_record.py",
+                           "backend/app/models/record.py",
+                           "backend/app/models/p1_record.py",
+                           "backend/app/models/p2_item.py",
+                           "backend/app/models/p2_record.py",
+                           "backend/app/models/p2_item_v2.py",
+                           "backend/app/models/p3_item.py",
+                           "backend/app/models/p3_record.py",
+                           "backend/app/models/p3_item_v2.py"
                        ],
     "templateSources":  [
 
@@ -307,17 +263,6 @@
                                        },
                                        {
                                            "kit":  "import-pipeline-kit",
-                                           "module":  "app.api.routes_import",
-                                           "symbol":  "router",
-                                           "prefix":  "/api",
-                                           "tags":  [
-                                                        "資料匯入"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "import-pipeline-kit",
                                            "module":  "app.api.routes_import_v2",
                                            "symbol":  "router",
                                            "prefix":  "/api/v2/import",
@@ -328,89 +273,13 @@
                                            "featureFlag":  null
                                        },
                                        {
-                                           "kit":  "query-traceability-kit",
-                                           "module":  "app.api.routes_query_v2",
+                                           "kit":  "station-data-link-kit",
+                                           "subfeature":  "p123-compatibility-adapter",
+                                           "module":  "app.api.routes_import",
                                            "symbol":  "router",
-                                           "prefix":  "/api/v2/query",
+                                           "prefix":  "/api",
                                            "tags":  [
-                                                        "Query V2"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "query-traceability-kit",
-                                           "module":  "app.api.traceability",
-                                           "symbol":  "router",
-                                           "prefix":  null,
-                                           "tags":  [
-                                                        "生產追溯"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "analytics-kit",
-                                           "module":  "app.api.routes_analytics",
-                                           "symbol":  "router",
-                                           "prefix":  null,
-                                           "tags":  [
-                                                        "Analytics"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "analytics-kit",
-                                           "module":  "app.api.routes_ut",
-                                           "symbol":  "router",
-                                           "prefix":  null,
-                                           "tags":  [
-                                                        "UT Data"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "station-admin-kit",
-                                           "module":  "app.api.routes_stations",
-                                           "symbol":  "router",
-                                           "prefix":  null,
-                                           "tags":  [
-                                                        "Stations (Generic)"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  "USE_GENERIC_SCHEMA"
-                                       },
-                                       {
-                                           "kit":  "audit-edit-kit",
-                                           "module":  "app.api.routes_edit",
-                                           "symbol":  "router",
-                                           "prefix":  "/api/edit",
-                                           "tags":  [
-                                                        "Inline Edit"
-                                                    ],
-                                           "tenantScoped":  true,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "audit-edit-kit",
-                                           "module":  "app.api.routes_audit_events",
-                                           "symbol":  "router",
-                                           "prefix":  null,
-                                           "tags":  [
-                                                        "Audit Events"
-                                                    ],
-                                           "tenantScoped":  false,
-                                           "featureFlag":  null
-                                       },
-                                       {
-                                           "kit":  "logs-ops-kit",
-                                           "module":  "app.api.routes_logs",
-                                           "symbol":  "router",
-                                           "prefix":  "/api/logs",
-                                           "tags":  [
-                                                        "日誌管理"
+                                                        "資料匯入（P1/P2/P3 相容）"
                                                     ],
                                            "tenantScoped":  true,
                                            "featureFlag":  null
@@ -424,13 +293,58 @@
                              }
                          ],
     "selectedExternalServices":  [
-
+                                     {
+                                         "kit":  "upload-validation-kit",
+                                         "subfeature":  "pdf-to-csv-binding",
+                                         "id":  "pdf-conversion-service",
+                                         "config":  "PDF_SERVER_URL",
+                                         "required":  true
+                                     }
                                  ],
     "featureFlags":  {
-                         "USE_GENERIC_SCHEMA":  true
+                         "USE_GENERIC_SCHEMA":  false,
+                         "MULTI_TENANT_ENABLED":  true,
+                         "AUTH_MODE":  "api_key",
+                         "AUDIT_EVENTS_ENABLED":  false,
+                         "PDF_SERVER_URL":  "required",
+                         "LEGACY_TABLE_CODES_CSV":  "P1,P2,P3",
+                         "PDF_WINDER_TABLE_CODES_CSV":  "P2"
                      },
     "frontendNavigation":  [
-
+                               {
+                                   "tab":  "register",
+                                   "labelKey":  "tabs.register",
+                                   "kit":  "tenant-auth-kit"
+                               },
+                               {
+                                   "tab":  "upload",
+                                   "labelKey":  "tabs.upload",
+                                   "kit":  "upload-validation-kit"
+                               }
                            ],
-    "previewScenarios":  null
+    "previewScenarios":  [
+                             {
+                                 "id":  "mvp-upload-import",
+                                 "label":  "MVP 上傳到匯入",
+                                 "kits":  [
+                                              "tenant-auth-kit",
+                                              "upload-validation-kit",
+                                              "import-pipeline-kit",
+                                              "station-data-link-kit"
+                                          ],
+                                 "steps":  [
+                                               "登入租戶",
+                                               "上傳 P1/P2/P3 CSV",
+                                               "顯示驗證摘要",
+                                               "建立 import job",
+                                               "commit 到正式資料表"
+                                           ]
+                             }
+                         ],
+    "dataflows":  [
+
+                  ],
+    "formSchemas":  [
+
+                    ]
 }

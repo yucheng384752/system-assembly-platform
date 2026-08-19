@@ -5,6 +5,7 @@
 """
 
 import hashlib
+import re
 import time
 import uuid
 from datetime import UTC, datetime
@@ -204,10 +205,8 @@ def _infer_table_code_from_filename(filename: str) -> str | None:
     name = (filename or "").strip()
     if not name:
         return None
-    token = Path(name).name.split("_", 1)[0].upper()
-    if token in {"P1", "P2", "P3"}:
-        return token
-    return None
+    token = re.split(r"[_-]", Path(name).name, maxsplit=1)[0].upper()
+    return token if re.fullmatch(r"[A-Z][A-Z0-9]*", token) else None
 
 
 async def _create_v2_import_job_from_upload_job(

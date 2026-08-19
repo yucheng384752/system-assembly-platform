@@ -195,6 +195,53 @@ foreach ($kitId in $resolved) {
         $subfeature = $subfeatureMap[$subfeatureId]
         $validSelectedIds.Add($subfeatureId)
 
+        $contributions = $subfeature.contributions
+        if ($null -ne $contributions) {
+            foreach ($api in @($contributions.api)) {
+                $apiName = [string]$api
+                if (-not [string]::IsNullOrWhiteSpace($apiName) -and -not $enabledApis.Contains($apiName)) { $enabledApis.Add($apiName) }
+            }
+            foreach ($model in @($contributions.database.models)) {
+                $modelName = [string]$model
+                if (-not [string]::IsNullOrWhiteSpace($modelName) -and -not $models.Contains($modelName)) { $models.Add($modelName) }
+            }
+            foreach ($source in @($contributions.frontend.pages) + @($contributions.frontend.components) + @($contributions.frontend.services) + @($contributions.frontend.hooks) + @($contributions.frontend.shellFiles)) {
+                $sourcePath = [string]$source
+                if (-not [string]::IsNullOrWhiteSpace($sourcePath) -and -not $frontendSources.Contains($sourcePath)) { $frontendSources.Add($sourcePath) }
+            }
+            foreach ($source in @($contributions.backend.routers) + @($contributions.backend.core) + @($contributions.backend.services) + @($contributions.backend.models)) {
+                $sourcePath = [string]$source
+                if (-not [string]::IsNullOrWhiteSpace($sourcePath) -and -not $backendSources.Contains($sourcePath)) { $backendSources.Add($sourcePath) }
+            }
+            foreach ($source in @($contributions.templates.backend) + @($contributions.templates.frontend)) {
+                $sourcePath = [string]$source
+                if (-not [string]::IsNullOrWhiteSpace($sourcePath) -and -not $templateSources.Contains($sourcePath)) { $templateSources.Add($sourcePath) }
+            }
+            foreach ($registration in @($contributions.backend.routerRegistrations)) {
+                if ($null -ne $registration) {
+                    $backendRouterRegistrations.Add([ordered]@{
+                        kit = $kitId
+                        subfeature = $subfeatureId
+                        module = $registration.module
+                        symbol = $registration.symbol
+                        prefix = $registration.prefix
+                        tags = @($registration.tags)
+                        tenantScoped = [bool]$registration.tenantScoped
+                        featureFlag = $registration.featureFlag
+                    })
+                }
+            }
+            foreach ($flag in @($contributions.featureFlags)) {
+                $flagName = [string]$flag
+                if (-not [string]::IsNullOrWhiteSpace($flagName) -and -not $featureFlags.Contains($flagName)) { $featureFlags[$flagName] = $true }
+            }
+            if ($contributions.config) {
+                foreach ($property in $contributions.config.PSObject.Properties) {
+                    if (-not $featureFlags.Contains($property.Name)) { $featureFlags[$property.Name] = $property.Value }
+                }
+            }
+        }
+
         foreach ($dependency in @($subfeature.dependencies)) {
             if ([string]::IsNullOrWhiteSpace([string]$dependency)) {
                 continue
