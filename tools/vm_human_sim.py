@@ -4,9 +4,16 @@ Simulates a factory operator using the form system end-to-end.
 """
 import io, json, time
 import requests as req
+import os
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 BASE = "http://localhost:8000"
-ADMIN_KEY = "vm-admin-key-2026"
+ADMIN_KEY = _require_env("VM_ADMIN_API_KEY")
 results: list = []
 state: dict = {}
 

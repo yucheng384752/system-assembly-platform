@@ -96,6 +96,7 @@ class JobStatus(BaseModel):
     error_count: int
     created_at: str
     finished_at: str | None = None
+    message: str | None = None
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -198,29 +199,40 @@ async def _do_commit(
     total = imported = skipped = error_count = 0
     try:
         df, exc = _parse_csv_content(content)
-        if exc or df is None or df.empty:
+        if exc:
+            _import_jobs[job_id].update(
+                status="failed", message=exc.detail,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+            )
+            return
+        if df is None or df.empty:
             _import_jobs[job_id].update(status="done", finished_at=datetime.now(timezone.utc).isoformat())
             return
         total = len(df)
+        seen_keys: set[str] = set()
         async with get_db_context() as db:
             for row in df.itertuples(index=False):
                 row_data, row_errors = _map_row(row._asdict(), fields)
                 if row_errors:
                     error_count += 1
                     continue
-                key_val = _key_val_for(row_data, key_fields)
+                key_val = _key_val_for(row_data, key_fields)[:50]
+                if key_val in seen_keys:
+                    skipped += 1
+                    continue
                 exists = (
                     await db.execute(
                         select(GenericRecord.id).where(
                             GenericRecord.tenant_id == tenant_id,
                             GenericRecord.station_id == station_id,
-                            GenericRecord.lot_no_raw == key_val[:50],
+                            GenericRecord.lot_no_raw == key_val,
                         )
                     )
                 ).scalar_one_or_none()
                 if exists:
                     skipped += 1
                     continue
+                seen_keys.add(key_val)
                 db.add(GenericRecord(
                     tenant_id=tenant_id,
                     station_id=station_id,
@@ -855,6 +867,7 @@ async def import_commit(
     if len(content) >= _threshold_bytes():
         job_id = str(uuid.uuid4())
         _import_jobs[job_id] = {
+            "tenant_id": tenant.id,
             "status": "pending",
             "total": 0, "imported": 0, "skipped": 0, "error_count": 0,
             "created_at": datetime.now(timezone.utc).isoformat(),
@@ -872,29 +885,34 @@ async def import_commit(
         return CommitResult(total=0, imported=0, skipped=0, error_count=0)
 
     imported = skipped = error_count = 0
+    seen_keys: set[str] = set()
     for row in df.itertuples(index=False):
         row_data, row_errors = _map_row(row._asdict(), fields)
         if row_errors:
             error_count += 1
             continue
-        key_val = _key_val_for(row_data, key_fields)
+        key_val = _key_val_for(row_data, key_fields)[:50]
+        if key_val in seen_keys:
+            skipped += 1
+            continue
         exists = (
             await db.execute(
                 select(GenericRecord.id).where(
                     GenericRecord.tenant_id == tenant.id,
                     GenericRecord.station_id == station.id,
-                    GenericRecord.lot_no_raw == key_val[:50],
+                    GenericRecord.lot_no_raw == key_val,
                 )
             )
         ).scalar_one_or_none()
         if exists:
             skipped += 1
             continue
+        seen_keys.add(key_val)
         db.add(GenericRecord(
             tenant_id=tenant.id,
             station_id=station.id,
             schema_version_id=schema.id,
-            lot_no_raw=key_val[:50],
+            lot_no_raw=key_val,
             lot_no_norm=_lot_no_norm(key_val),
             data=row_data,
         ))
@@ -914,7 +932,8 @@ async def get_import_job(
     # Verify the station exists and belongs to this tenant
     await _get_station(code, tenant.id, db)
     job = _import_jobs.get(job_id)
-    if not job:
+    # 404 (not 403) for a job owned by another tenant, so we don't confirm the job_id exists at all.
+    if not job or job.get("tenant_id") != tenant.id:
         raise HTTPException(404, f"Import job '{job_id}' not found")
     return JobStatus(
         job_id=job_id,
@@ -925,4 +944,5 @@ async def get_import_job(
         error_count=job.get("error_count", 0),
         created_at=job["created_at"],
         finished_at=job.get("finished_at"),
+        message=job.get("message"),
     )

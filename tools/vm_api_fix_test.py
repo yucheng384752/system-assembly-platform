@@ -1,9 +1,15 @@
 """Re-test endpoints that failed due to wrong parameters in first pass."""
-import json, time
+import json, os, time
 import requests as req
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 BASE = "http://localhost:8000"
-ADMIN_KEY = "vm-admin-key-2026"
+ADMIN_KEY = _require_env("VM_ADMIN_API_KEY")
 
 r = req.post(f"{BASE}/api/auth/login", json={"tenant_code": "default", "username": "manager", "password": "TestPass123!"})
 d = r.json()

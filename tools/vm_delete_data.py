@@ -1,9 +1,19 @@
-"""Delete all test import data from VM DB."""
+"""Delete all test import data from VM DB. Requires VM_DB_PASSWORD in the environment."""
 import asyncio
+import os
+
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
+
 
 async def main():
     import asyncpg
-    conn = await asyncpg.connect("postgresql://form_system:qqq123@localhost:5432/form_system")
+    db_password = _require_env("VM_DB_PASSWORD")
+    conn = await asyncpg.connect(f"postgresql://form_system:{db_password}@localhost:5432/form_system")
 
     steps = [
         ("staging_rows",     "DELETE FROM staging_rows"),

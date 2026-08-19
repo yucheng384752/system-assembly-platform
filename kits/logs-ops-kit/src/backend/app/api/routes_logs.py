@@ -1,7 +1,9 @@
 """
 logs-ops-kit: system log query API.
 
-Routes (all tenant-scoped):
+Routes (all tenant-scoped — only rows written with a matching tenant_id are visible;
+platform-level rows with no tenant_id, e.g. startup/heartbeat events, are visible to no one
+through this API):
   GET /api/logs/          paginated log list with filters
   GET /api/logs/summary   counts by log_type + level (last 24 h)
 """
@@ -15,7 +17,9 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_tenant
 from app.core.database import get_db
+from app.models.core.tenant import Tenant
 
 router = APIRouter()
 
@@ -40,6 +44,7 @@ def _row_to_dict(row: Any) -> dict[str, Any]:
 @router.get("/")
 async def list_logs(
     db: Annotated[AsyncSession, Depends(get_db)],
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
     log_type: str | None = Query(
         None,
         description="user_action | system_error | system_warning | system",
@@ -51,8 +56,8 @@ async def list_logs(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
 ) -> dict[str, Any]:
-    filters: list[str] = []
-    params: dict[str, Any] = {"limit": limit, "offset": offset}
+    filters: list[str] = ["tenant_id = :tenant_id"]
+    params: dict[str, Any] = {"limit": limit, "offset": offset, "tenant_id": str(tenant.id)}
 
     if log_type:
         filters.append("log_type = :log_type")
@@ -102,6 +107,7 @@ async def list_logs(
 @router.get("/summary")
 async def log_summary(
     db: Annotated[AsyncSession, Depends(get_db)],
+    tenant: Annotated[Tenant, Depends(get_current_tenant)],
 ) -> dict[str, Any]:
     since = (datetime.now(timezone.utc) - timedelta(hours=24)).isoformat()
     rows = (
@@ -109,11 +115,11 @@ async def log_summary(
             text(
                 "SELECT log_type, level, COUNT(*) AS cnt"
                 " FROM system_logs"
-                " WHERE timestamp >= :since"
+                " WHERE timestamp >= :since AND tenant_id = :tenant_id"
                 " GROUP BY log_type, level"
                 " ORDER BY cnt DESC"
             ),
-            {"since": since},
+            {"since": since, "tenant_id": str(tenant.id)},
         )
     ).fetchall()
     return {

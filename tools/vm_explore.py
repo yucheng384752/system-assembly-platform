@@ -1,12 +1,19 @@
 """Quick VM exploration via paramiko."""
+import os
 import paramiko, sys
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 HOST = "192.168.200.33"
 USER = "gslab"
-PASS = "qqq123"
+PASS = _require_env("VM_SSH_PASSWORD")
 
 client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+client.set_missing_host_key_policy(paramiko.WarningPolicy())
 client.connect(HOST, username=USER, password=PASS, timeout=15)
 
 cmds = [

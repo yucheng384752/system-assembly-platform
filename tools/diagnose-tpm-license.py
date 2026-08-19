@@ -126,7 +126,7 @@ if shutil.which("tpm2_readpublic"):
                 def _norm(p):
                     return "\n".join(l.strip() for l in p.strip().splitlines() if l.strip())
                 if _norm(local_pem) == _norm(handle_pem):
-                    ok("signing_public.pem 與 handle 公鑰一致 ✓")
+                    ok("signing_public.pem 與 handle 公鑰一致")
                 else:
                     fail("signing_public.pem 與 handle 公鑰不一致！PEM 檔可能過期或指向不同 handle")
         else:
@@ -234,7 +234,7 @@ def _norm_pem(pem: str) -> str:
 
 if license_pubkey_pem and local_pem:
     if _norm_pem(license_pubkey_pem) == _norm_pem(local_pem):
-        ok("license.machinePublicKey == /opt/hiba/tpm/signing_public.pem ✓")
+        ok("license.machinePublicKey == /opt/hiba/tpm/signing_public.pem")
     else:
         fail("license.machinePublicKey ≠ /opt/hiba/tpm/signing_public.pem")
         info("License 是用不同機器的 PEM 簽發的，需重新從本機取得 PEM 並簽發新 license")
@@ -245,7 +245,7 @@ elif not local_pem:
 
 if license_pubkey_pem and handle_pem:
     if _norm_pem(license_pubkey_pem) == _norm_pem(handle_pem):
-        ok("license.machinePublicKey == TPM handle 公鑰 ✓")
+        ok("license.machinePublicKey == TPM handle 公鑰")
     else:
         fail("license.machinePublicKey ≠ TPM handle 公鑰")
         info("TPM handle 已被重設（重跑 01_tpm_full_setup.sh 後 handle 改變），需重新簽發 license")
@@ -258,7 +258,7 @@ if sig_bytes and license_pubkey_pem:
         from cryptography.hazmat.primitives.asymmetric import padding as _pad
         pub = serialization.load_pem_public_key(license_pubkey_pem.encode())
         pub.verify(sig_bytes, nonce, _pad.PKCS1v15(), hashes.SHA256())
-        ok("TPM challenge-response 通過 ✓（本機 TPM 握有 license 對應私鑰）")
+        ok("TPM challenge-response 通過（本機 TPM 握有 license 對應私鑰）")
     except Exception as e:
         fail(f"TPM challenge-response 失敗：{e}")
         info("原因：license 的 machinePublicKey 與本機 TPM handle 的私鑰不對應")
@@ -294,7 +294,7 @@ EwIDAQAB
             padding.PSS(mgf=padding.MGF1(hashes.SHA256()), salt_length=32),
             hashes.SHA256(),
         )
-        ok("Issuer RSA-PSS 簽章驗證通過 ✓")
+        ok("Issuer RSA-PSS 簽章驗證通過")
     except InvalidSignature:
         fail("Issuer 簽章無效 — license.lic 可能被竄改或由不同 Kit Composer 簽發")
     except ImportError:

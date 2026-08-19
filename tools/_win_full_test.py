@@ -24,14 +24,20 @@ import time
 import uuid
 import zipfile
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 import paramiko
 
 # ── Config ────────────────────────────────────────────────────────────────────
 VM_HOST = "192.168.200.33"
 VM_USER = "gslab"
-VM_PASS = "qqq123"
+VM_PASS = _require_env("VM_SSH_PASSWORD")
 DB_USER = "gslab"
-DB_PASS = "qqq123"
+DB_PASS = _require_env("VM_SSH_PASSWORD")
 DB_NAME = "formdb_wintest"
 TUNNEL_PORT = 15432
 
@@ -216,7 +222,7 @@ class SSHTunnel:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
 ssh.connect(VM_HOST, username=VM_USER, password=VM_PASS, timeout=15)
 p(f"Connected to {VM_HOST}")
 

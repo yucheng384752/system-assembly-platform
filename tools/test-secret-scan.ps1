@@ -67,4 +67,37 @@ foreach ($root in $distRoots) {
     }
 }
 
+# Hardcoded credential literals in the local VM deploy/debug scripts (e.g. PASS = "qqq123",
+# ADMIN_API_KEYS='...') — these scripts talk to a live demo VM, so a hardcoded credential
+# here is an active secret leak, not just a style issue. Env-var reads (_require_env(...))
+# and f-string interpolation (the quoted value starting with "{") are the expected pattern
+# and do not match. Scoped to tools/vm_*.py + _win_full_test.py (where this was found) rather
+# than all of tools/, since other tools/test_*.py fixtures use intentional non-secret
+# placeholder values that would otherwise false-positive here.
+$credentialPattern = '(PASS(WORD)?|PGPASSWORD|ADMIN_API_KEYS?|ADMIN_KEY)\s*=\s*[''"](?!\{)[^''"]+[''"]'
+$trackedToolScripts = @(
+    & git -C $ProjectRoot ls-files 'tools/vm_*.py' 'tools/_win_full_test.py'
+)
+$hardcodedCredHits = @()
+foreach ($relPath in $trackedToolScripts) {
+    $fullPath = Join-Path $ProjectRoot $relPath
+    if (-not (Test-Path $fullPath)) {
+        continue
+    }
+    $lineNum = 0
+    foreach ($line in Get-Content -Encoding UTF8 -LiteralPath $fullPath) {
+        $lineNum++
+        $trimmed = $line.TrimStart()
+        if ($trimmed.StartsWith("#")) {
+            continue
+        }
+        if ($line -match $credentialPattern) {
+            $hardcodedCredHits += "${relPath}:${lineNum}: $($line.Trim())"
+        }
+    }
+}
+if ($hardcodedCredHits.Count -gt 0) {
+    throw "Hardcoded credential literal(s) found in VM deploy/debug scripts:`n$($hardcodedCredHits -join "`n")"
+}
+
 Write-Host "OK secret scan"

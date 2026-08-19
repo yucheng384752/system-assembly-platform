@@ -1,7 +1,13 @@
 """Comprehensive VM API endpoint tester – runs on VM via venv python3."""
-import json, sys, time, random
+import json, os, sys, time, random
 from pathlib import Path
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 BASE = "http://localhost:8000"
 KEY = ""
 TID = ""
@@ -25,8 +31,10 @@ print(f"Login {r.status_code}: key={KEY[:16]}... tenant={TID}")
 def H():
     return {"X-API-Key": KEY, "X-Tenant-Id": TID}
 
+ADMIN_KEY = _require_env("VM_ADMIN_API_KEY")
+
 def HA():
-    return {**H(), "X-Admin-API-Key": "daihui-admin-key-2026"}
+    return {**H(), "X-Admin-API-Key": ADMIN_KEY}
 
 results: list[tuple] = []
 
@@ -37,29 +45,29 @@ def test(method: str, path: str, desc: str, admin=False, **kwargs):
         r = requests.request(method, url, headers=headers, timeout=20, **kwargs)
         ok = "OK" if r.status_code < 400 else ("4xx" if r.status_code < 500 else "5xx")
         results.append((ok, method, path, r.status_code, desc, r.text[:300]))
-        icon = {"OK": "✅", "4xx": "⚠️", "5xx": "❌"}.get(ok, "?")
+        icon = {"OK": "[OK]  ", "4xx": "[WARN]", "5xx": "[FAIL]"}.get(ok, "[??? ]")
         print(f"  {icon} {r.status_code:3} {method:7} {path}")
         return r.status_code, r.text
     except Exception as e:
         results.append(("ERR", method, path, "---", desc, str(e)))
-        print(f"  💥 --- {method:7} {path} → {e}")
+        print(f"  [ERR] --- {method:7} {path} -> {e}")
         return "---", str(e)
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 1. HEALTH CHECK
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 1. HEALTH CHECK ═══════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 1. HEALTH CHECK ===")
 test("GET", "/healthz", "Basic health")
 test("GET", "/healthz/", "Basic health (trailing slash)")
 test("GET", "/healthz/detailed", "Detailed health w/ DB & disk info")
 test("GET", "/healthz/ready", "Readiness check")
 test("GET", "/healthz/live", "Liveness check")
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 2. AUTHENTICATION
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 2. AUTHENTICATION ═════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 2. AUTHENTICATION ===")
 test("GET", "/api/auth/whoami", "Who am I (current session)")
 test("GET", "/api/auth/bootstrap-status", "Bootstrap config status")
 test("GET", "/api/auth/bootstrap/manager-status", "Manager account bootstrap status")
@@ -91,10 +99,10 @@ test("POST", "/api/auth/admin/tenant-api-keys", "Issue a new tenant API key",
     json={"tenant_id": TID, "label": f"ci-test-{ts}"})
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 3. GENERIC FORMS
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 3. GENERIC FORMS ══════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 3. GENERIC FORMS ===")
 test("GET", "/api/forms", "List all forms (5 daihui + others)")
 
 # Create
@@ -160,10 +168,10 @@ test("POST", "/api/forms/daihui_entry/upload", "Upload to daihui_entry (Chinese 
 test("GET", "/api/forms/daihui_entry/records?page_size=3", "List daihui_entry records (newest 3)")
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 4. IMPORT V2
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 4. IMPORT V2 ══════════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 4. IMPORT V2 ===")
 
 uid = random.randint(1000, 9999)
 csv_daihui = (
@@ -229,10 +237,10 @@ test("POST", "/api/v2/import/jobs/from-upload-job",
     json={"upload_job_id": "00000000-0000-0000-0000-000000000000"})
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 5. TENANTS
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 5. TENANTS ════════════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 5. TENANTS ===")
 test("GET", "/api/tenants", "List tenants (current user's)")
 
 # Create tenant
@@ -256,10 +264,10 @@ test("POST", "/api/tenants/admin", "Admin create tenant (X-Admin-API-Key)",
     json={"code": f"adm{ts}", "name": "Admin建立的租戶"})
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 6. LEGACY UPLOAD
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 6. LEGACY UPLOAD ══════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 6. LEGACY UPLOAD ===")
 csv_bytes = csv_valid.encode()
 
 test("POST", "/api/upload", "Legacy upload endpoint (expect deprecation hint)",
@@ -282,31 +290,31 @@ test("POST", f"/api/upload/pdf/{fake_id}/convert",        "PDF convert trigger (
 test("POST", f"/api/upload/pdf/{fake_id}/convert/ingest", "PDF convert ingest  (fake → 404)")
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 7. LEGACY IMPORT
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 7. LEGACY IMPORT ══════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 7. LEGACY IMPORT ===")
 test("POST", "/api/import", "Legacy /api/import (expect deprecation or 405)",
     json={})
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # 8. VALIDATE
-# ════════════════════════════════════════════════════════════════════
-print("\n╔═ 8. VALIDATE ═══════════════════════════════════════════╗")
+# ====================================================================
+print("\n=== 8. VALIDATE ===")
 test("GET", "/api/validate", "Validate results (no filter)")
 test("GET", "/api/validate?form_code=daihui_entry", "Validate results for daihui_entry")
 test("GET", "/api/validate?form_code=nonexistent", "Validate results for nonexistent form")
 
 
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 # SUMMARY TABLE
-# ════════════════════════════════════════════════════════════════════
+# ====================================================================
 print("\n")
 print("=" * 115)
 print(f"  {'St':3} {'Method':7} {'Path':65} {'Code':4}  Description")
 print("=" * 115)
-icons = {"OK": "✅", "4xx": "⚠️", "5xx": "❌", "ERR": "💥"}
+icons = {"OK": "[OK]  ", "4xx": "[WARN]", "5xx": "[FAIL]", "ERR": "[ERR] "}
 for ok, m, p, c, desc, body in results:
     icon = icons.get(ok, "?")
     print(f"  {icon} {m:7} {p:65} {c!s:4}  {desc}")
@@ -317,13 +325,13 @@ n_4xx = sum(1 for r in results if r[0] == "4xx")
 n_5xx = sum(1 for r in results if r[0] == "5xx")
 n_err = sum(1 for r in results if r[0] == "ERR")
 print("=" * 115)
-print(f"  Total {total} | ✅ PASS {n_ok} | ⚠️ 4xx {n_4xx} | ❌ 5xx {n_5xx} | 💥 ERR {n_err}")
+print(f"  Total {total} | [OK] PASS {n_ok} | [WARN] 4xx {n_4xx} | [FAIL] 5xx {n_5xx} | [ERR] ERR {n_err}")
 
-print("\n╔═ FAILURES / WARNINGS DETAIL ════════════════════════════╗")
+print("\n=== FAILURES / WARNINGS DETAIL ===")
 for ok, m, p, c, desc, body in results:
     if ok in ("5xx", "ERR"):
-        print(f"\n  ❌ [{ok}] {m} {p} → {c}")
+        print(f"\n  [FAIL] [{ok}] {m} {p} -> {c}")
         print(f"     {body[:400]}")
 for ok, m, p, c, desc, body in results:
     if ok == "4xx":
-        print(f"\n  ⚠️  [4xx] {m} {p} → {c}: {body[:200]}")
+        print(f"\n  [WARN] [4xx] {m} {p} -> {c}: {body[:200]}")

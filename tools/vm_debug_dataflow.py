@@ -2,6 +2,12 @@
 import requests as req
 import json, time, random
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 BASE = "http://localhost:8000"
 
 # 1. Login
@@ -71,7 +77,7 @@ if job_id:
 # A6. Check DB row count
 import subprocess, os
 env = os.environ.copy()
-env["PGPASSWORD"] = "qqq123"
+env["PGPASSWORD"] = _require_env("VM_DB_PASSWORD")
 result = subprocess.run(
     ["psql", "-h", "127.0.0.1", "-U", "form_system", "-d", "form_system",
      "-c", "SELECT COUNT(*) FROM daihui_entry;"],

@@ -23,7 +23,8 @@ async def call_capability(
         raise HTTPException(status_code=404, detail=f"Unknown kit capability: {capability}")
 
     if capability in DB_CAPABILITIES:
-        data = await DB_CAPABILITIES[capability](db=db, tenant_id=tenant_id, **payload)
+        safe_payload = {k: v for k, v in payload.items() if k not in ("db", "tenant_id")}
+        data = await DB_CAPABILITIES[capability](db=db, tenant_id=tenant_id, **safe_payload)
         return {"capability": capability, "kind": "db", "data": data}
 
     if entry.get("kind") == "api":

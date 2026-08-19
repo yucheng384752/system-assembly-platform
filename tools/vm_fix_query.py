@@ -9,9 +9,15 @@ Steps:
 """
 import paramiko, stat, time, sys
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 HOST = "192.168.200.33"
 USER = "gslab"
-PASS = "qqq123"
+PASS = _require_env("VM_SSH_PASSWORD")
 DEPLOY_DIR = "/home/gslab/Desktop/form-system-import-query-analytics-generic-forms-deploy-2026-06-26"
 BACKEND_DIR = f"{DEPLOY_DIR}/system/backend"
 VENV = f"{DEPLOY_DIR}/system/.venv/bin/python"
@@ -143,7 +149,7 @@ asyncio.run(main())
 '''
 
 client = paramiko.SSHClient()
-client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+client.set_missing_host_key_policy(paramiko.WarningPolicy())
 client.connect(HOST, username=USER, password=PASS, timeout=15)
 
 def run(cmd, desc="", timeout=60):
@@ -194,9 +200,10 @@ run(f"cd {BACKEND_DIR} && {VENV} {REMOTE_MIG} 2>&1", "migration", timeout=60)
 print("\n=== Restarting uvicorn ===")
 run("pkill -f 'uvicorn app.main:app' || true", "kill uvicorn", timeout=10)
 time.sleep(2)
+admin_key = _require_env("VM_ADMIN_API_KEY")
 start_cmd = (
     f"cd {BACKEND_DIR} && "
-    f"ADMIN_API_KEYS='vm-admin-key-2026' "
+    f"ADMIN_API_KEYS='{admin_key}' "
     f"nohup {VENV} -m uvicorn app.main:app "
     f"--host 0.0.0.0 --port 8000 >> {LOG_FILE} 2>&1 &"
 )

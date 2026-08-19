@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS system_logs (
     state           TEXT        NOT NULL,
     describe        TEXT        NOT NULL DEFAULT '',
     metadata_json   TEXT        NOT NULL DEFAULT '{}',
+    tenant_id       TEXT        NULL,
     created_at      TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 )
 """
@@ -54,13 +55,19 @@ CREATE TABLE IF NOT EXISTS system_logs (
     state           TEXT        NOT NULL,
     describe        TEXT        NOT NULL DEFAULT '',
     metadata_json   TEXT        NOT NULL DEFAULT '{}',
+    tenant_id       TEXT        NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
 
+# Best-effort migration for tables created before tenant_id existed. SQLite/PG both accept
+# bare ADD COLUMN; neither reliably supports "IF NOT EXISTS" for it (PG needs 9.6+, SQLite never
+# does), so the caller must swallow the "column already exists" error on a second run.
+_ALTER_ADD_TENANT_ID = "ALTER TABLE system_logs ADD COLUMN tenant_id TEXT"
+
 _INSERT_SQL = """
-INSERT INTO system_logs (id, timestamp, log_type, level, action, state, describe, metadata_json)
-VALUES (:id, :timestamp, :log_type, :level, :action, :state, :describe, :metadata_json)
+INSERT INTO system_logs (id, timestamp, log_type, level, action, state, describe, metadata_json, tenant_id)
+VALUES (:id, :timestamp, :log_type, :level, :action, :state, :describe, :metadata_json, :tenant_id)
 """
 
 
@@ -106,6 +113,15 @@ def _do_init(db_url: str) -> None:
         with engine.connect() as conn:
             conn.execute(text(ddl))
             conn.commit()
+        try:
+            # Separate connection/transaction: a pre-existing table (created before tenant_id
+            # existed) makes this fail with "column already exists" — that failure must not
+            # abort the CREATE TABLE transaction above, which already committed successfully.
+            with engine.connect() as conn:
+                conn.execute(text(_ALTER_ADD_TENANT_ID))
+                conn.commit()
+        except Exception:
+            pass
         factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         _running = True
         _worker_thread = threading.Thread(
@@ -165,6 +181,7 @@ def init_monitoring(*, server_url: str = "", source: str | None = None) -> None:
             "state": "success",
             "describe": f"source={source}",
             "metadata_json": json.dumps({"source": source, "server_url": server_url}),
+            "tenant_id": None,  # platform-level lifecycle event, not attributable to a tenant
         })
 
 
@@ -179,6 +196,7 @@ def start_heartbeat(interval_seconds: int | float = 30) -> None:
         "state": "success",
         "describe": f"interval={interval_seconds}s",
         "metadata_json": json.dumps({"interval_seconds": interval_seconds}),
+        "tenant_id": None,
     })
 
 
@@ -192,6 +210,7 @@ def stop_heartbeat() -> None:
         "state": "success",
         "describe": "heartbeat stopped at shutdown",
         "metadata_json": "{}",
+        "tenant_id": None,
     })
     global _running
     _running = False
@@ -205,6 +224,11 @@ def report_user_action(
     level: str = "INFO",
     **metadata: Any,
 ) -> None:
+    # tenant_id is not a formal parameter so this keeps the exact signature of the
+    # platform-core-kit no-op it overrides — callers that want the row attributed to a
+    # tenant pass tenant_id=tenant.id like any other metadata kwarg; it is pulled out of
+    # metadata_json into its own column here instead of staying buried in JSON.
+    tenant_id = metadata.pop("tenant_id", None)
     _ensure_initialized()
     log_level_int = getattr(logging, str(level or "INFO").upper(), logging.INFO)
     _logger.log(
@@ -223,6 +247,7 @@ def report_user_action(
         "state": state,
         "describe": describe,
         "metadata_json": json.dumps(metadata, default=str),
+        "tenant_id": str(tenant_id) if tenant_id is not None else None,
     })
 
 
@@ -243,6 +268,11 @@ def make_structlog_processor(min_level: str = "WARNING") -> Callable[..., Any]:
             has_exc = bool(event_dict.get("exc_info") or event_dict.get("exception"))
             _ensure_initialized()
             log_type = "system_error" if level_int >= logging.ERROR else "system_warning"
+            # Most log lines have no request/tenant context (startup, background workers).
+            # Pick up tenant_id only if something upstream already bound it into the event
+            # dict (e.g. a future structlog contextvars binding in request middleware);
+            # otherwise the row is platform-level and stays unattributed rather than guessed.
+            tenant_id = event_dict.get("tenant_id")
             _enqueue({
                 "id": str(uuid.uuid4()),
                 "timestamp": _now_iso(),
@@ -251,9 +281,10 @@ def make_structlog_processor(min_level: str = "WARNING") -> Callable[..., Any]:
                 "action": "structlog_event",
                 "state": "error" if has_exc else "warning",
                 "describe": event,
+                "tenant_id": str(tenant_id) if tenant_id is not None else None,
                 "metadata_json": json.dumps(
                     {k: str(v) for k, v in event_dict.items()
-                     if k not in ("event", "exc_info", "exception", "_record")},
+                     if k not in ("event", "exc_info", "exception", "_record", "tenant_id")},
                     default=str,
                 ),
             })
