@@ -412,9 +412,8 @@ async function initMachineGate() {
   document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", (e) => {
     handleMachinePubkeyFile(e.target.files?.[0], {
       statusEl: document.getElementById("gate-status"),
-      // serverRunning is not yet determined here; handleMachinePubkeyFile will
-      // try the API and fall back gracefully if the server is unavailable.
-      serverRunning: true,
+      // Always attempts the API call; handleMachinePubkeyFile falls back to a
+      // "PEM valid, server unreachable" status if the fetch itself fails.
       showGate: true,
     });
   });
@@ -447,28 +446,22 @@ async function initMachineGate() {
     }
   });
 
+  // Every page load requires a fresh PEM upload before Kit selection unlocks —
+  // a prior registration in data/machines.json is intentionally NOT used to
+  // skip straight to the "already registered" state.
   let serverRunning = false;
-  let machines = [];
   try {
     const resp = await fetch("/api/machines");
-    if (resp.ok) { machines = await resp.json(); serverRunning = true; }
+    if (resp.ok) serverRunning = true;
   } catch (_) { /* server not running */ }
-
-  if (serverRunning && Array.isArray(machines) && machines.length > 0 && machines[0].pubkey) {
-    state.machinePubkey = machines[0].pubkey;
-    overlay.removeAttribute("hidden");
-    _showGateRegistered(machines);
-    return;
-  }
 
   overlay.removeAttribute("hidden");
   if (!serverRunning) {
     document.getElementById("gate-offline-notice")?.removeAttribute("hidden");
   }
-
 }
 
-async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, showGate = false } = {}) {
+async function handleMachinePubkeyFile(file, { statusEl, showGate = false } = {}) {
   if (!file) return;
   const pem = (await file.text()).trim();
   const isPem = pem.includes("-----BEGIN PUBLIC KEY-----") && pem.includes("-----END PUBLIC KEY-----");
@@ -483,16 +476,6 @@ async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, s
   if (statusEl) {
     statusEl.style.color = "var(--ink-3,#6b7280)";
     statusEl.textContent = "驗證中…";
-  }
-
-  if (!serverRunning) {
-    state.machinePubkey = pem;
-    if (showGate) _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
-    if (statusEl) {
-      statusEl.style.color = "var(--success,#16a34a)";
-      statusEl.textContent = "✓ PEM 格式有效（離線模式）";
-    }
-    return;
   }
 
   try {
@@ -529,19 +512,9 @@ async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, s
 
 function _showGateRegistered(machines) {
   const registeredArea = document.getElementById("gate-registered-area");
-  const listEl = document.getElementById("gate-machine-list");
   const stepsEl = document.getElementById("gate-register-steps");
   if (stepsEl) stepsEl.style.opacity = "0.45";
   if (registeredArea) registeredArea.removeAttribute("hidden");
-  if (listEl) {
-    listEl.innerHTML = machines.map((m) => {
-      // Show PEM header + key fingerprint preview
-      const lines = (m.pubkey || "").split("\n").filter(Boolean);
-      const b64 = lines.filter(l => !l.startsWith("-----")).join("");
-      const preview = b64.length > 20 ? b64.slice(0, 12) + "…" + b64.slice(-8) : (m.pubkey || "").slice(0, 20);
-      return `<div>RSA-2048 公鑰 <code>${preview}</code>&nbsp;&nbsp;<span style="color:var(--ink-4,#8293a8);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`;
-    }).join("");
-  }
   const statusEl = document.getElementById("gate-status");
   if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ TPM 公鑰已登錄"; }
 }
