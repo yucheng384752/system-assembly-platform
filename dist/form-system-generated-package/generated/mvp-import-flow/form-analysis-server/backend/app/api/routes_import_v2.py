@@ -1,8 +1,10 @@
 import hashlib
+import csv
+import io
 import logging
 import shutil
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import (
@@ -23,7 +25,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_tenant, get_db
 from app.core import database
 from app.core.config import get_settings
-from app.models.core.schema_registry import TableRegistry
+from app.models.core.schema_registry import SchemaVersion, TableRegistry
 from app.models.core.tenant import Tenant
 from app.models.import_job import ImportFile, ImportJob, ImportJobStatus, StagingRow
 from app.models.upload_job import UploadJob
@@ -81,15 +83,125 @@ class ImportJobFromUploadJobRequest(BaseModel):
     allow_duplicate: bool = False
 
 
-def _infer_table_code_from_filename(filename: str) -> str | None:
-    # Heuristic: prefer leading token before '_' (e.g., P1_2503033_01.csv)
-    name = (filename or "").strip()
-    if not name:
-        return None
-    token = Path(name).name.split("_", 1)[0].upper()
-    if token in {"P1", "P2", "P3"}:
-        return token
-    return None
+def compute_header_fingerprint(headers: list[str]) -> str:
+    canonical = "|".join(sorted(h.strip() for h in headers if h and h.strip()))
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+async def _read_csv_headers(file: UploadFile) -> list[str]:
+    content = await file.read()
+    await file.seek(0)
+    for encoding in ("utf-8-sig", "cp950"):
+        try:
+            text_content = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text_content = content.decode("utf-8-sig", errors="ignore")
+    reader = csv.reader(io.StringIO(text_content))
+    return next(reader, [])
+
+
+def _read_csv_headers_from_bytes(content: bytes) -> list[str]:
+    for encoding in ("utf-8-sig", "cp950"):
+        try:
+            text_content = content.decode(encoding)
+            break
+        except UnicodeDecodeError:
+            continue
+    else:
+        text_content = content.decode("utf-8-sig", errors="ignore")
+    reader = csv.reader(io.StringIO(text_content))
+    return next(reader, [])
+
+
+async def _resolve_table_registry(
+    db: AsyncSession,
+    table_code: str | None,
+    files: list[UploadFile],
+) -> tuple[TableRegistry, str]:
+    requested = (table_code or "").strip()
+    if requested and requested.upper() != "UNKNOWN":
+        normalized = requested
+        result = await db.execute(
+            select(TableRegistry).where(TableRegistry.table_code == normalized)
+        )
+        table_registry = result.scalar_one_or_none()
+        if table_registry:
+            return table_registry, normalized
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid table code: {normalized}",
+        )
+
+    csv_files = [
+        file for file in files
+        if Path(file.filename or "").suffix.lower() == ".csv"
+    ]
+    if not csv_files:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="table_code is required for non-CSV imports",
+        )
+
+    headers = await _read_csv_headers(csv_files[0])
+    fingerprint = compute_header_fingerprint(headers)
+    result = await db.execute(
+        select(TableRegistry)
+        .join(SchemaVersion, SchemaVersion.table_id == TableRegistry.id)
+        .where(SchemaVersion.header_fingerprint == fingerprint)
+    )
+    table_registry = result.scalar_one_or_none()
+    if table_registry:
+        return table_registry, table_registry.table_code
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unable to resolve table_code from CSV header fingerprint: {fingerprint}",
+    )
+
+
+async def _resolve_table_registry_from_bytes(
+    db: AsyncSession,
+    table_code: str | None,
+    filename: str,
+    content: bytes,
+) -> tuple[TableRegistry, str]:
+    requested = (table_code or "").strip()
+    if requested and requested.upper() != "UNKNOWN":
+        normalized = requested
+        result = await db.execute(
+            select(TableRegistry).where(TableRegistry.table_code == normalized)
+        )
+        table_registry = result.scalar_one_or_none()
+        if table_registry:
+            return table_registry, normalized
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Invalid table code: {normalized}",
+        )
+
+    if Path(filename or "").suffix.lower() != ".csv":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="table_code is required for non-CSV imports",
+        )
+
+    fingerprint = compute_header_fingerprint(_read_csv_headers_from_bytes(content))
+    result = await db.execute(
+        select(TableRegistry)
+        .join(SchemaVersion, SchemaVersion.table_id == TableRegistry.id)
+        .where(SchemaVersion.header_fingerprint == fingerprint)
+    )
+    table_registry = result.scalar_one_or_none()
+    if table_registry:
+        return table_registry, table_registry.table_code
+
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=f"Unable to resolve table_code from CSV header fingerprint: {fingerprint}",
+    )
 
 
 async def _mark_job_failed(job_id: uuid.UUID, error: Exception | str) -> None:
@@ -109,7 +221,7 @@ async def _mark_job_failed(job_id: uuid.UUID, error: Exception | str) -> None:
         prev_status = job.status
         job.status = ImportJobStatus.FAILED
         job.error_summary = {"error": error_text}
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "system"
         job.last_status_actor_api_key_id = None
         job.last_status_actor_label_snapshot = None
@@ -176,7 +288,7 @@ async def process_import_job_background(
 async def create_import_job(
     request: Request,
     background_tasks: BackgroundTasks,
-    table_code: str = Form(..., description="Target table code (e.g., 'P1', 'P2')"),
+    table_code: str | None = Form(None, description="Target table code or UNKNOWN for header auto-detection"),
     allow_duplicate: bool = Form(
         False, description="Allow importing the same file content multiple times"
     ),
@@ -187,17 +299,6 @@ async def create_import_job(
     """
     Create a new import job with uploaded files.
     """
-    # 1. Validate Table Code
-    stmt = select(TableRegistry).where(TableRegistry.table_code == table_code)
-    result = await db.execute(stmt)
-    table_registry = result.scalar_one_or_none()
-
-    if not table_registry:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid table code: {table_code}",
-        )
-
     if not files:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -210,6 +311,7 @@ async def create_import_job(
         )
 
     safe_filenames = [_safe_upload_filename(f.filename) for f in files]
+    table_registry, resolved_table_code = await _resolve_table_registry(db, table_code, files)
 
     # 1.5 Check Mixed Batch (Extensions)
     exts = {Path(name).suffix.lower() for name in safe_filenames}
@@ -241,7 +343,7 @@ async def create_import_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -356,7 +458,7 @@ async def create_import_job(
         metadata={
             "job_id": str(job.id),
             "batch_id": job.batch_id,
-            "table_code": table_code,
+            "table_code": resolved_table_code,
             "total_files": len(files),
             "allow_duplicate": bool(allow_duplicate),
         },
@@ -368,7 +470,7 @@ async def create_import_job(
     report_user_action(
         action="import_job_create",
         state="success",
-        describe=f"job={job.id} table={table_code} files={len(files)} tenant={current_tenant.code} ip={_ip}",
+        describe=f"job={job.id} table={resolved_table_code} files={len(files)} tenant={current_tenant.code} ip={_ip}",
     )
 
     # Eager load files for response
@@ -406,7 +508,9 @@ async def create_import_job(
                 "Skip background processing: async_session_factory not initialized"
             )
 
-    return job
+    response = ImportJobRead.model_validate(job)
+    response.table_code = resolved_table_code
+    return response
 
 
 @router.post(
@@ -446,26 +550,13 @@ async def create_import_job_from_upload_job(
             detail="Upload job file_content is empty",
         )
 
-    # 2) Determine table_code
-    table_code = (
-        payload.table_code or ""
-    ).strip().upper() or _infer_table_code_from_filename(upload_job.filename)
-    if not table_code:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="table_code is required (cannot infer from filename)",
-        )
-
-    # 3) Validate TableRegistry
-    result = await db.execute(
-        select(TableRegistry).where(TableRegistry.table_code == table_code)
+    content = bytes(upload_job.file_content)
+    table_registry, table_code = await _resolve_table_registry_from_bytes(
+        db,
+        payload.table_code,
+        upload_job.filename,
+        content,
     )
-    table_registry = result.scalar_one_or_none()
-    if not table_registry:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid table code: {table_code}",
-        )
 
     # 4) Create ImportJob + ImportFile
     job_id = uuid.uuid4()
@@ -489,7 +580,7 @@ async def create_import_job_from_upload_job(
         job.actor_label_snapshot = actor_api_key_label
         job.last_status_actor_api_key_id = actor_api_key_id
         job.last_status_actor_label_snapshot = actor_api_key_label
-    job.last_status_changed_at = datetime.now(UTC)
+    job.last_status_changed_at = datetime.now(timezone.utc)
     job.last_status_actor_kind = "user"
     db.add(job)
 
@@ -499,7 +590,6 @@ async def create_import_job_from_upload_job(
     try:
         filename = Path(upload_job.filename).name
         file_path = upload_dir / filename
-        content = bytes(upload_job.file_content)
         file_hash = hashlib.sha256(content).hexdigest()
         file_size = len(content)
         file_path.write_bytes(content)
@@ -578,7 +668,9 @@ async def create_import_job_from_upload_job(
                 "Skip background processing: async_session_factory not initialized"
             )
 
-    return job
+    response = ImportJobRead.model_validate(job)
+    response.table_code = table_code
+    return response
 
 
 @router.get("/jobs/{job_id}", response_model=ImportJobRead)
@@ -605,7 +697,12 @@ async def get_import_job(
             status_code=status.HTTP_404_NOT_FOUND, detail="Import job not found"
         )
 
-    return job
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    response = ImportJobRead.model_validate(job)
+    response.table_code = tr_result.scalar_one_or_none()
+    return response
 
 
 @router.get("/jobs/{job_id}/errors", response_model=list[ImportJobErrorRow])
@@ -690,7 +787,7 @@ async def commit_import_job(
             job.actor_label_snapshot = actor_api_key_label
             job.last_status_actor_api_key_id = actor_api_key_id
             job.last_status_actor_label_snapshot = actor_api_key_label
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "user"
         await db.commit()
         await db.refresh(job)
@@ -749,7 +846,12 @@ async def commit_import_job(
     result = await db.execute(stmt)
     job = result.scalar_one()
 
-    return job
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    response = ImportJobRead.model_validate(job)
+    response.table_code = tr_result.scalar_one_or_none()
+    return response
 
 
 @router.post("/jobs/{job_id}/cancel", response_model=ImportJobRead)
@@ -785,7 +887,7 @@ async def cancel_import_job(
             job.actor_label_snapshot = actor_api_key_label
             job.last_status_actor_api_key_id = actor_api_key_id
             job.last_status_actor_label_snapshot = actor_api_key_label
-        job.last_status_changed_at = datetime.now(UTC)
+        job.last_status_changed_at = datetime.now(timezone.utc)
         job.last_status_actor_kind = "user"
         await db.commit()
 
@@ -822,7 +924,13 @@ async def cancel_import_job(
     )
     result = await db.execute(stmt)
     job = result.scalar_one()
-    return job
+
+    tr_result = await db.execute(
+        select(TableRegistry.table_code).where(TableRegistry.id == job.table_id)
+    )
+    response = ImportJobRead.model_validate(job)
+    response.table_code = tr_result.scalar_one_or_none()
+    return response
 
 
 async def process_commit_job_background(

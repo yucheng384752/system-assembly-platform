@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-07-01T18:11:20",
+    "generatedAt":  "2026-08-19T16:48:37",
     "backend":  {
                     "appEntry":  "backend\\app\\main.py",
                     "requirementsTxt":  true,
@@ -12,7 +12,7 @@
     "frontend":  {
                      "sourceDirectory":  "frontend",
                      "packageJson":  true,
-                     "installCommand":  "npm install",
+                     "installCommand":  "npm ci",
                      "startCommand":  "npm run dev"
                  },
     "notes":  [

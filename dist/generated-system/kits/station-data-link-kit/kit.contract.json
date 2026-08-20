@@ -1,0 +1,15 @@
+{
+  "kit": "station-data-link-kit",
+  "provides": {
+    "api": [],
+    "db": [
+      { "capability": "db.tables.resolve" },
+      { "capability": "db.forms.list" },
+      { "capability": "db.records.search" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.tenants.read"]
+  }
+}

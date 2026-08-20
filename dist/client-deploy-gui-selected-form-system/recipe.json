@@ -1,69 +1,197 @@
-﻿{
-    "recipeVersion":  "0.2.0",
-    "name":  "gui-selected-form-system",
-    "sourceManifest":  "kits/form-analysis.kit-manifest.json",
-    "selectedFlows":  [
-
-                      ],
-    "enabledKits":  [
-                        "platform-core-kit",
-                        "tenant-auth-kit",
-                        "station-data-link-kit",
-                        "upload-validation-kit",
-                        "import-pipeline-kit",
-                        "query-traceability-kit",
-                        "analytics-kit",
-                        "station-admin-kit",
-                        "audit-edit-kit",
-                        "logs-ops-kit"
-                    ],
-    "selectedSubfeatures":  {
-                                "platform-core-kit":  [
-
-                                                      ],
-                                "tenant-auth-kit":  [
-
-                                                    ],
-                                "station-data-link-kit":  [
-
-                                                          ],
-                                "upload-validation-kit":  [
-
-                                                          ],
-                                "import-pipeline-kit":  [
-
-                                                        ],
-                                "query-traceability-kit":  [
-
-                                                           ],
-                                "analytics-kit":  [
-
-                                                  ],
-                                "station-admin-kit":  [
-
-                                                      ],
-                                "audit-edit-kit":  [
-
-                                                   ],
-                                "logs-ops-kit":  [
-
-                                                 ]
-                            },
-    "selectedSubfeatureOptions":  {
-
-                                  },
-    "tableSchemas":  [
-
-                     ],
-    "featureFlags":  {
-
-                     },
-    "frontendNavigation":  [
-
-                           ],
-    "database":  {
-                     "engine":  "postgresql",
-                     "connectionOwner":  "platform-core-kit",
-                     "autoGenerateConnection":  true
-                 }
+{
+  "recipeVersion": "0.1.0",
+  "name": "form-analysis-original-recomposition",
+  "displayName": "Form Analysis Original System",
+  "description": "Recompose all kits required to rebuild the target Form Analysis system.",
+  "sourceManifest": "../kits/form-analysis.kit-manifest.json",
+  "database": {
+    "selectedByUserIntent": {
+      "usageScale": "multi-user",
+      "dataCriticality": "production",
+      "needsTenantIsolation": true,
+      "needsAnalytics": true,
+      "needsBackgroundJobs": true
+    },
+    "engine": "postgresql",
+    "reasonForNonTechnicalUser": "這套系統會長期保存製程資料、匯入紀錄、批號追溯、使用者權限與分析結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。"
+  },
+  "enabledKits": [
+    "platform-core-kit",
+    "tenant-auth-kit",
+    "station-data-link-kit",
+    "upload-validation-kit",
+    "import-pipeline-kit",
+    "query-traceability-kit",
+    "analytics-kit",
+    "station-admin-kit",
+    "audit-edit-kit",
+    "logs-ops-kit"
+  ],
+  "featureFlags": {
+    "MULTI_TENANT_ENABLED": true,
+    "AUTH_MODE": "api_key",
+    "AUDIT_EVENTS_ENABLED": true,
+    "USE_GENERIC_SCHEMA": true,
+    "PDF_SERVER_URL": "required"
+  },
+  "frontendNavigation": [
+    {
+      "tab": "register",
+      "labelKey": "tabs.register",
+      "kit": "tenant-auth-kit"
+    },
+    {
+      "tab": "upload",
+      "labelKey": "tabs.upload",
+      "kit": "upload-validation-kit"
+    },
+    {
+      "tab": "query",
+      "labelKey": "tabs.query",
+      "kit": "query-traceability-kit"
+    },
+    {
+      "tab": "analysis",
+      "labelKey": "tabs.analysis",
+      "kit": "analytics-kit"
+    },
+    {
+      "tab": "manager",
+      "labelKey": "tabs.manager",
+      "kit": "station-admin-kit",
+      "visibleWhen": "actor_role == manager"
+    },
+    {
+      "tab": "admin",
+      "labelKey": "tabs.admin",
+      "kit": "tenant-auth-kit",
+      "visibleWhen": "admin_unlocked == true"
+    }
+  ],
+  "assemblyOrder": [
+    "platform-core-kit",
+    "tenant-auth-kit",
+    "station-data-link-kit",
+    "upload-validation-kit",
+    "import-pipeline-kit",
+    "query-traceability-kit",
+    "analytics-kit",
+    "station-admin-kit",
+    "audit-edit-kit",
+    "logs-ops-kit"
+  ],
+  "previewScenarios": [
+    {
+      "id": "upload-to-import",
+      "label": "CSV 上傳到匯入",
+      "kits": [
+        "tenant-auth-kit",
+        "upload-validation-kit",
+        "import-pipeline-kit",
+        "station-data-link-kit"
+      ],
+      "steps": [
+        "登入租戶",
+        "上傳 P1/P2/P3 CSV",
+        "顯示驗證摘要",
+        "修正錯誤列",
+        "建立 v2 import job",
+        "commit 到正式資料表"
+      ]
+    },
+    {
+      "id": "trace-and-analyze",
+      "label": "追溯與分析",
+      "kits": [
+        "query-traceability-kit",
+        "analytics-kit"
+      ],
+      "steps": [
+        "輸入 product_id 或 lot_no",
+        "顯示 P1/P2/P3 追溯鏈",
+        "載入 artifact 或即時分析",
+        "顯示圖表與異常資訊"
+      ]
+    }
+  ],
+  "selectedSubfeatures": {
+    "platform-core-kit": [
+      "app-shell",
+      "configuration-management",
+      "database-connection",
+      "health-check",
+      "api-client-foundation"
+    ],
+    "tenant-auth-kit": [
+      "tenant-list-and-create",
+      "user-login",
+      "api-key-issue",
+      "user-management",
+      "admin-unlock"
+    ],
+    "station-data-link-kit": [
+      "station-data-model",
+      "p123-compatibility-adapter",
+      "new-station-definition",
+      "lot-normalization",
+      "product-id-generation",
+      "generic-record"
+    ],
+    "upload-validation-kit": [
+      "csv-excel-upload-validation",
+      "csv-excel-error-summary",
+      "csv-content-correction",
+      "pdf-upload-option",
+      "pdf-to-csv-binding",
+      "converted-result-ingest-upload-job"
+    ],
+    "import-pipeline-kit": [
+      "create-import-job",
+      "create-import-job-from-upload-job",
+      "staging-row-validation",
+      "import-error-query",
+      "commit-production-records",
+      "cancel-import"
+    ],
+    "query-traceability-kit": [
+      "lot-query",
+      "product-id-query",
+      "advanced-filter",
+      "traceability-detail",
+      "dynamic-field-query"
+    ],
+    "analytics-kit": [
+      "realtime-analysis",
+      "complaint-analysis",
+      "artifact-browser",
+      "extraction-analysis",
+      "chart-summary"
+    ],
+    "station-admin-kit": [
+      "station-management",
+      "schema-configuration",
+      "validation-rules",
+      "analytics-mapping",
+      "station-linking"
+    ],
+    "audit-edit-kit": [
+      "edit-reason",
+      "record-correction",
+      "before-after-diff",
+      "audit-event-query"
+    ],
+    "logs-ops-kit": [
+      "log-list",
+      "log-search",
+      "log-statistics",
+      "cleanup-and-download"
+    ]
+  },
+  "selectedSubfeatureOptions": {
+    "analytics-kit::chart-summary": {
+      "color-palette": "production",
+      "chart-style": "mixed-kpi",
+      "show-anomaly-colors": true
+    }
+  }
 }

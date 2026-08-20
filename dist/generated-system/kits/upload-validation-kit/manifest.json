@@ -1,0 +1,16 @@
+﻿{
+    "kit":  "upload-validation-kit",
+    "displayName":  "檔案上傳與驗證",
+    "installOrder":  40,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+                       "VALID_MATERIALS_CSV",
+                       "VALID_SLITTING_MACHINES_CSV"
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

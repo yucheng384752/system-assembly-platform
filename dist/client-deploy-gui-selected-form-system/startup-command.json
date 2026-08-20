@@ -1,0 +1,12 @@
+{
+    "systemName":  "gui-selected-form-system",
+    "mode":  "auto",
+    "commands":  {
+                     "windows":  ".\\start-form-manager.ps1",
+                     "linux":  "./start-form-manager.sh"
+                 },
+    "urls":  {
+                 "frontend":  "http://localhost",
+                 "backendHealth":  "http://localhost:8000/healthz"
+             }
+}

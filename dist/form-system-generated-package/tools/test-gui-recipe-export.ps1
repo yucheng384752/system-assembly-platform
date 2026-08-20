@@ -21,20 +21,27 @@ $requiredAppSnippets = @(
     "selectedSubfeatureOptions",
     "function recipeJsonText()",
     "function assemblyCommands()",
+    "async function downloadPackage()",
+    'zip.file("recipe.json", recipeJsonText())',
+    'zip.file("deploy.ps1"',
+    'zip.file("deploy.sh"',
+    'zip.file("README.md"',
     "copyRecipeJson",
-    "downloadRecipeJson"
+    "downloadRecipeJson",
+    'recordOperation("download-package")'
 )
 
 $requiredIndexSnippets = @(
-    "recipe-output",
-    "copy-recipe-json",
-    "download-recipe-json",
-    "assembly-command-list"
+    "generation-summary",
+    "download-package",
+    "package-machine-pubkey-file",
+    "package-pem-status"
 )
 
 $requiredStyleSnippets = @(
-    ".recipe-output",
-    ".action-row"
+    ".deploy-cta-card",
+    ".deploy-btn",
+    ".pem-verify-row"
 )
 
 foreach ($snippet in $requiredAppSnippets) {

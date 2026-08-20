@@ -111,7 +111,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         .all()
                     )
                     if not settings.use_generic_schema:
-                        for code in ("P1", "P2", "P3"):
+                        legacy_codes = {
+                            code.strip()
+                            for code in settings.legacy_table_codes_csv.split(",")
+                            if code.strip()
+                        }
+                        for code in legacy_codes:
                             if code not in existing:
                                 db.add(TableRegistry(table_code=code, display_name=code))
                         await db.commit()
@@ -555,5 +560,4 @@ if __name__ == "__main__":
         log_level=settings.log_level.lower(),
         access_log=True,
     )
-
 

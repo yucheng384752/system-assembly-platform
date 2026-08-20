@@ -9,6 +9,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Assert-WizardFresh([string]$Root) {
+    $wizardPy = Join-Path $Root "tools\install-wizard.py"
+    $wizardExe = Join-Path $Root "tools\install-wizard.exe"
+    if ((Test-Path $wizardPy) -and (Test-Path $wizardExe)) {
+        $pyTime = (Get-Item $wizardPy).LastWriteTime
+        $exeTime = (Get-Item $wizardExe).LastWriteTime
+        if ($pyTime -gt $exeTime) {
+            throw "install-wizard.py is newer than install-wizard.exe. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+    }
+}
+
+Assert-WizardFresh $ProjectRoot
+
 function Read-JsonUtf8([string]$Path) {
     return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json
 }
@@ -38,10 +52,24 @@ function Test-RelativePath([string]$Root, [string]$RelativePath) {
 $plan = Read-JsonUtf8 (Join-Path $ProjectRoot $ResolvedPlanPath)
 $sourcePath = Join-Path $ProjectRoot $SourceSystemDirectory
 $outputPath = Join-Path $ProjectRoot $OutputDirectory
+$legacyAdapterEnabled = @($plan.selectedSubfeatures.'station-data-link-kit').Contains("p123-compatibility-adapter")
+
+& (Join-Path $ProjectRoot "tools\validate-kit-contracts.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputPath "assembly\kit-contract-report.json"
 
 New-CleanDirectory $outputPath
 Copy-Tree (Join-Path $sourcePath "backend") (Join-Path $outputPath "backend")
 Copy-Tree (Join-Path $sourcePath "frontend") (Join-Path $outputPath "frontend")
+
+# Enforce: logs-ops-kit is mandatory when platform-core-kit is selected,
+# because the generated backend emits report_user_action calls that must be persisted.
+if (($plan.resolvedKitOrder -contains "platform-core-kit") -and
+    -not ($plan.resolvedKitOrder -contains "logs-ops-kit")) {
+    throw "Assembly error: logs-ops-kit is required whenever platform-core-kit is selected. " +
+          "Add 'logs-ops-kit' to enabledKits in your recipe before assembling."
+}
 
 # Overlay kit-specific source files from kits/<id>/src/ into the assembled system.
 # Files are copied file-by-file to merge correctly into existing backend/ and frontend/ trees.
@@ -57,9 +85,28 @@ foreach ($kitId in @($plan.resolvedKitOrder)) {
     }
 }
 
+if (-not $legacyAdapterEnabled) {
+    foreach ($relativePath in @(
+        "backend\app\api\routes_import.py",
+        "backend\app\models\base_record.py",
+        "backend\app\models\record.py",
+        "backend\app\models\p1_record.py",
+        "backend\app\models\p2_item.py",
+        "backend\app\models\p2_record.py",
+        "backend\app\models\p2_item_v2.py",
+        "backend\app\models\p3_item.py",
+        "backend\app\models\p3_record.py",
+        "backend\app\models\p3_item_v2.py",
+        "backend\app\services\production_date_extractor.py"
+    )) {
+        $legacyPath = Join-Path $outputPath $relativePath
+        if (Test-Path $legacyPath) { Remove-Item -LiteralPath $legacyPath -Force }
+    }
+}
+
 # Keep generated backend compatible with Python 3.10 deployments.
 Get-ChildItem -LiteralPath (Join-Path $outputPath "backend") -Recurse -File -Filter *.py | ForEach-Object {
-    $content = [string](Get-Content -Raw -Encoding UTF8 $_.FullName)
+    $content = [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8)
     $updated = $content.Replace("from datetime import UTC, datetime", "from datetime import datetime, timezone").Replace("datetime.now(UTC)", "datetime.now(timezone.utc)")
     $updated = $updated.Replace("from enum import StrEnum", "from enum import Enum")
     $updated = [regex]::Replace($updated, "class ([A-Za-z_][A-Za-z0-9_]*)\(StrEnum\):", 'class $1(str, Enum):')
@@ -74,6 +121,22 @@ Get-ChildItem -LiteralPath (Join-Path $outputPath "backend") -Recurse -File -Fil
     if ($updated -ne $content) {
         [System.IO.File]::WriteAllText($_.FullName, $updated, (New-Object System.Text.UTF8Encoding $false))
     }
+}
+
+# Inject current signing public key into assembled license.py to prevent drift.
+$pubKeyPath = Join-Path $ProjectRoot "tools\keys\signing-public-key.pem"
+$assembledLicensePath = Join-Path $outputPath "backend\app\core\license.py"
+if ((Test-Path $pubKeyPath) -and (Test-Path $assembledLicensePath)) {
+    $pubKeyPem = (Get-Content -Raw -Encoding UTF8 $pubKeyPath).Trim()
+    $licContent = [System.IO.File]::ReadAllText($assembledLicensePath, [System.Text.Encoding]::UTF8)
+    $newBlock = "_PUBLIC_KEY_PEM = `"`"`"`n$pubKeyPem`n`"`"`""
+    $licUpdated = [regex]::Replace($licContent, '_PUBLIC_KEY_PEM\s*=\s*"""[\s\S]*?"""', $newBlock)
+    if ($licUpdated -ne $licContent) {
+        [System.IO.File]::WriteAllText($assembledLicensePath, $licUpdated, (New-Object System.Text.UTF8Encoding $false))
+        Write-Host "OK  Injected signing public key into assembled license.py"
+    }
+} elseif (-not (Test-Path $pubKeyPath)) {
+    Write-Warning "tools\keys\signing-public-key.pem not found — run tools\generate-license-keys.ps1 to create key pair"
 }
 
 $auditServicePath = Join-Path $outputPath "backend\app\services\audit_events.py"
@@ -153,8 +216,9 @@ def get_slitting_machine_list() -> list[int]:
 '@ | Set-Content -Encoding UTF8 (Join-Path $configPath "constants.py")
 }
 
-$recordModelPath = Join-Path $outputPath "backend\app\models\record.py"
-if (-not (Test-Path $recordModelPath)) {
+if ($legacyAdapterEnabled) {
+    $recordModelPath = Join-Path $outputPath "backend\app\models\record.py"
+    if (-not (Test-Path $recordModelPath)) {
     @'
 import uuid
 from datetime import date
@@ -196,10 +260,10 @@ class Record(Base):
     p2_items: Mapped[list["P2Item"]] = relationship("P2Item", back_populates="record", cascade="all, delete-orphan")
     p3_items: Mapped[list["P3Item"]] = relationship("P3Item", back_populates="record", cascade="all, delete-orphan")
 '@ | Set-Content -Encoding UTF8 $recordModelPath
-}
+    }
 
-$p2ItemModelPath = Join-Path $outputPath "backend\app\models\p2_item.py"
-if (-not (Test-Path $p2ItemModelPath)) {
+    $p2ItemModelPath = Join-Path $outputPath "backend\app\models\p2_item.py"
+    if (-not (Test-Path $p2ItemModelPath)) {
     @'
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -235,10 +299,10 @@ class P2Item(Base):
 
     record: Mapped["Record"] = relationship("Record", back_populates="p2_items")
 '@ | Set-Content -Encoding UTF8 $p2ItemModelPath
-}
+    }
 
-$p3ItemModelPath = Join-Path $outputPath "backend\app\models\p3_item.py"
-if (-not (Test-Path $p3ItemModelPath)) {
+    $p3ItemModelPath = Join-Path $outputPath "backend\app\models\p3_item.py"
+    if (-not (Test-Path $p3ItemModelPath)) {
     @'
 import uuid
 from datetime import date
@@ -273,6 +337,7 @@ class P3Item(Base):
 
     record: Mapped["Record"] = relationship("Record", back_populates="p3_items")
 '@ | Set-Content -Encoding UTF8 $p3ItemModelPath
+    }
 }
 
 $schemasPath = Join-Path $outputPath "backend\app\schemas"
@@ -508,6 +573,13 @@ $assemblyIrPath = Join-Path $OutputDirectory $assemblyIrPackagePath
     -IRPath $assemblyIrPath `
     -OutputDirectory (Join-Path $OutputDirectory "assembly\backend-registry")
 
+$generatedBackendRegistry = Join-Path $outputPath "assembly\backend-registry\backend_router_registry.py"
+$runtimeBackendRegistry = Join-Path $outputPath "backend\app\core\backend_router_registry.py"
+if (-not (Test-Path $generatedBackendRegistry)) {
+    throw "Generated backend router registry not found: $generatedBackendRegistry"
+}
+Copy-Item -LiteralPath $generatedBackendRegistry -Destination $runtimeBackendRegistry -Force
+
 & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
     -ProjectRoot $ProjectRoot `
     -IRPath $assemblyIrPath `
@@ -524,11 +596,16 @@ $frontendDir = Join-Path $outputPath "frontend"
 if ($SkipFrontendBuild) {
     Write-Host "Skipping frontend production build."
 } elseif (Test-Path (Join-Path $frontendDir "package.json")) {
-    Write-Host "Building frontend (npm install + npm run build)..."
+    Write-Host "Building frontend (npm ci/install + npm run build)..."
     Push-Location $frontendDir
     try {
-        & npm install --silent
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        if (Test-Path (Join-Path $frontendDir "package-lock.json")) {
+            & npm ci --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed in $frontendDir" }
+        } else {
+            & npm install --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        }
         & npm run build
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed in $frontendDir" }
     } finally {
@@ -543,7 +620,8 @@ if ($SkipFrontendBuild) {
 
 & (Join-Path $ProjectRoot "tools\generate-model-init.ps1") `
     -ProjectRoot $ProjectRoot `
-    -SystemDirectory $OutputDirectory
+    -SystemDirectory $OutputDirectory `
+    -ResolvedPlanPath $ResolvedPlanPath
 
 $scriptsPath = Join-Path $outputPath "scripts"
 New-Item -ItemType Directory -Force $scriptsPath | Out-Null
@@ -590,10 +668,21 @@ foreach ($entry in @($plan | Sort-Object order)) {
 Write-Host "Kit install plan completed."
 '@ | Set-Content -Encoding UTF8 (Join-Path $scriptsPath "run-kit-installs.ps1")
 
+$dbPlanDirectory = "build\db-plan-$($plan.recipe)"
+& (Join-Path $ProjectRoot "tools\generate-db-plan.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputDirectory $dbPlanDirectory
+
 & (Join-Path $ProjectRoot "tools\generate-db-bootstrap.ps1") `
     -ProjectRoot $ProjectRoot `
     -SystemDirectory $OutputDirectory `
-    -BaselinePath (Join-Path $ProjectRoot "assembly\baselines\default-db-schema.baseline.json")
+    -DbPlanPath (Join-Path $dbPlanDirectory "db-assembly-plan.json")
+
+& (Join-Path $ProjectRoot "tools\generate-form-schema.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -SystemDirectory $OutputDirectory
 
 $dependencyManifest = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
@@ -609,7 +698,7 @@ $dependencyManifest = [ordered]@{
     frontend = [ordered]@{
         sourceDirectory = "frontend"
         packageJson = Test-RelativePath $outputPath "frontend\package.json"
-        installCommand = "npm install"
+        installCommand = "npm ci"
         startCommand = "npm run dev"
     }
     notes = @(
@@ -845,6 +934,7 @@ $order = @(
     "MULTI_TENANT_ENABLED",
     "AUDIT_EVENTS_ENABLED",
     "USE_GENERIC_SCHEMA",
+    "LEGACY_TABLE_CODES_CSV",
     "ENTITLEMENT_MODE",
     "ENVIRONMENT"
 )
@@ -1315,6 +1405,9 @@ $ErrorActionPreference = "Stop"
     -Background
 '@ | Set-Content -Encoding UTF8 (Join-Path $scriptsPath "restart.ps1")
 
+$genericSchemaValue = ([bool]$plan.featureFlags.USE_GENERIC_SCHEMA).ToString().ToLowerInvariant()
+$legacyTableCodesValue = [string]$plan.featureFlags.LEGACY_TABLE_CODES_CSV
+
 @"
 DB_HOST=localhost
 DB_PORT=5432
@@ -1335,7 +1428,8 @@ BOOTSTRAP_MANAGER_PASSWORD=
 BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD=true
 MULTI_TENANT_ENABLED=true
 AUDIT_EVENTS_ENABLED=false
-USE_GENERIC_SCHEMA=false
+USE_GENERIC_SCHEMA=$genericSchemaValue
+LEGACY_TABLE_CODES_CSV=$legacyTableCodesValue
 PDF_SERVER_URL=
 PDF_SERVER_TIMEOUT_SECONDS=1800
 PDF_SERVER_MAX_CONCURRENT=3

@@ -1,0 +1,2 @@
+import type { InputHTMLAttributes } from "react"
+export function Input(p: InputHTMLAttributes<HTMLInputElement>) { return <input style={{ border:"1px solid #d1d5db",borderRadius:4,padding:"4px 8px",width:"100%" }} {...p} /> }

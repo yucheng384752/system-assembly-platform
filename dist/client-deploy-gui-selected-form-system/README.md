@@ -2,8 +2,8 @@
 
 | Field   | Value |
 |---------|-------|
-| Recipe  | `gui-selected-form-system` |
-| Built   | 2026-07-01 18:11 |
+| Recipe  | `form-analysis-original-recomposition` |
+| Built   | 2026-08-19 16:48 |
 | DB      | postgresql |
 | Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit |
 
@@ -28,13 +28,27 @@ client-deploy-gui-selected-form-system/
 ### 1. Extract ZIP
 
 ```bash
-unzip client-deploy-gui-selected-form-system.zip
+unzip gui-selected-form-system.zip
 cd client-deploy-gui-selected-form-system
 ```
 
 ### 2. Install
 
-#### Option A ??Web Install Wizard (recommended)
+#### No Python yet? Run bootstrap first
+
+On a fresh VM without Python 3, run the bootstrap script ??it installs Python 3 + pip (online via apt/dnf/yum/winget, or offline from `installers/`), then launches the wizard:
+
+```bash
+bash bootstrap.sh          # Linux / macOS
+```
+
+```powershell
+.\bootstrap.ps1            # Windows
+```
+
+> Offline machines: drop the Python installer into `installers/` before transfer (see `installers/README.txt`). `prepare-offline.ps1` auto-bundles the Windows installer.
+
+#### Option A ??Web Install Wizard (recommended, Python already installed)
 
 Interactive browser-based wizard. No extra dependencies ??only Python 3 required.
 
@@ -98,7 +112,7 @@ The script automatically:
 2. Checks prerequisites (python3, pip3, node, npm)
 3. Creates an isolated Python virtual environment at `system/.venv`
 4. Installs backend dependencies via `pip` into the venv
-5. Builds the frontend (`npm install` + `npm run build`)
+5. Builds the frontend (`npm ci` when package-lock.json exists, then `npm run build`)
 6. Runs database migrations (`alembic upgrade head` or `generated_db_bootstrap.py`)
 
 ### 4. Start the backend
@@ -136,7 +150,7 @@ Or configure manually to serve via nginx as a reverse proxy:
 server {
     listen 80;
     server_name your-domain.com;
-    root /path/to/client-deploy-gui-selected-form-system/system/frontend/dist;
+    root /path/to/client-deploy-form-analysis-original-recomposition/system/frontend/dist;
     index index.html;
 
     location / {

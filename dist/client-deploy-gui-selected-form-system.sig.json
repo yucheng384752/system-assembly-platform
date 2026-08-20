@@ -1,0 +1,5 @@
+{
+  "payload": "{\"schemaVersion\":\"1.0\",\"issuedAt\":\"2026-07-06T03:46:22Z\",\"zipFile\":\"client-deploy-gui-selected-form-system.zip\",\"sha256\":\"8e8cfd170ce82445e250533f6551aa02dad6cd0c6321f36a77e7d62a5857ce90\",\"recipe\":\"gui-selected-form-system\"}",
+  "signature": "gGlsAf7SGwLZgrtr4xpwDnolFIRL1QBWUPjgW4yxmanfaaO+Oi4uKiGkd/zyiYlnJX6Bh5F1Q1SoGirVZoP3ANwIQx3as4qzYEUM6459aQR3ZUYqTikmxRZ1fBWIr98VDWuYLYRYge9dFL/0rkgJuNJ83uVBL3vaCehQroiA5iwXpWAA6afoc+9geCYF3curVpK2lbIhbWJe3xg+oc8pmUHfjQuCpM8273v1l7ABfC01RKBE42D0GaKJLD3qcxZi5as5XwYjdZ+ItPmBT5kjNyc9BeRPHjTMzUC26VJN8SENPdbjmwqnOP3PNMxs2TnXjJQhF73Kx3zs99dfnGUOxQ==",
+  "algorithm": "RSA-PSS-SHA256"
+}

@@ -1,0 +1,19 @@
+{
+  "kit": "platform-core-kit",
+  "provides": {
+    "api": [
+      { "capability": "platform.health", "method": "GET", "path": "/healthz" },
+      { "capability": "kit.contracts.list", "method": "GET", "path": "/api/kit/contracts" },
+      { "capability": "kit.capability.call", "method": "POST", "path": "/api/kit/call/{capability}" }
+    ],
+    "db": [
+      { "capability": "db.tables.resolve" },
+      { "capability": "db.forms.list" },
+      { "capability": "db.records.search" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": []
+  }
+}

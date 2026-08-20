@@ -1,5 +1,5 @@
 {
-    "generatedAt":  "2026-07-01T18:11:20",
+    "generatedAt":  "2026-08-19T16:48:37",
     "systemDirectory":  "dist\\generated-system",
     "backend":  {
                     "source":  "baseline-first+import-inference",
@@ -85,6 +85,7 @@
                                      "react-i18next"
                                  ],
                      "packageJsonPath":  "frontend\\package.json",
+                     "packageLockPath":  "frontend\\package-lock.json",
                      "dependencies":  {
                                           "react":  "18.3.1",
                                           "react-dom":  "18.3.1",

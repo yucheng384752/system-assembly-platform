@@ -1,0 +1,19 @@
+{
+  "kit": "tenant-auth-kit",
+  "provides": {
+    "api": [
+      { "capability": "auth.whoami", "method": "GET", "path": "/api/auth/whoami" },
+      { "capability": "auth.login", "method": "POST", "path": "/api/auth/login" },
+      { "capability": "tenants.list", "method": "GET", "path": "/api/tenants" },
+      { "capability": "tenants.create", "method": "POST", "path": "/api/tenants" }
+    ],
+    "db": [
+      { "capability": "db.tenants.read" },
+      { "capability": "db.users.read" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": []
+  }
+}

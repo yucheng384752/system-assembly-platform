@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
-#  Recipe : gui-selected-form-system
-#  Built  : 2026-07-01 18:11
+#  Recipe : form-analysis-original-recomposition
+#  Built  : 2026-08-19 16:48
 #  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit
 #  DB     : postgresql
 # ================================================================
@@ -23,7 +23,7 @@ info() { echo "  $*"; }
 ok()   { echo "  OK $*"; }
 
 ASK_AUTH=true
-ASK_PDF=false
+ASK_PDF=true
 ASK_VALIDATION=true
 HIBA_NODE_ID="${HIBA_NODE_ID:-}"
 HIBA_DASHBOARD_URL="${HIBA_DASHBOARD_URL:-}"
@@ -205,7 +205,7 @@ wizard_welcome() {
     echo ""
     echo "================================================================"
     echo "  Form System 摰?蝎暸?"
-    echo "  Recipe : gui-selected-form-system"
+    echo "  Recipe : form-analysis-original-recomposition"
     echo "  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit"
     echo "================================================================"
     echo ""
@@ -458,7 +458,16 @@ build_frontend() {
     fi
     if [ -f "${SYS_ROOT}/frontend/package.json" ]; then
         echo "=== Building frontend ==="
-        npm --prefix "${SYS_ROOT}/frontend" install --silent
+        _npm_cache="${SYS_ROOT}/frontend/.npm-cache"
+        _npm_args=""
+        if [ -d "${_npm_cache}" ]; then
+            _npm_args="--cache ${_npm_cache} --offline"
+        fi
+        if [ -f "${SYS_ROOT}/frontend/package-lock.json" ]; then
+            npm --prefix "${SYS_ROOT}/frontend" ci --silent ${_npm_args}
+        else
+            npm --prefix "${SYS_ROOT}/frontend" install --silent ${_npm_args}
+        fi
         npm --prefix "${SYS_ROOT}/frontend" run build
         ok "Frontend built -> ${SYS_ROOT}/frontend/dist/"
         echo ""
@@ -484,7 +493,6 @@ setup_database() {
 }
 
 start_backend() {
-    echo "=== Deploy complete ==="
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
         (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
@@ -492,12 +500,143 @@ start_backend() {
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"
         info "Stop: kill \$(cat ${SYS_ROOT}/logs/backend.pid)"
-    else
-        info "--- Next steps ---"
-        info "Start backend:"
-        info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
     fi
-    [ -d "${SYS_ROOT}/frontend/dist" ] && info "Frontend dist: ${SYS_ROOT}/frontend/dist/ (serve via nginx, see README)"
+    echo ""
+}
+
+setup_postgres() {
+    local db_url
+    db_url="$(get_env_value DATABASE_URL)"
+    case "$db_url" in
+        postgresql*) : ;;
+        *) return 0 ;;   # SQLite or unset -> nothing to provision
+    esac
+
+    echo "=== PostgreSQL setup ==="
+
+    # Parse postgresql[+driver]://user:pass@host:port/dbname
+    # ponytail: assumes password has no URL-encoded special chars; fine for generated creds.
+    local _rest _creds _hostpart _hostport db_host db_port db_name db_user db_pass
+    _rest="${db_url#*://}"
+    _creds="${_rest%%@*}"
+    _hostpart="${_rest#*@}"
+    db_user="${_creds%%:*}"
+    db_pass="${_creds#*:}" ; [ "$db_pass" = "$_creds" ] && db_pass=""
+    _hostport="${_hostpart%%/*}"
+    db_name="${_hostpart#*/}" ; db_name="${db_name%%\?*}"
+    db_host="${_hostport%%:*}"
+    db_port="${_hostport#*:}" ; [ "$db_port" = "$_hostport" ] && db_port="5432"
+    [ -n "$db_host" ] || db_host="localhost"
+    [ -n "$db_name" ] || db_name="form_system"
+    [ -n "$db_user" ] || db_user="form_system"
+
+    if [ "$db_host" != "localhost" ] && [ "$db_host" != "127.0.0.1" ]; then
+        info "DATABASE_URL targets remote host ${db_host}; skipping local PostgreSQL provisioning."
+        echo ""
+        return 0
+    fi
+
+    if ! command -v psql >/dev/null 2>&1; then
+        info "PostgreSQL not found -- installing..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y postgresql || \
+                die "PostgreSQL install failed (offline / no network?). Install it manually or use SQLite (empty DATABASE_URL)."
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y postgresql-server postgresql || die "PostgreSQL install failed."
+            sudo postgresql-setup --initdb >/dev/null 2>&1 || true
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y postgresql-server postgresql || die "PostgreSQL install failed."
+            sudo postgresql-setup initdb >/dev/null 2>&1 || true
+        else
+            die "Cannot auto-install PostgreSQL. Install it manually, or use SQLite (empty DATABASE_URL)."
+        fi
+    fi
+
+    sudo systemctl enable --now postgresql >/dev/null 2>&1 || sudo service postgresql start >/dev/null 2>&1 || true
+
+    # Wait until the server accepts connections (native, no extra deps)
+    local _ready=1 _i
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if sudo -u postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then _ready=0; break; fi
+        sleep 1
+    done
+    [ "$_ready" -eq 0 ] || die "PostgreSQL did not become ready. Check: sudo systemctl status postgresql"
+
+    # Create role + database idempotently (single-quote-escape the password)
+    local esc_pass
+    esc_pass="$(printf '%s' "$db_pass" | sed "s/'/''/g")"
+    if [ -n "$db_pass" ]; then
+        if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${db_user}'" 2>/dev/null | grep -q 1; then
+            sudo -u postgres psql -c "ALTER ROLE \"${db_user}\" WITH LOGIN PASSWORD '${esc_pass}'" >/dev/null
+        else
+            sudo -u postgres psql -c "CREATE ROLE \"${db_user}\" WITH LOGIN PASSWORD '${esc_pass}'" >/dev/null
+        fi
+    fi
+    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
+        sudo -u postgres psql -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\"" >/dev/null
+    fi
+
+    ok "PostgreSQL ready -- ${db_user}@${db_host}:${db_port}/${db_name}"
+    echo ""
+}
+
+setup_nginx() {
+    echo "=== nginx setup ==="
+    if ! [ -d "${SYS_ROOT}/frontend/dist" ]; then
+        info "No frontend/dist found; skipping nginx setup"
+        echo ""
+        return
+    fi
+
+    # Install nginx if missing
+    if ! command -v nginx >/dev/null 2>&1; then
+        info "nginx not found ??installing..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get install -y nginx || die "Failed to install nginx. Run: sudo apt-get install -y nginx"
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y nginx || die "Failed to install nginx. Run: sudo yum install -y nginx"
+        else
+            die "Cannot auto-install nginx. Please install nginx manually then re-run."
+        fi
+    fi
+
+    NGINX_CONF="/etc/nginx/sites-available/form-system"
+    sudo tee "${NGINX_CONF}" > /dev/null <<NGINXEOF
+server {
+    listen 80;
+    server_name _;
+
+    root ${SYS_ROOT}/frontend/dist;
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+
+    location /healthz {
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+NGINXEOF
+
+    sudo ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/form-system
+    # Remove default site if it conflicts on port 80
+    [ -f /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default
+
+    if sudo nginx -t 2>/dev/null; then
+        sudo systemctl reload nginx 2>/dev/null || sudo systemctl start nginx 2>/dev/null
+        ok "nginx configured ??frontend available at http://localhost"
+    else
+        info "nginx config test failed. Check: sudo nginx -t"
+    fi
+    echo ""
 }
 
 configure_hiba_node() {
@@ -551,7 +690,7 @@ base = os.environ["HIBA_DASHBOARD_URL"].rstrip("/")
 url = base + "/api/hiba/nodes/register"
 payload = {
     "nodeId": os.environ["HIBA_NODE_ID"],
-    "recipe": "gui-selected-form-system",
+    "recipe": "form-analysis-original-recomposition",
     "status": "deployed",
     "hostname": socket.gethostname(),
     "systemRoot": os.environ["SYS_ROOT"],
@@ -630,7 +769,7 @@ fi
 resolve_system_root
 echo ""
 echo "Form System Kit Composer - Deploy"
-echo "Recipe  : gui-selected-form-system"
+echo "Recipe  : form-analysis-original-recomposition"
 echo "SysRoot : ${SYS_ROOT}"
 echo ""
 
@@ -646,19 +785,37 @@ setup_venv
 install_backend
 run_kit_installs
 build_frontend
+setup_postgres
 setup_database
 start_backend
+setup_nginx
 send_hiba_dashboard_callback
 show_license_notice
 
+echo ""
+echo "------------------------------------------------------"
+echo "  === Deploy complete ==="
+echo "------------------------------------------------------"
+if [ "${BACKGROUND}" -eq 1 ]; then
+    info "Backend : http://127.0.0.1:8000  (running in background)"
+fi
+info "Frontend: http://localhost  (served via nginx)"
+if [ "${BACKGROUND}" -ne 1 ]; then
+    info ""
+    info "Start backend (foreground):"
+    info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+    info ""
+    info "Or start in background:"
+    info "  $0 --background"
+fi
 echo ""
 echo "------------------------------------------------------"
 echo "  WARNING: Production checklist"
 echo "------------------------------------------------------"
 info "1. Do NOT run as root. Create a system user:"
 info "     sudo useradd -r -s /bin/false form-system"
-info "2. uvicorn has no TLS. Use a reverse proxy:"
-info "     nginx + certbot (Let's Encrypt) or Caddy"
+info "2. Add TLS to nginx:"
+info "     sudo apt install certbot python3-certbot-nginx && sudo certbot --nginx"
 info "3. DATABASE_URL, SECRET_KEY, and ADMIN_API_KEYS must be non-default values"
 info "4. ENVIRONMENT=production disables the /docs endpoint"
 info "5. Run: pip-audit  and  npm audit  (CVE scan)"

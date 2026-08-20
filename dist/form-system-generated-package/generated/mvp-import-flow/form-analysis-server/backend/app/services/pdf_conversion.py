@@ -50,14 +50,8 @@ def _infer_table_from_filename(filename: str) -> str | None:
     if not name:
         return None
 
-    # Common naming patterns like: P1_XXXX.pdf / P2-XXXX.pdf / P3 XXXX.pdf
-    m = re.match(r"^(P[123])([_\-\s].*)?$", name)
-    if m:
-        return m.group(1)
-    m = re.match(r"^(P[123])", name)
-    if m:
-        return m.group(1)
-    return None
+    match = re.match(r"^([A-Z][A-Z0-9]*)(?:[_\-\s].*)?$", name)
+    return match.group(1) if match else None
 
 
 def _to_error_summary(error: Exception | str, *, stage: str) -> dict[str, Any]:
@@ -117,8 +111,8 @@ async def _call_pdf_server_convert(
                 table = (getattr(settings, "pdf_server_table", None) or "").strip()
             if not table:
                 raise PdfServerNotConfigured(
-                    "PDF server /process requires a table (P1/P2/P3). "
-                    "Set PDF_SERVER_TABLE or upload a PDF filename starting with P1/P2/P3."
+                    "PDF server /process requires a table code. "
+                    "Set PDF_SERVER_TABLE or prefix the PDF filename with its table code."
                 )
 
             data: dict[str, Any] = {"table": table}
@@ -343,7 +337,12 @@ async def _auto_ingest_converted_csvs(
 
         # Inject sequential Winder number (1–20) only for P2 CSVs.
         table_type = _infer_table_from_filename(filename)
-        if table_type == "P2":
+        winder_table_codes = {
+            code.strip().upper()
+            for code in get_settings().pdf_winder_table_codes_csv.split(",")
+            if code.strip()
+        }
+        if table_type in winder_table_codes:
             injected = _inject_winder_into_csv(file_content)
             if injected is not file_content:
                 # Write back to disk so the outputs endpoint also returns injected content.

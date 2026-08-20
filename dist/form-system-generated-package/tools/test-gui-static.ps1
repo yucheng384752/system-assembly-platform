@@ -16,14 +16,25 @@ $app = Get-Content -Raw -Encoding UTF8 $appPath
 $index = Get-Content -Raw -Encoding UTF8 $indexPath
 
 $requiredAppSnippets = @(
-    "architectureQuestions",
-    "data-guide-choice",
-    "data-subfeature-toggle",
-    "data-subfeature-option",
-    "mod-subscription-kit"
+    "const flows = [",
+    "data-flow-toggle",
+    "data-subflow-toggle",
+    "function buildRecipe()",
+    "machinePubkey",
+    "handleMachinePubkeyFile",
+    "gate-machine-pubkey-file",
+    "valueToPk",
+    "clientTableCode",
+    "dataflows:",
+    "edgeCreatesCycle",
+    "fromTableCode"
 )
 $requiredIndexSnippets = @(
-    "architecture-guide",
+    "machine-gate-overlay",
+    "gate-machine-pubkey-file",
+    "client-name",
+    "dataflow-select",
+    "flow-grid",
     "kit-grid",
     "generation-summary"
 )

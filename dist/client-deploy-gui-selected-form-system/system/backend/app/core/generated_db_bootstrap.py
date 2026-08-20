@@ -13,7 +13,7 @@ import importlib
 import json
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.database import Base, close_db, init_db
 
@@ -70,7 +70,7 @@ def create_schema_target_tables(connection, schema_versions: list[dict[str, obje
     created = 0
     for version in schema_versions:
         table_code = version.get("formCode") or version.get("tableCode")
-        if not isinstance(table_code, str) or not table_code.startswith("daihui_"):
+        if not isinstance(table_code, str) or not table_code.replace("_", "").isalnum():
             continue
         schema_json = version.get("schemaJson") or {}
         if not isinstance(schema_json, dict):
@@ -87,7 +87,7 @@ def create_schema_target_tables(connection, schema_versions: list[dict[str, obje
             connection.execute(text(
                 f'ALTER TABLE "{table_code}" ADD COLUMN IF NOT EXISTS {col} {typ}'
             ))
-        safe = table_code.replace('"', '')
+        safe = table_code
         connection.execute(text(
             f'CREATE UNIQUE INDEX IF NOT EXISTS "uq_{safe}_job_row" '
             f'ON "{table_code}" ("_tenant_id", "_import_job_id", "_row_index")'

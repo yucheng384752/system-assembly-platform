@@ -2,8 +2,8 @@
 <#
 .SYNOPSIS
   Form System Kit Composer - Server Deploy Script (Windows)
-  Recipe : gui-selected-form-system
-  Built  : 2026-07-01 18:11
+  Recipe : form-analysis-original-recomposition
+  Built  : 2026-08-19 16:48
 
 .DESCRIPTION
   One-shot deploy: creates venv, installs deps, migrates DB, starts backend.
@@ -120,7 +120,7 @@ function Send-HibaDashboardCallback {
         $uri = $script:HibaDashboardUrl.TrimEnd("/") + "/api/hiba/nodes/register"
         $body = @{
             nodeId = $script:HibaNodeId
-            recipe = "gui-selected-form-system"
+            recipe = "form-analysis-original-recomposition"
             status = "deployed"
             hostname = $env:COMPUTERNAME
             systemRoot = $SysRoot
@@ -201,7 +201,16 @@ if (-not $SkipFrontend) {
         Write-Host "=== Building frontend ==="
         Push-Location "$SysRoot\frontend"
         try {
-            npm install --silent
+            $npmArgs = @()
+            $npmCache = Join-Path (Get-Location) ".npm-cache"
+            if (Test-Path $npmCache) {
+                $npmArgs += @("--cache", $npmCache, "--offline")
+            }
+            if (Test-Path "package-lock.json") {
+                npm ci --silent @npmArgs
+            } else {
+                npm install --silent @npmArgs
+            }
             npm run build
         } finally { Pop-Location }
         Write-Host "  OK frontend built"
