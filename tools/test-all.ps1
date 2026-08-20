@@ -35,6 +35,7 @@ Run-Step "Secret scan" { & (Join-Path $ProjectRoot "tools\test-secret-scan.ps1")
 Run-Step "Resolver" { & (Join-Path $ProjectRoot "tools\test-resolver.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Station data link genericization" { & (Join-Path $ProjectRoot "tools\test-station-data-link-genericization.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Resolved plan contracts" { & (Join-Path $ProjectRoot "tools\test-resolved-plan-contracts.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "External kit admission" { & (Join-Path $ProjectRoot "tools\test-external-kit-validation.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Backend registry full" { & (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Backend registry MVP" {
     & (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") `
