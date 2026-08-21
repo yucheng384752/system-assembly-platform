@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
-#  Recipe : form-analysis-original-recomposition
-#  Built  : 2026-08-19 16:48
-#  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit
+#  Recipe : gui-selected-form-system
+#  Built  : 2026-08-21 10:40
+#  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit
 #  DB     : postgresql
 # ================================================================
 #
@@ -23,7 +23,7 @@ info() { echo "  $*"; }
 ok()   { echo "  OK $*"; }
 
 ASK_AUTH=true
-ASK_PDF=true
+ASK_PDF=false
 ASK_VALIDATION=true
 SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd)"
 SYS_ROOT=""
@@ -201,8 +201,8 @@ wizard_welcome() {
     echo ""
     echo "================================================================"
     echo "  Form System 摰?蝎暸?"
-    echo "  Recipe : form-analysis-original-recomposition"
-    echo "  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit"
+    echo "  Recipe : gui-selected-form-system"
+    echo "  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit"
     echo "================================================================"
     echo ""
     echo "  甇斤移??撘??典???"
@@ -694,7 +694,7 @@ fi
 resolve_system_root
 echo ""
 echo "Form System Kit Composer - Deploy"
-echo "Recipe  : form-analysis-original-recomposition"
+echo "Recipe  : gui-selected-form-system"
 echo "SysRoot : ${SYS_ROOT}"
 echo ""
 

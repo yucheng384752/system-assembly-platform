@@ -1,9 +1,9 @@
 ﻿{
     "irVersion":  "0.1.0",
-    "generatedAt":  "2026-08-19T08:48:36.8983315Z",
+    "generatedAt":  "2026-08-21T02:40:38.9318792Z",
     "sourceRecipe":  {
-                         "id":  "form-analysis-original-recomposition",
-                         "resolvedPlanPath":  "build\\package-client-deploy\\form-analysis-original-recomposition.resolved-plan.json",
+                         "id":  "gui-selected-form-system",
+                         "resolvedPlanPath":  "build\\package-client-deploy\\gui-selected-form-system.resolved-plan.json",
                          "sourceManifest":  "form-analysis-kit-suite",
                          "manifestPath":  "kits\\form-analysis.kit-manifest.json",
                          "databaseRecommendation":  {
@@ -18,11 +18,7 @@
                              "category":  "foundation",
                              "required":  true,
                              "selectedSubfeatures":  [
-                                                         "app-shell",
-                                                         "configuration-management",
-                                                         "database-connection",
-                                                         "health-check",
-                                                         "api-client-foundation"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -38,11 +34,7 @@
                              "category":  "security",
                              "required":  true,
                              "selectedSubfeatures":  [
-                                                         "tenant-list-and-create",
-                                                         "user-login",
-                                                         "api-key-issue",
-                                                         "user-management",
-                                                         "admin-unlock"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -58,12 +50,7 @@
                              "category":  "data-model",
                              "required":  true,
                              "selectedSubfeatures":  [
-                                                         "station-data-model",
-                                                         "p123-compatibility-adapter",
-                                                         "new-station-definition",
-                                                         "lot-normalization",
-                                                         "product-id-generation",
-                                                         "generic-record"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -80,12 +67,7 @@
                              "category":  "workflow",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "csv-excel-upload-validation",
-                                                         "csv-excel-error-summary",
-                                                         "csv-content-correction",
-                                                         "pdf-upload-option",
-                                                         "pdf-to-csv-binding",
-                                                         "converted-result-ingest-upload-job"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -102,12 +84,7 @@
                              "category":  "workflow",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "create-import-job",
-                                                         "create-import-job-from-upload-job",
-                                                         "staging-row-validation",
-                                                         "import-error-query",
-                                                         "commit-production-records",
-                                                         "cancel-import"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -125,11 +102,7 @@
                              "category":  "business",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "lot-query",
-                                                         "product-id-query",
-                                                         "advanced-filter",
-                                                         "traceability-detail",
-                                                         "dynamic-field-query"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -147,11 +120,7 @@
                              "category":  "analytics",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "realtime-analysis",
-                                                         "complaint-analysis",
-                                                         "artifact-browser",
-                                                         "extraction-analysis",
-                                                         "chart-summary"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -170,11 +139,7 @@
                              "category":  "admin",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "station-management",
-                                                         "schema-configuration",
-                                                         "validation-rules",
-                                                         "analytics-mapping",
-                                                         "station-linking"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -192,10 +157,7 @@
                              "category":  "governance",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "edit-reason",
-                                                         "record-correction",
-                                                         "before-after-diff",
-                                                         "audit-event-query"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -213,10 +175,7 @@
                              "category":  "operations",
                              "required":  false,
                              "selectedSubfeatures":  [
-                                                         "log-list",
-                                                         "log-search",
-                                                         "log-statistics",
-                                                         "cleanup-and-download"
+
                                                      ],
                              "selectedSubfeatureOptions":  null,
                              "dependencies":  [
@@ -226,16 +185,28 @@
                              "optionalDependencies":  [
 
                                                       ]
+                         },
+                         {
+                             "id":  "generic-forms-kit",
+                             "displayName":  "通用表格",
+                             "category":  "data",
+                             "required":  false,
+                             "selectedSubfeatures":  [
+
+                                                     ],
+                             "selectedSubfeatureOptions":  null,
+                             "dependencies":  [
+                                                  "platform-core-kit",
+                                                  "tenant-auth-kit",
+                                                  "station-data-link-kit"
+                                              ],
+                             "optionalDependencies":  [
+
+                                                      ]
                          }
                      ],
     "featureFlags":  {
-                         "USE_GENERIC_SCHEMA":  true,
-                         "MULTI_TENANT_ENABLED":  true,
-                         "AUTH_MODE":  "api_key",
-                         "AUDIT_EVENTS_ENABLED":  true,
-                         "PDF_SERVER_URL":  "required",
-                         "LEGACY_TABLE_CODES_CSV":  "P1,P2,P3",
-                         "PDF_WINDER_TABLE_CODES_CSV":  "P2"
+                         "USE_GENERIC_SCHEMA":  true
                      },
     "frontend":  {
                      "sources":  [
@@ -274,91 +245,11 @@
                                      "frontend/src/components/EditRecordModal.tsx",
                                      "frontend/src/components/SimpleLogViewer.tsx",
                                      "frontend/src/components/LogViewer.tsx",
-                                     "frontend/src/services/logService.ts"
+                                     "frontend/src/services/logService.ts",
+                                     "frontend/src/pages/FormsPage.tsx"
                                  ],
                      "navigation":  [
-                                        {
-                                            "tab":  "register",
-                                            "labelKey":  "tabs.register",
-                                            "kit":  "tenant-auth-kit",
-                                            "visibleWhen":  null,
-                                            "pages":  [
-                                                          "frontend/src/pages/RegisterPage.tsx",
-                                                          "frontend/src/pages/AdminPage.tsx",
-                                                          "frontend/src/pages/ManagerPage.tsx"
-                                                      ],
-                                            "services":  [
-                                                             "frontend/src/services/auth.ts",
-                                                             "frontend/src/services/adminAuth.ts",
-                                                             "frontend/src/services/tenant.ts",
-                                                             "frontend/src/services/tenantMap.ts"
-                                                         ]
-                                        },
-                                        {
-                                            "tab":  "upload",
-                                            "labelKey":  "tabs.upload",
-                                            "kit":  "upload-validation-kit",
-                                            "visibleWhen":  null,
-                                            "pages":  [
-                                                          "frontend/src/pages/UploadPage.tsx"
-                                                      ],
-                                            "services":  [
 
-                                                         ]
-                                        },
-                                        {
-                                            "tab":  "query",
-                                            "labelKey":  "tabs.query",
-                                            "kit":  "query-traceability-kit",
-                                            "visibleWhen":  null,
-                                            "pages":  [
-                                                          "frontend/src/pages/QueryPage.tsx"
-                                                      ],
-                                            "services":  [
-                                                             "frontend/src/services/api.ts"
-                                                         ]
-                                        },
-                                        {
-                                            "tab":  "analysis",
-                                            "labelKey":  "tabs.analysis",
-                                            "kit":  "analytics-kit",
-                                            "visibleWhen":  null,
-                                            "pages":  [
-                                                          "frontend/src/pages/AnalyticsPage.tsx"
-                                                      ],
-                                            "services":  [
-                                                             "frontend/src/services/analyticsArtifacts.ts"
-                                                         ]
-                                        },
-                                        {
-                                            "tab":  "manager",
-                                            "labelKey":  "tabs.manager",
-                                            "kit":  "station-admin-kit",
-                                            "visibleWhen":  "actor_role == manager",
-                                            "pages":  [
-                                                          "frontend/src/pages/ManagerPage.tsx"
-                                                      ],
-                                            "services":  [
-                                                             "frontend/src/services/stationApi.ts"
-                                                         ]
-                                        },
-                                        {
-                                            "tab":  "admin",
-                                            "labelKey":  "tabs.admin",
-                                            "kit":  "tenant-auth-kit",
-                                            "visibleWhen":  "admin_unlocked == true",
-                                            "pages":  [
-                                                          "frontend/src/pages/RegisterPage.tsx",
-                                                          "frontend/src/pages/AdminPage.tsx",
-                                                          "frontend/src/pages/ManagerPage.tsx"
-                                                      ],
-                                            "services":  [
-                                                             "frontend/src/services/auth.ts",
-                                                             "frontend/src/services/adminAuth.ts",
-                                                             "frontend/src/services/tenant.ts",
-                                                             "frontend/src/services/tenantMap.ts"
-                                                         ]
-                                        }
                                     ]
                  },
     "backend":  {
@@ -420,17 +311,7 @@
                                     "backend/app/services/audit_events.py",
                                     "backend/app/models/core/audit_event.py",
                                     "backend/app/api/routes_logs.py",
-                                    "backend/app/api/routes_import.py",
-                                    "backend/app/services/production_date_extractor.py",
-                                    "backend/app/models/base_record.py",
-                                    "backend/app/models/record.py",
-                                    "backend/app/models/p1_record.py",
-                                    "backend/app/models/p2_item.py",
-                                    "backend/app/models/p2_record.py",
-                                    "backend/app/models/p2_item_v2.py",
-                                    "backend/app/models/p3_item.py",
-                                    "backend/app/models/p3_record.py",
-                                    "backend/app/models/p3_item_v2.py"
+                                    "backend/app/api/routes_generic_forms.py"
                                 ],
                     "enabledApis":  [
                                         "GET /api/auth/whoami",
@@ -497,16 +378,7 @@
                                            "AnalyticsMapping",
                                            "EditReason",
                                            "RowEdit",
-                                           "AuditEvent",
-                                           "DataType",
-                                           "Record",
-                                           "P1Record",
-                                           "P2Item",
-                                           "P2Record",
-                                           "P2ItemV2",
-                                           "P3Item",
-                                           "P3Record",
-                                           "P3ItemV2"
+                                           "AuditEvent"
                                        ],
                     "routerRegistrations":  [
                                                 {
@@ -675,13 +547,12 @@
                                                     "featureFlag":  null
                                                 },
                                                 {
-                                                    "kit":  "station-data-link-kit",
-                                                    "subfeature":  "p123-compatibility-adapter",
-                                                    "module":  "app.api.routes_import",
+                                                    "kit":  "generic-forms-kit",
+                                                    "module":  "app.api.routes_generic_forms",
                                                     "symbol":  "router",
                                                     "prefix":  "/api",
                                                     "tags":  [
-                                                                 "資料匯入（P1/P2/P3 相容）"
+                                                                 "Generic Forms"
                                                              ],
                                                     "tenantScoped":  true,
                                                     "featureFlag":  null
@@ -690,14 +561,8 @@
                 },
     "database":  {
                      "engine":  "postgresql",
-                     "selectedByUserIntent":  {
-                                                  "usageScale":  "multi-user",
-                                                  "dataCriticality":  "production",
-                                                  "needsTenantIsolation":  true,
-                                                  "needsAnalytics":  true,
-                                                  "needsBackgroundJobs":  true
-                                              },
-                     "reasonForNonTechnicalUser":  "這套系統會長期保存製程資料、匯入紀錄、批號追溯、使用者權限與分析結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。",
+                     "selectedByUserIntent":  null,
+                     "reasonForNonTechnicalUser":  null,
                      "physicalFirstStorage":  {
                                                   "strategy":  "hybrid-physical-first",
                                                   "decisions":  [
@@ -2840,12 +2705,11 @@
                 "DATABASE_URL":  "required",
                 "SECRET_KEY":  "required",
                 "CORS_ORIGINS":  "required",
-                "AUTH_MODE":  "api_key",
-                "MULTI_TENANT_ENABLED":  true,
+                "AUTH_MODE":  null,
+                "MULTI_TENANT_ENABLED":  null,
                 "USE_GENERIC_SCHEMA":  true,
-                "LEGACY_TABLE_CODES_CSV":  "P1,P2,P3",
-                "AUDIT_EVENTS_ENABLED":  true,
-                "PDF_SERVER_URL":  "required"
+                "LEGACY_TABLE_CODES_CSV":  null,
+                "AUDIT_EVENTS_ENABLED":  null
             },
     "scripts":  [
                     "scripts\\check-prerequisites.ps1",
@@ -2925,6 +2789,19 @@
                                        ],
                                "scripts":  [
                                                "kits/import-pipeline-kit/install.ps1"
+                                           ]
+                           },
+                           {
+                               "kit":  "generic-forms-kit",
+                               "order":  55,
+                               "requires":  [
+                                                "python"
+                                            ],
+                               "env":  [
+
+                                       ],
+                               "scripts":  [
+                                               "kits/generic-forms-kit/install.ps1"
                                            ]
                            },
                            {
@@ -3164,9 +3041,9 @@
                                                    "owner":  "logs-ops-kit"
                                                },
                                                {
-                                                   "id":  "router:app.api.routes_import",
+                                                   "id":  "router:app.api.routes_generic_forms",
                                                    "kind":  "backend-router",
-                                                   "owner":  "station-data-link-kit"
+                                                   "owner":  "generic-forms-kit"
                                                },
                                                {
                                                    "id":  "model:Tenant",
@@ -3277,56 +3154,6 @@
                                                    "id":  "model:AuditEvent",
                                                    "kind":  "database-model",
                                                    "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:DataType",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:Record",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P1Record",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P2Item",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P2Record",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P2ItemV2",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P3Item",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P3Record",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "model:P3ItemV2",
-                                                   "kind":  "database-model",
-                                                   "owner":  ""
-                                               },
-                                               {
-                                                   "id":  "external:pdf-conversion-service",
-                                                   "kind":  "external-service",
-                                                   "owner":  "upload-validation-kit"
                                                }
                                            ],
                                  "edges":  [
@@ -3406,7 +3233,7 @@
                                                    "kind":  "tenant-scoped"
                                                },
                                                {
-                                                   "from":  "router:app.api.routes_import",
+                                                   "from":  "router:app.api.routes_generic_forms",
                                                    "to":  "runtime:tenant",
                                                    "kind":  "tenant-scoped"
                                                },
@@ -3519,56 +3346,6 @@
                                                    "from":  "model:AuditEvent",
                                                    "to":  "runtime:database",
                                                    "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:DataType",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:Record",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P1Record",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P2Item",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P2Record",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P2ItemV2",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P3Item",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P3Record",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "model:P3ItemV2",
-                                                   "to":  "runtime:database",
-                                                   "kind":  "persists-to"
-                                               },
-                                               {
-                                                   "from":  "external:pdf-conversion-service",
-                                                   "to":  "runtime:env",
-                                                   "kind":  "configured-by:PDF_SERVER_URL"
                                                }
                                            ]
                              }

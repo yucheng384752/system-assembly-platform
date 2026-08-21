@@ -5,7 +5,7 @@ param(
 $ErrorActionPreference = "Stop"
 
 $AskAuth = [System.Convert]::ToBoolean("true")
-$AskPdf = [System.Convert]::ToBoolean("true")
+$AskPdf = [System.Convert]::ToBoolean("false")
 $AskValidation = [System.Convert]::ToBoolean("true")
 
 function Read-EnvFile([string]$Path) {

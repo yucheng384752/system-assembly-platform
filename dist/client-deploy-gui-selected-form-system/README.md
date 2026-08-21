@@ -2,10 +2,10 @@
 
 | Field   | Value |
 |---------|-------|
-| Recipe  | `form-analysis-original-recomposition` |
-| Built   | 2026-08-19 16:48 |
+| Recipe  | `gui-selected-form-system` |
+| Built   | 2026-08-21 10:40 |
 | DB      | postgresql |
-| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit |
+| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit |
 
 ## Package contents
 
@@ -150,7 +150,7 @@ Or configure manually to serve via nginx as a reverse proxy:
 server {
     listen 80;
     server_name your-domain.com;
-    root /path/to/client-deploy-form-analysis-original-recomposition/system/frontend/dist;
+    root /path/to/client-deploy-gui-selected-form-system/system/frontend/dist;
     index index.html;
 
     location / {

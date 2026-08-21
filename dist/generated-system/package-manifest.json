@@ -1,6 +1,6 @@
 ﻿{
-    "generatedAt":  "2026-08-19T16:48:37",
-    "sourceRecipe":  "form-analysis-original-recomposition",
+    "generatedAt":  "2026-08-21T10:40:40",
+    "sourceRecipe":  "gui-selected-form-system",
     "resolvedKitOrder":  [
                              "platform-core-kit",
                              "tenant-auth-kit",
@@ -11,18 +11,13 @@
                              "analytics-kit",
                              "station-admin-kit",
                              "audit-edit-kit",
-                             "logs-ops-kit"
+                             "logs-ops-kit",
+                             "generic-forms-kit"
                          ],
     "database":  {
-                     "selectedByUserIntent":  {
-                                                  "usageScale":  "multi-user",
-                                                  "dataCriticality":  "production",
-                                                  "needsTenantIsolation":  true,
-                                                  "needsAnalytics":  true,
-                                                  "needsBackgroundJobs":  true
-                                              },
                      "engine":  "postgresql",
-                     "reasonForNonTechnicalUser":  "這套系統會長期保存製程資料、匯入紀錄、批號追溯、使用者權限與分析結果，並支援多人共同使用，因此建議使用 PostgreSQL 作為正式資料庫。"
+                     "connectionOwner":  "platform-core-kit",
+                     "autoGenerateConnection":  true
                  },
     "scripts":  [
                     "scripts\\check-prerequisites.ps1",

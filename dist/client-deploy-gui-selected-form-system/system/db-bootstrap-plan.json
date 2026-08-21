@@ -1,6 +1,6 @@
 ﻿{
-    "generatedAt":  "2026-08-19T16:48:37",
-    "sourcePlan":  "build\\db-plan-form-analysis-original-recomposition\\db-assembly-plan.json",
+    "generatedAt":  "2026-08-21T10:40:40",
+    "sourcePlan":  "build\\db-plan-gui-selected-form-system\\db-assembly-plan.json",
     "engine":  "postgresql",
     "connectionOwner":  "platform-core-kit",
     "envVars":  {

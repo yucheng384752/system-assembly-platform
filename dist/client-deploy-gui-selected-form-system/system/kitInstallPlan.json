@@ -67,6 +67,19 @@
                     ]
     },
     {
+        "kit":  "generic-forms-kit",
+        "order":  55,
+        "requires":  [
+                         "python"
+                     ],
+        "env":  [
+
+                ],
+        "scripts":  [
+                        "kits/generic-forms-kit/install.ps1"
+                    ]
+    },
+    {
         "kit":  "query-traceability-kit",
         "order":  60,
         "requires":  [

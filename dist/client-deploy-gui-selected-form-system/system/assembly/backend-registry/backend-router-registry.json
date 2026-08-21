@@ -99,13 +99,12 @@
         "featureFlag":  null
     },
     {
-        "kit":  "station-data-link-kit",
-        "subfeature":  "p123-compatibility-adapter",
-        "module":  "app.api.routes_import",
+        "kit":  "generic-forms-kit",
+        "module":  "app.api.routes_generic_forms",
         "symbol":  "router",
         "prefix":  "/api",
         "tags":  [
-                     "資料匯入（P1/P2/P3 相容）"
+                     "Generic Forms"
                  ],
         "tenantScoped":  true,
         "featureFlag":  null

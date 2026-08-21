@@ -2,8 +2,8 @@
 <#
 .SYNOPSIS
   Form System Kit Composer - Server Deploy Script (Windows)
-  Recipe : form-analysis-original-recomposition
-  Built  : 2026-08-19 16:48
+  Recipe : gui-selected-form-system
+  Built  : 2026-08-21 10:40
 
 .DESCRIPTION
   One-shot deploy: creates venv, installs deps, migrates DB, starts backend.
@@ -120,7 +120,7 @@ function Send-HibaDashboardCallback {
         $uri = $script:HibaDashboardUrl.TrimEnd("/") + "/api/hiba/nodes/register"
         $body = @{
             nodeId = $script:HibaNodeId
-            recipe = "form-analysis-original-recomposition"
+            recipe = "gui-selected-form-system"
             status = "deployed"
             hostname = $env:COMPUTERNAME
             systemRoot = $SysRoot
