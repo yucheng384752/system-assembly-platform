@@ -4,7 +4,9 @@
     "api": [
       { "capability": "platform.health", "method": "GET", "path": "/healthz" },
       { "capability": "kit.contracts.list", "method": "GET", "path": "/api/kit/contracts" },
-      { "capability": "kit.capability.call", "method": "POST", "path": "/api/kit/call/{capability}" }
+      { "capability": "kit.capability.call", "method": "POST", "path": "/api/kit/call/{capability}" },
+      { "capability": "admin.endpoint-permissions.get", "method": "GET", "path": "/api/admin/endpoint-permissions" },
+      { "capability": "admin.endpoint-permissions.put", "method": "PUT", "path": "/api/admin/endpoint-permissions" }
     ],
     "db": [
       { "capability": "db.tables.resolve" },

@@ -219,6 +219,7 @@ $ir = [ordered]@{
         enabledApis = @($plan.enabledApis | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
         requiredModels = @($plan.requiredModels)
         routerRegistrations = @($plan.backendRouterRegistrations)
+        middlewareRegistrations = @($plan.backendMiddlewareRegistrations)
     }
     database = [ordered]@{
         engine = [string]$plan.database.engine

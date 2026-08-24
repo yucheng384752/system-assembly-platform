@@ -123,6 +123,13 @@
                   "$ref": "#/$defs/backendRouterRegistration"
                 },
                 "default": []
+              },
+              "middlewareRegistrations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/backendMiddlewareRegistration"
+                },
+                "default": []
               }
             }
           },
@@ -244,6 +251,24 @@
         }
       }
     },
+    "backendMiddlewareRegistration": {
+      "type": "object",
+      "required": [
+        "module",
+        "symbol"
+      ],
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "featureFlag": {
+          "type": "string"
+        }
+      }
+    },
     "subfeature": {
       "type": "object",
       "required": [
@@ -337,6 +362,11 @@
             "routerRegistrations": {
               "type": "array",
               "items": { "$ref": "#/$defs/backendRouterRegistration" },
+              "default": []
+            },
+            "middlewareRegistrations": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/backendMiddlewareRegistration" },
               "default": []
             }
           }

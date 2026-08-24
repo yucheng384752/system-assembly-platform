@@ -580,6 +580,19 @@ if (-not (Test-Path $generatedBackendRegistry)) {
 }
 Copy-Item -LiteralPath $generatedBackendRegistry -Destination $runtimeBackendRegistry -Force
 
+& (Join-Path $ProjectRoot "tools\generate-backend-middleware-registry.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -IRPath $assemblyIrPath `
+    -OutputDirectory (Join-Path $OutputDirectory "assembly\backend-middleware-registry")
+
+$generatedMiddlewareRegistry = Join-Path $outputPath "assembly\backend-middleware-registry\backend_middleware_registry.py"
+$runtimeMiddlewareRegistry = Join-Path $outputPath "backend\app\core\backend_middleware_registry.py"
+if (-not (Test-Path $generatedMiddlewareRegistry)) {
+    throw "Generated backend middleware registry not found: $generatedMiddlewareRegistry"
+}
+Copy-Item -LiteralPath $generatedMiddlewareRegistry -Destination $runtimeMiddlewareRegistry -Force
+
 & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
     -ProjectRoot $ProjectRoot `
     -IRPath $assemblyIrPath `

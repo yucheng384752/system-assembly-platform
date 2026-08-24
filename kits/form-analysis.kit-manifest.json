@@ -44,7 +44,8 @@
                      "backend":  {
                                      "routers":  [
                                                      "backend/app/api/routes_health.py",
-                                                     "backend/app/api/routes_kit_broker.py"
+                                                     "backend/app/api/routes_kit_broker.py",
+                                                     "backend/app/api/routes_admin_permissions.py"
                                                  ],
                                      "core":  [
                                                   "backend/app/main.py",
@@ -55,6 +56,8 @@
                                                   "backend/app/core/kit_contracts.py",
                                                   "backend/app/core/kit_broker.py",
                                                   "backend/app/core/db_capabilities.py",
+                                                  "backend/app/core/permission_config.py",
+                                                  "backend/app/core/endpoint_permission_middleware.py",
                                                   "backend/app/api/deps.py"
                                               ],
                                      "services":  [
@@ -81,8 +84,23 @@
                                                                                  "Kit Broker"
                                                                              ],
                                                                     "tenantScoped":  false
+                                                                },
+                                                                {
+                                                                    "module":  "app.api.routes_admin_permissions",
+                                                                    "symbol":  "router",
+                                                                    "prefix":  null,
+                                                                    "tags":  [
+                                                                                 "Admin"
+                                                                             ],
+                                                                    "tenantScoped":  false
                                                                 }
-                                                            ]
+                                                            ],
+                                     "middlewareRegistrations":  [
+                                                                     {
+                                                                         "module":  "app.core.endpoint_permission_middleware",
+                                                                         "symbol":  "endpoint_permission_middleware"
+                                                                     }
+                                                                 ]
                                  },
                      "database":  {
                                       "models":  [
@@ -510,7 +528,7 @@
                      "id":  "upload-validation-kit",
                      "displayName":  "檔案上傳與驗證",
                      "category":  "workflow",
-                     "required":  false,
+                     "required":  true,
                      "businessCapability":  "使用者上傳 CSV、Excel 或 PDF，系統建立上傳工作、驗證內容、顯示錯誤並允許修正。",
                      "dependencies":  [
                                           "platform-core-kit",

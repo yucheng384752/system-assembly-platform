@@ -8,13 +8,14 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pandas as pd
-from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile, status
 from pydantic import BaseModel
 from sqlalchemy import delete as sql_delete, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_tenant
 from app.core.database import get_db, get_db_context
+from app.core.db_capabilities import DB_CAPABILITIES
 from app.models.core.tenant import Tenant
 from app.models.generic_record import GenericRecord
 from app.models.station import Station, StationLink, StationSchema
@@ -40,6 +41,7 @@ class StationCreate(BaseModel):
 
 class SchemaIn(BaseModel):
     fields: list[FieldDef]
+    reason_id: uuid.UUID
 
 
 class StationRead(BaseModel):
@@ -129,6 +131,18 @@ def _coerce(value: Any, ftype: str) -> Any:
             return float(s)
         except (ValueError, TypeError):
             return s
+    if ftype_lower == "boolean":
+        normalized = s.lower()
+        if normalized in {"true", "1", "yes", "y", "on"}:
+            return True
+        if normalized in {"false", "0", "no", "n", "off"}:
+            return False
+        return s
+    if ftype_lower == "date":
+        try:
+            return datetime.fromisoformat(s).date().isoformat()
+        except ValueError:
+            return s
     return s
 
 
@@ -180,6 +194,15 @@ def _key_val_for(row_data: dict, key_fields: list[str]) -> str:
         val = "_".join(str(row_data.get(k) or "") for k in key_fields)
         return val if val.strip("_") else str(uuid.uuid4())
     return str(uuid.uuid4())
+
+
+def _actor(request: Request) -> str | None:
+    actor = (
+        getattr(request.state, "auth_api_key_label", None)
+        or getattr(request.state, "actor_user_id", None)
+        or getattr(request.state, "auth_api_key_id", None)
+    )
+    return str(actor)[:100] if actor else None
 
 
 # ponytail: in-memory, single-process only — upgrade to DB model if multi-worker/restart-safe needed
@@ -480,11 +503,15 @@ async def delete_form(
 async def set_schema(
     code: str,
     body: SchemaIn,
+    request: Request,
     tenant: Tenant = Depends(get_current_tenant),
     db: AsyncSession = Depends(get_db),
 ):
     """Set (or replace) the active schema for a form type."""
     station = await _get_station(code, tenant.id, db)
+    reason = await DB_CAPABILITIES["db.edit-reasons.validate"](
+        db=db, tenant_id=tenant.id, reason_id=body.reason_id
+    )
 
     # Deactivate old schemas
     old = (
@@ -507,6 +534,7 @@ async def set_schema(
 
     key_fields = [f.name for f in body.fields if f.is_key]
     field_dicts = [f.model_dump() for f in body.fields]
+    actor = _actor(request)
 
     schema = StationSchema(
         station_id=station.id,
@@ -518,6 +546,9 @@ async def set_schema(
         csv_signature_columns=[f.name for f in body.fields],
         csv_filename_pattern=None,
         csv_field_mapping={f.name: f.name for f in body.fields},
+        reason_id=body.reason_id,
+        reason_text=reason["label"],
+        created_by=actor,
     )
     db.add(schema)
     await db.commit()

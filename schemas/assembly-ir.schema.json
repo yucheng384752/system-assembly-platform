@@ -60,7 +60,8 @@
         "sources": { "type": "array", "items": { "type": "string" } },
         "enabledApis": { "type": "array", "items": { "type": "string" } },
         "requiredModels": { "type": "array", "items": { "type": "string" } },
-        "routerRegistrations": { "type": "array", "items": { "$ref": "#/$defs/backendRouterRegistration" } }
+        "routerRegistrations": { "type": "array", "items": { "$ref": "#/$defs/backendRouterRegistration" } },
+        "middlewareRegistrations": { "type": "array", "items": { "$ref": "#/$defs/backendMiddlewareRegistration" } }
       }
     },
     "database": {
@@ -192,6 +193,17 @@
         "prefix": { "type": ["string", "null"] },
         "tags": { "type": "array", "items": { "type": "string" } },
         "tenantScoped": { "type": "boolean" },
+        "featureFlag": { "type": ["string", "null"] }
+      }
+    },
+    "backendMiddlewareRegistration": {
+      "type": "object",
+      "required": ["kit", "module", "symbol"],
+      "additionalProperties": true,
+      "properties": {
+        "kit": { "type": "string" },
+        "module": { "type": "string" },
+        "symbol": { "type": "string" },
         "featureFlag": { "type": ["string", "null"] }
       }
     },

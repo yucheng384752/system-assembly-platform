@@ -3,10 +3,14 @@
   "provides": {
     "api": [
       { "capability": "audit.events.list", "method": "GET", "path": "/api/audit/events" },
-      { "capability": "records.edit", "method": "POST", "path": "/api/edit" }
+      { "capability": "records.edit", "method": "PATCH", "path": "/api/edit/records/{table_code}/{record_id}" },
+      { "capability": "edit-reasons.list", "method": "GET", "path": "/api/edit/reasons" },
+      { "capability": "edit-reasons.create", "method": "POST", "path": "/api/edit/reasons" },
+      { "capability": "edit-reasons.update", "method": "PATCH", "path": "/api/edit/reasons/{reason_id}" }
     ],
     "db": [
-      { "capability": "db.audit.events" }
+      { "capability": "db.audit.events" },
+      { "capability": "db.edit-reasons.validate" }
     ]
   },
   "consumes": {

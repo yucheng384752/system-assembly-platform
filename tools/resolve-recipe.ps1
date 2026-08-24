@@ -105,6 +105,7 @@ $frontendSources = New-Object System.Collections.Generic.List[string]
 $backendSources = New-Object System.Collections.Generic.List[string]
 $templateSources = New-Object System.Collections.Generic.List[string]
 $backendRouterRegistrations = New-Object System.Collections.Generic.List[object]
+$backendMiddlewareRegistrations = New-Object System.Collections.Generic.List[object]
 $externalServices = New-Object System.Collections.Generic.List[object]
 $featureFlags = [ordered]@{}
 
@@ -147,6 +148,16 @@ foreach ($kitId in $resolved) {
                 prefix = $registration.prefix
                 tags = @($registration.tags)
                 tenantScoped = [bool]$registration.tenantScoped
+                featureFlag = $registration.featureFlag
+            })
+        }
+    }
+    foreach ($registration in @($kit.backend.middlewareRegistrations)) {
+        if ($null -ne $registration) {
+            $backendMiddlewareRegistrations.Add([ordered]@{
+                kit = $kitId
+                module = $registration.module
+                symbol = $registration.symbol
                 featureFlag = $registration.featureFlag
             })
         }
@@ -227,6 +238,17 @@ foreach ($kitId in $resolved) {
                         prefix = $registration.prefix
                         tags = @($registration.tags)
                         tenantScoped = [bool]$registration.tenantScoped
+                        featureFlag = $registration.featureFlag
+                    })
+                }
+            }
+            foreach ($registration in @($contributions.backend.middlewareRegistrations)) {
+                if ($null -ne $registration) {
+                    $backendMiddlewareRegistrations.Add([ordered]@{
+                        kit = $kitId
+                        subfeature = $subfeatureId
+                        module = $registration.module
+                        symbol = $registration.symbol
                         featureFlag = $registration.featureFlag
                     })
                 }
@@ -315,6 +337,7 @@ $plan = [ordered]@{
     backendSources = $backendSources.ToArray()
     templateSources = $templateSources.ToArray()
     backendRouterRegistrations = $backendRouterRegistrations.ToArray()
+    backendMiddlewareRegistrations = $backendMiddlewareRegistrations.ToArray()
     externalServices = $externalServices.ToArray()
     selectedExternalServices = $selectedExternalServices.ToArray()
     featureFlags = $featureFlags
