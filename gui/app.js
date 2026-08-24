@@ -130,9 +130,8 @@ const flows = [
     name: "資料匯入",
     description: "上傳 CSV、Excel 或 PDF，驗證內容後匯入正式資料表",
     kits: ["upload-validation-kit", "import-pipeline-kit"],
-    subflows: [
-      { id: "pdf-convert", name: "PDF → CSV", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
-    ],
+    required: true,
+    subflows: [],
     pages: ["上傳頁", "匯入工作頁", "錯誤檢視頁"],
   },
   {
@@ -243,12 +242,13 @@ async function start() {
   cacheElements();
   state.kits = await loadKitCatalog();
   document.querySelector("#manifest-warning").hidden = state.manifestSource !== "fallback";
-  resetToRequiredKits();
+  applyFlowSelection();
   bindNavigation();
   bindToolbarActions();
   bindSearch();
   bindFlows();
   bindCsvUpload();
+  bindDatabaseCarousel();
   bindNodeEditor();
   bindFormSchemaEditor();
   bindDeploymentMode();
@@ -552,6 +552,7 @@ function bindFlows() {
 function applyFlowSelection() {
   resetToRequiredKits();
   const allFlows = new Set(state.selectedFlows);
+  flows.filter((f) => f.required).forEach((f) => allFlows.add(f.id));
   allFlows.forEach((flowId) => {
     const flow = visibleFlows().find((f) => f.id === flowId);
     flow?.requiresFlows?.forEach((reqId) => allFlows.add(reqId));
@@ -565,6 +566,8 @@ function applyFlowSelection() {
 }
 
 function isAutoRequiredFlow(flowId) {
+  const flow = flows.find((f) => f.id === flowId);
+  if (flow?.required) return true;
   return flows.some((f) => state.selectedFlows.has(f.id) && f.requiresFlows?.includes(flowId));
 }
 
@@ -662,6 +665,17 @@ function bindCsvUpload() {
       }
     });
   }
+}
+
+function bindDatabaseCarousel() {
+  const btn = document.getElementById("card-next-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const cards = databaseCards();
+    if (!cards.length) return;
+    state.dbCard = (state.dbCard + 1) % cards.length;
+    renderDatabaseCarousel();
+  });
 }
 
 // 把表格從「已上傳表格」與所有資料流（nodeOrder + 引用它的 edges）中移除。
@@ -1547,13 +1561,16 @@ function kitTagsTemplate(item) {
 }
 
 function subfeaturesTemplate(item) {
-  const locked = item.required;
-  const action = locked
-    ? `<span class="locked-note">必選 kit 的子功能會自動納入。</span>`
-    : `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${escapeHtml(item.id)}" type="button">全選子功能</button>`;
+  const kitLocked = item.required;
+  const hasUnlockedEntitlement = kitLocked && subfeatureList(item).some((sf) => sf.entitlement);
+  const action = !kitLocked
+    ? `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${escapeHtml(item.id)}" type="button">全選子功能</button>`
+    : hasUnlockedEntitlement
+      ? `<span class="locked-note">必選 kit 的一般子功能會自動納入；標示「需要方案權益」的子功能仍可自行開關。</span>`
+      : `<span class="locked-note">必選 kit 的子功能會自動納入。</span>`;
   return `
     <div class="subfeature-actions">${action}</div>
-    <div class="subfeature-grid">${subfeatureList(item).map((subfeature) => subfeatureTemplate(subfeature, locked)).join("")}</div>
+    <div class="subfeature-grid">${subfeatureList(item).map((subfeature) => subfeatureTemplate(subfeature, kitLocked && !subfeature.entitlement)).join("")}</div>
   `;
 }
 
@@ -1613,9 +1630,24 @@ function onKitRowClick(event) {
 function onSubfeatureToggle(event) {
   const { kitId, subfeatureId } = parseSubfeatureKey(event.target.dataset.subfeatureToggle);
   const selected = state.selectedSubfeatures.get(kitId) || new Set();
-  event.target.checked ? selected.add(subfeatureId) : selected.delete(subfeatureId);
+  if (event.target.checked) {
+    selected.add(subfeatureId);
+  } else {
+    selected.delete(subfeatureId);
+    cascadeUnselectDependents(kitId, subfeatureId, selected);
+  }
   state.selectedSubfeatures.set(kitId, selected);
   renderAll();
+}
+
+function cascadeUnselectDependents(kitId, removedSubfeatureId, selected) {
+  const item = findKit(kitId);
+  subfeatureList(item).forEach((sf) => {
+    if (selected.has(sf.id) && sf.dependencies?.includes(removedSubfeatureId)) {
+      selected.delete(sf.id);
+      cascadeUnselectDependents(kitId, sf.id, selected);
+    }
+  });
 }
 
 function onSubfeatureOption(event) {
@@ -1708,6 +1740,8 @@ function renderDatabaseCarousel() {
   const dotsWrap = document.getElementById("card-indicators");
   if (!dotsWrap) return;
   dotsWrap.style.display = cards.length > 1 ? "flex" : "none";
+  const nextBtn = document.getElementById("card-next-btn");
+  if (nextBtn) nextBtn.style.display = cards.length > 1 ? "" : "none";
   dotsWrap.innerHTML = cards.map((_, i) =>
     `<button class="card-dot${i === state.dbCard ? " is-active" : ""}" type="button" data-card="${i}" aria-label="第 ${i + 1} 張卡片"></button>`
   ).join("");
