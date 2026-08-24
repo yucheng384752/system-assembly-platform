@@ -1,4 +1,4 @@
-﻿import uuid
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -10,14 +10,21 @@ from app.core.database import Base
 
 
 class RowEdit(Base):
+    """One correction made to an already-imported row. reason_id is the
+    EditReason the user picked when required by the edit-reason subfeature."""
+
     __tablename__ = "row_edits"
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    tenant_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    tenant_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("tenants.id"), nullable=False, index=True)
     table_code: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
     record_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), nullable=False, index=True)
-    reason_id: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    reason_id: Mapped[uuid.UUID | None] = mapped_column(
+        ForeignKey("edit_reasons.id"), nullable=True
+    )
     reason_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     before_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     after_json: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)

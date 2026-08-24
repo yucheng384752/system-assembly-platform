@@ -1,6 +1,6 @@
 ﻿{
     "irVersion":  "0.1.0",
-    "generatedAt":  "2026-08-21T02:40:38.9318792Z",
+    "generatedAt":  "2026-08-24T10:54:53.2858317Z",
     "sourceRecipe":  {
                          "id":  "gui-selected-form-system",
                          "resolvedPlanPath":  "build\\package-client-deploy\\gui-selected-form-system.resolved-plan.json",
@@ -65,7 +65,7 @@
                              "id":  "upload-validation-kit",
                              "displayName":  "檔案上傳與驗證",
                              "category":  "workflow",
-                             "required":  false,
+                             "required":  true,
                              "selectedSubfeatures":  [
 
                                                      ],
@@ -256,6 +256,7 @@
                     "sources":  [
                                     "backend/app/api/routes_health.py",
                                     "backend/app/api/routes_kit_broker.py",
+                                    "backend/app/api/routes_admin_permissions.py",
                                     "backend/app/main.py",
                                     "backend/app/core/config.py",
                                     "backend/app/core/database.py",
@@ -264,6 +265,8 @@
                                     "backend/app/core/kit_contracts.py",
                                     "backend/app/core/kit_broker.py",
                                     "backend/app/core/db_capabilities.py",
+                                    "backend/app/core/permission_config.py",
+                                    "backend/app/core/endpoint_permission_middleware.py",
                                     "backend/app/api/deps.py",
                                     "backend/app/api/routes_auth.py",
                                     "backend/app/api/routes_tenants.py",
@@ -399,6 +402,17 @@
                                                     "prefix":  "/api/kit",
                                                     "tags":  [
                                                                  "Kit Broker"
+                                                             ],
+                                                    "tenantScoped":  false,
+                                                    "featureFlag":  null
+                                                },
+                                                {
+                                                    "kit":  "platform-core-kit",
+                                                    "module":  "app.api.routes_admin_permissions",
+                                                    "symbol":  "router",
+                                                    "prefix":  null,
+                                                    "tags":  [
+                                                                 "Admin"
                                                              ],
                                                     "tenantScoped":  false,
                                                     "featureFlag":  null
@@ -557,7 +571,15 @@
                                                     "tenantScoped":  true,
                                                     "featureFlag":  null
                                                 }
-                                            ]
+                                            ],
+                    "middlewareRegistrations":  [
+                                                    {
+                                                        "kit":  "platform-core-kit",
+                                                        "module":  "app.core.endpoint_permission_middleware",
+                                                        "symbol":  "endpoint_permission_middleware",
+                                                        "featureFlag":  null
+                                                    }
+                                                ]
                 },
     "database":  {
                      "engine":  "postgresql",
@@ -2976,6 +2998,11 @@
                                                    "owner":  "platform-core-kit"
                                                },
                                                {
+                                                   "id":  "router:app.api.routes_admin_permissions",
+                                                   "kind":  "backend-router",
+                                                   "owner":  "platform-core-kit"
+                                               },
+                                               {
                                                    "id":  "router:app.api.routes_auth",
                                                    "kind":  "backend-router",
                                                    "owner":  "tenant-auth-kit"
@@ -3164,6 +3191,11 @@
                                                },
                                                {
                                                    "from":  "router:app.api.routes_kit_broker",
+                                                   "to":  "runtime:tenant",
+                                                   "kind":  "public-or-system"
+                                               },
+                                               {
+                                                   "from":  "router:app.api.routes_admin_permissions",
                                                    "to":  "runtime:tenant",
                                                    "kind":  "public-or-system"
                                                },

@@ -1,10 +1,11 @@
 import { useState, useEffect, useRef, type CSSProperties } from "react";
 import { getApiKeyValue, getApiKeyHeaderName } from "../services/auth";
 import { TENANT_STORAGE_KEY } from "../services/tenant";
+import { EditRecordModal } from "../components/EditRecordModal";
 
-type FieldType = "string" | "integer" | "decimal" | "date" | "boolean";
+export type FieldType = "string" | "integer" | "decimal" | "date" | "boolean";
 
-interface FieldDef {
+export interface FieldDef {
   name: string;
   type: FieldType;
   label: string;
@@ -21,7 +22,7 @@ interface FormType {
   fields: FieldDef[] | null;
 }
 
-interface RecordRow {
+export interface RecordRow {
   id: string;
   lot_no_raw: string;
   data: Record<string, unknown>;
@@ -29,8 +30,10 @@ interface RecordRow {
 }
 
 type SubTab = "schema" | "upload" | "records";
+type EditReason = { id: string; code: string; label: string; is_active: boolean };
 
 const FIELD_TYPES: FieldType[] = ["string", "integer", "decimal", "date", "boolean"];
+const EMPTY_FIELDS: FieldDef[] = [];
 
 function apiHeaders(extra: Record<string, string> = {}): HeadersInit {
   const tenantId = window.localStorage.getItem(TENANT_STORAGE_KEY) || "";
@@ -62,6 +65,10 @@ export function FormsPage() {
   const [editFields, setEditFields] = useState<FieldDef[]>([]);
   const [schemaSaving, setSchemaSaving] = useState(false);
   const [schemaErrors, setSchemaErrors] = useState<string[]>([]);
+  const [editReasons, setEditReasons] = useState<EditReason[]>([]);
+  const [loadingReasons, setLoadingReasons] = useState(true);
+  const [reasonLoadFailed, setReasonLoadFailed] = useState(false);
+  const [schemaReasonId, setSchemaReasonId] = useState("");
 
   // upload
   const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -75,6 +82,7 @@ export function FormsPage() {
   const [records, setRecords] = useState<RecordRow[]>([]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const [editingRecord, setEditingRecord] = useState<RecordRow | null>(null);
   const PAGE_SIZE = 50;
 
   async function loadForms() {
@@ -89,10 +97,21 @@ export function FormsPage() {
 
   useEffect(() => { loadForms(); }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/edit/reasons", { headers: apiHeaders() })
+      .then(res => (res.ok ? (res.json() as Promise<EditReason[]>) : Promise.reject(res.status)))
+      .then(body => { if (!cancelled) setEditReasons(body.filter(r => r.is_active)); })
+      .catch(() => { if (!cancelled) { setEditReasons([]); setReasonLoadFailed(true); } })
+      .finally(() => { if (!cancelled) setLoadingReasons(false); });
+    return () => { cancelled = true; };
+  }, []);
+
   function selectForm(f: FormType) {
     setSelected(f);
     setSubTab("schema");
     setEditFields(f.fields ? f.fields.map(fd => ({ ...fd })) : []);
+    setSchemaReasonId("");
     setUploadResult(null);
     setUploadFile(null);
     setRecords([]);
@@ -141,6 +160,7 @@ export function FormsPage() {
   async function saveSchema() {
     if (!selected) return;
     const errs = validateSchema(editFields);
+    if (!schemaReasonId) errs.push("請選擇編輯原因");
     if (errs.length > 0) { setSchemaErrors(errs); return; }
     setSchemaErrors([]);
     setSchemaSaving(true);
@@ -148,13 +168,14 @@ export function FormsPage() {
       const res = await fetch(`/api/forms/${selected.code}/schema`, {
         method: "PUT",
         headers: apiHeaders({ "Content-Type": "application/json" }),
-        body: JSON.stringify({ fields: editFields }),
+        body: JSON.stringify({ fields: editFields, reason_id: schemaReasonId }),
       });
       if (res.ok) {
         const updated: FormType = await res.json();
         setForms(prev => prev.map(f => f.code === updated.code ? updated : f));
         setSelected(updated);
         setEditFields(updated.fields ? updated.fields.map(fd => ({ ...fd })) : []);
+        setSchemaReasonId("");
       } else {
         const err = await res.json().catch(() => ({}));
         setSchemaErrors([err.detail || `儲存失敗 ${res.status}`]);
@@ -339,13 +360,26 @@ export function FormsPage() {
                     )}
                   </tbody>
                 </table>
-                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                   <button style={btn("#6b7280")} onClick={addField}>＋ 新增欄位</button>
+                  <select value={schemaReasonId} disabled={loadingReasons || editReasons.length === 0}
+                    onChange={e => { setSchemaReasonId(e.target.value); setSchemaErrors([]); }}
+                    style={{ padding: "5px 8px", border: "1px solid #d1d5db", borderRadius: 4, fontSize: 13 }}>
+                    <option value="">選擇編輯原因</option>
+                    {editReasons.map(r => <option key={r.id} value={r.id}>{r.label} ({r.code})</option>)}
+                  </select>
                   <button style={btn()} onClick={saveSchema} disabled={schemaSaving}>
                     {schemaSaving ? "儲存中…" : "儲存 Schema"}
                   </button>
                   <span style={{ fontSize: 12, color: "#6b7280" }}>* 必填欄位在 CSV 上傳時若缺少值將報錯；🔑 識別鍵用於去重</span>
                 </div>
+                {!loadingReasons && editReasons.length === 0 && (
+                  <div style={{ fontSize: 12, color: "#d97706" }}>
+                    {reasonLoadFailed
+                      ? "無法載入編輯原因清單，請稍後再試或聯絡管理者。"
+                      : "尚無可用編輯原因，請先由管理者於「編輯原因管理」建立後再儲存 Schema。"}
+                  </div>
+                )}
               </div>
             )}
 
@@ -453,7 +487,10 @@ export function FormsPage() {
                           {columns.map(c => <td key={c} style={cell}>{String(r.data[c] ?? "")}</td>)}
                           <td style={cell}>{r.created_at?.slice(0, 19).replace("T", " ")}</td>
                           <td style={cell}>
-                            <button style={btn("#ef4444")} onClick={() => deleteRecord(r.id)}>刪除</button>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button style={btn()} onClick={() => setEditingRecord(r)}>編輯</button>
+                              <button style={btn("#ef4444")} onClick={() => deleteRecord(r.id)}>刪除</button>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -476,6 +513,15 @@ export function FormsPage() {
           </>
         )}
       </div>
+      {selected && editingRecord ? (
+        <EditRecordModal
+          tableCode={selected.code}
+          fields={selected.fields ?? EMPTY_FIELDS}
+          record={editingRecord}
+          onClose={() => setEditingRecord(null)}
+          onSaved={() => loadRecords(page)}
+        />
+      ) : null}
     </div>
   );
 }

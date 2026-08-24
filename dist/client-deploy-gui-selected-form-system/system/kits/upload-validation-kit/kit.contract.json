@@ -9,7 +9,7 @@
       { "capability": "upload.pdf.outputs", "method": "GET", "path": "/api/upload/pdf/{process_id}/convert/outputs" }
     ],
     "db": [
-      { "capability": "db.upload.jobs" }
+      { "capability": "db.upload.jobs.list" }
     ]
   },
   "consumes": {

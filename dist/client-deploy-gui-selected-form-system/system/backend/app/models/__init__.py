@@ -2,6 +2,8 @@
 
 from .analytics_mapping import AnalyticsMapping
 from .audit import RowEdit
+from .core.audit_event import AuditEvent
+from .core.edit_reason import EditReason
 from .core.schema_registry import TableRegistry, SchemaVersion
 from .core.tenant import Tenant
 from .core.tenant_api_key import TenantApiKey
@@ -17,6 +19,8 @@ from .validation_rule import ValidationRule
 
 __all__ = [
     "AnalyticsMapping",
+    "AuditEvent",
+    "EditReason",
     "GenericRecord",
     "GenericRecordItem",
     "ImportFile",

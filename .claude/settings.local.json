@@ -174,7 +174,9 @@
       "Bash(node tools/serve-gui.cjs)",
       "PowerShell(Stop-Process *)",
       "Bash(echo \"exit:$?\")",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(awk '{print $2}')",
+      "Bash(xargs -I{} stat -c \"%Y %n\" {})"
     ]
   }
 }

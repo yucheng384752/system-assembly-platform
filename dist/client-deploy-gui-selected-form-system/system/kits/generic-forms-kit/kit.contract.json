@@ -9,6 +9,6 @@
   },
   "consumes": {
     "api": [],
-    "db": ["db.tenants.read"]
+    "db": ["db.tenants.read", "db.edit-reasons.validate"]
   }
 }

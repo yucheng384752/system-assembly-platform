@@ -22,6 +22,17 @@
         "featureFlag":  null
     },
     {
+        "kit":  "platform-core-kit",
+        "module":  "app.api.routes_admin_permissions",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Admin"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
         "kit":  "tenant-auth-kit",
         "module":  "app.api.routes_auth",
         "symbol":  "router",
@@ -85,6 +96,39 @@
                      "Query V2"
                  ],
         "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "analytics-kit",
+        "module":  "app.api.routes_analytics",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Analytics"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "audit-edit-kit",
+        "module":  "app.api.routes_edit",
+        "symbol":  "router",
+        "prefix":  "/api/edit",
+        "tags":  [
+                     "Inline Edit"
+                 ],
+        "tenantScoped":  true,
+        "featureFlag":  null
+    },
+    {
+        "kit":  "audit-edit-kit",
+        "module":  "app.api.routes_audit_events",
+        "symbol":  "router",
+        "prefix":  null,
+        "tags":  [
+                     "Audit Events"
+                 ],
+        "tenantScoped":  false,
         "featureFlag":  null
     },
     {
