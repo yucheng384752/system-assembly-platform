@@ -2,12 +2,14 @@
   "kit": "analytics-kit",
   "provides": {
     "api": [
-      { "capability": "analytics.summary", "method": "GET", "path": "/api/analytics/summary" }
+      { "capability": "analytics.upload-history.list", "method": "GET", "path": "/api/analytics/upload-history" },
+      { "capability": "analytics.upload-history.export", "method": "GET", "path": "/api/analytics/upload-history/export" },
+      { "capability": "analytics.trend", "method": "GET", "path": "/api/analytics/trend" }
     ],
     "db": []
   },
   "consumes": {
     "api": [],
-    "db": ["db.records.search", "db.forms.list"]
+    "db": ["db.records.search", "db.forms.list", "db.upload.jobs.list", "db.records.trend"]
   }
 }
