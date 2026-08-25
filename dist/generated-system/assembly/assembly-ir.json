@@ -1,9 +1,9 @@
 ﻿{
     "irVersion":  "0.1.0",
-    "generatedAt":  "2026-08-24T10:54:53.2858317Z",
+    "generatedAt":  "2026-08-25T09:10:05.3282358Z",
     "sourceRecipe":  {
                          "id":  "gui-selected-form-system",
-                         "resolvedPlanPath":  "build\\package-client-deploy\\gui-selected-form-system.resolved-plan.json",
+                         "resolvedPlanPath":  "assembly\\resolved-plan.json",
                          "sourceManifest":  "form-analysis-kit-suite",
                          "manifestPath":  "kits\\form-analysis.kit-manifest.json",
                          "databaseRecommendation":  {
@@ -127,7 +127,7 @@
                                                   "platform-core-kit",
                                                   "tenant-auth-kit",
                                                   "station-data-link-kit",
-                                                  "query-traceability-kit"
+                                                  "upload-validation-kit"
                                               ],
                              "optionalDependencies":  [
 
@@ -235,8 +235,6 @@
                                      "frontend/src/components/TraceabilityFlow.tsx",
                                      "frontend/src/components/GenericTraceabilityFlow.tsx",
                                      "frontend/src/pages/AnalyticsPage.tsx",
-                                     "frontend/src/components/analytics",
-                                     "frontend/src/services/analyticsArtifacts.ts",
                                      "frontend/src/components/admin/StationManager.tsx",
                                      "frontend/src/components/admin/StationLinkManager.tsx",
                                      "frontend/src/components/admin/ValidationRuleManager.tsx",
@@ -302,10 +300,6 @@
                                     "backend/app/services/traceability_flattener.py",
                                     "backend/app/services/ut_flattener.py",
                                     "backend/app/api/routes_analytics.py",
-                                    "backend/app/api/routes_ut.py",
-                                    "backend/app/services/analytics_external.py",
-                                    "backend/app/services/analytics_data_fetcher.py",
-                                    "backend/app/services/analytical_four_adapter.py",
                                     "backend/app/api/routes_stations.py",
                                     "backend/app/services/schema_service.py",
                                     "backend/app/core/seed_stations.py",
@@ -314,6 +308,8 @@
                                     "backend/app/services/audit_events.py",
                                     "backend/app/models/core/audit_event.py",
                                     "backend/app/api/routes_logs.py",
+                                    "backend/app/core/monitoring.py",
+                                    "backend/app/core/log_client.py",
                                     "backend/app/api/routes_generic_forms.py"
                                 ],
                     "enabledApis":  [
@@ -345,13 +341,9 @@
                                         "GET /product/{product_id}",
                                         "GET /lot/{lot_no}",
                                         "GET /winder/{lot_no}/{winder_number}",
-                                        "GET /api/v2/analytics/flatten/monthly",
-                                        "GET /api/v2/analytics/flatten",
-                                        "POST /api/v2/analytics/analyze",
-                                        "GET /api/v2/analytics/artifacts",
-                                        "POST /api/v2/analytics/realtime-analysis",
-                                        "POST /api/v2/analytics/complaint-analysis",
-                                        "POST /api/v2/analytics/extraction-analysis",
+                                        "GET /api/analytics/upload-history",
+                                        "GET /api/analytics/upload-history/export",
+                                        "GET /api/analytics/trend",
                                         "GET /api/logs/files",
                                         "GET /api/logs/view/{log_type}",
                                         "GET /api/logs/stats",
@@ -501,17 +493,6 @@
                                                     "prefix":  null,
                                                     "tags":  [
                                                                  "Analytics"
-                                                             ],
-                                                    "tenantScoped":  true,
-                                                    "featureFlag":  null
-                                                },
-                                                {
-                                                    "kit":  "analytics-kit",
-                                                    "module":  "app.api.routes_ut",
-                                                    "symbol":  "router",
-                                                    "prefix":  null,
-                                                    "tags":  [
-                                                                 "UT Data"
                                                              ],
                                                     "tenantScoped":  true,
                                                     "featureFlag":  null
@@ -2712,14 +2693,6 @@
                                                                                                          "pandas"
                                                                                                      ]
                                                                                       }
-                                                          },
-                                                          {
-                                                              "kit":  "analytics-kit",
-                                                              "runtimeDependencies":  {
-                                                                                          "python":  [
-                                                                                                         "pandas"
-                                                                                                     ]
-                                                                                      }
                                                           }
                                                       ]
                      },
@@ -3043,11 +3016,6 @@
                                                    "owner":  "analytics-kit"
                                                },
                                                {
-                                                   "id":  "router:app.api.routes_ut",
-                                                   "kind":  "backend-router",
-                                                   "owner":  "analytics-kit"
-                                               },
-                                               {
                                                    "id":  "router:app.api.routes_stations",
                                                    "kind":  "backend-router",
                                                    "owner":  "station-admin-kit"
@@ -3236,11 +3204,6 @@
                                                },
                                                {
                                                    "from":  "router:app.api.routes_analytics",
-                                                   "to":  "runtime:tenant",
-                                                   "kind":  "tenant-scoped"
-                                               },
-                                               {
-                                                   "from":  "router:app.api.routes_ut",
                                                    "to":  "runtime:tenant",
                                                    "kind":  "tenant-scoped"
                                                },

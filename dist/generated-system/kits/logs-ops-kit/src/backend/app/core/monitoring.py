@@ -1,10 +1,11 @@
 """
-logs-ops-kit monitoring — always-on local persistence.
+logs-ops-kit monitoring — local persistence plus optional remote heartbeat.
 
 Overrides the platform-core-kit no-op. Every report_user_action call and
 every structlog WARNING+ event is persisted to system_logs without blocking
 async route handlers. Uses a daemon background thread + queue so callers
-never wait on I/O.
+never wait on I/O. Remote heartbeat is disabled unless init_monitoring receives
+a non-empty server URL; user actions and structlog events are never forwarded.
 """
 from __future__ import annotations
 
@@ -26,6 +27,10 @@ _worker_thread: threading.Thread | None = None
 _running = False
 _initialized = False
 _init_lock = threading.Lock()
+_monitor_client: Any = None
+_heartbeat_thread: threading.Thread | None = None
+_heartbeat_stop = threading.Event()
+_heartbeat_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # DDL — database-agnostic (SQLite uses TEXT timestamps; PG uses TIMESTAMPTZ)
@@ -169,8 +174,13 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 def init_monitoring(*, server_url: str = "", source: str | None = None) -> None:
-    """Called from app/main.py on startup. Forces immediate DB init."""
+    """Initialize local persistence and the opt-in heartbeat client."""
+    global _monitor_client
     _ensure_initialized()
+    if server_url:
+        from app.core.log_client import LogCollectClient
+
+        _monitor_client = LogCollectClient(server_url, source or "form-analysis-server")
     if source:
         _enqueue({
             "id": str(uuid.uuid4()),
@@ -186,6 +196,8 @@ def init_monitoring(*, server_url: str = "", source: str | None = None) -> None:
 
 
 def start_heartbeat(interval_seconds: int | float = 30) -> None:
+    """Start remote heartbeat delivery when a monitor client is configured."""
+    global _heartbeat_thread
     _ensure_initialized()
     _enqueue({
         "id": str(uuid.uuid4()),
@@ -198,9 +210,35 @@ def start_heartbeat(interval_seconds: int | float = 30) -> None:
         "metadata_json": json.dumps({"interval_seconds": interval_seconds}),
         "tenant_id": None,
     })
+    if _monitor_client is None:
+        return
+
+    interval = max(float(interval_seconds), 1.0)
+    with _heartbeat_lock:
+        if _heartbeat_thread and _heartbeat_thread.is_alive():
+            return
+        _heartbeat_stop.clear()
+
+        def _heartbeat_loop() -> None:
+            while not _heartbeat_stop.is_set():
+                _monitor_client.send_heartbeat()
+                _heartbeat_stop.wait(interval)
+
+        _heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            daemon=True,
+            name="remote-heartbeat",
+        )
+        _heartbeat_thread.start()
 
 
 def stop_heartbeat() -> None:
+    """Stop remote heartbeat delivery and the local shutdown writer."""
+    global _heartbeat_thread, _running
+    _heartbeat_stop.set()
+    if _heartbeat_thread and _heartbeat_thread.is_alive():
+        _heartbeat_thread.join(timeout=5.0)
+    _heartbeat_thread = None
     _enqueue({
         "id": str(uuid.uuid4()),
         "timestamp": _now_iso(),
@@ -212,7 +250,6 @@ def stop_heartbeat() -> None:
         "metadata_json": "{}",
         "tenant_id": None,
     })
-    global _running
     _running = False
 
 
