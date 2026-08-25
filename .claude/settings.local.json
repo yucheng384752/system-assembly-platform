@@ -176,7 +176,25 @@
       "Bash(echo \"exit:$?\")",
       "Bash(git commit -m ' *)",
       "Bash(awk '{print $2}')",
-      "Bash(xargs -I{} stat -c \"%Y %n\" {})"
+      "Bash(xargs -I{} stat -c \"%Y %n\" {})",
+      "Bash(rg -l \"PDFtoCSV|PDF to CSV|pdf_to_csv|pdf-to-csv\" --iglob '!node_modules' -i)",
+      "Bash(rg -l \"查詢資料|資料分析\" --iglob '!node_modules' --iglob '!dist' -i)",
+      "Bash(node tools/serve-gui.cjs --port 8791)",
+      "PowerShell($conn = Get-NetTCPConnection -LocalPort 4174 -ErrorAction SilentlyContinue; if \\($conn\\) { Stop-Process -Id \\($conn | Select-Object -First 1 -ExpandProperty OwningProcess\\) -Force; \"stopped\" } else { \"not running\" })",
+      "Bash(jobs -l)",
+      "PowerShell(Get-NetTCPConnection *)",
+      "Bash(sort -t: -k1,1 -u)",
+      "Bash(echo \"exit: $?\")",
+      "Bash(grep -n \"generated\\\\\\\\\\\\\\\\mvp-import-flow\\\\|generated/mvp-import-flow\\\\|assemble-system\\\\|generate-assembly-ir\" README.md tools/assemble-system.ps1)",
+      "Bash(grep -n 'SourceRoot\\\\|$Source\\\\|param\\(' tools/extract-mvp-flow.ps1)",
+      "Bash(echo \"exit1: $?\")",
+      "Bash(echo \"exit2: $?\")",
+      "Bash(echo \"exit3: $?\")",
+      "Bash(powershell -NoProfile -ExecutionPolicy Bypass -File tools\\\\validate-generated-system.ps1 -GeneratedSystemDirectory dist\\\\generated-system)",
+      "PowerShell(powershell -NoProfile -ExecutionPolicy Bypass -File tools\\\\validate-generated-system.ps1 -GeneratedSystemDirectory dist\\\\generated-system)",
+      "Bash(xargs -I{} sh -c 'echo \"=== {} ===\"; grep -A15 \"enabledKits\" {} | head -16')",
+      "Bash(git diff *)",
+      "Bash(git apply *)"
     ]
   }
 }
