@@ -367,6 +367,25 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  // Kit manifest — gui/app.js fetches this from the repo-root kits/ directory, which sits
+  // outside the gui/ static root below, so it needs its own route.
+  if (pathname.startsWith("/kits/") && req.method === "GET") {
+    const kitsRoot = path.join(root, "kits");
+    const relPath = decodeURIComponent(pathname).replace(/^\/kits\//, "");
+    const filePath = path.normalize(path.join(kitsRoot, relPath));
+    if (!filePath.startsWith(kitsRoot)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+    fs.readFile(filePath, (error, data) => {
+      if (error) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream" });
+      res.end(data);
+    });
+    return;
+  }
+
   // Static files — serve from gui/ as root so ./styles.css and ./app.js resolve correctly
   const guiRoot = path.join(root, "gui");
   const relPath = pathname === "/" ? "index.html" : decodeURIComponent(pathname).replace(/^\//, "");

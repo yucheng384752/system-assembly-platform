@@ -181,6 +181,7 @@ const state = {
   selected: new Set(),
   selectedFlows: new Set(),
   selectedSubflows: new Map(),
+  expandedFlowDetails: new Set(),
   selectedSubfeatures: new Map(),
   subfeatureOptions: new Map(),
   activePreviewKit: "",
@@ -298,7 +299,7 @@ function kit(id, name, category, required, capability, dependencies, subfeatures
 // ── Kit Manifest 載入 ────────────────────────────────────────────────────────
 async function loadKitCatalog() {
   try {
-    const response = await fetch("../kits/form-analysis.kit-manifest.json", { cache: "no-store" });
+    const response = await fetch("/kits/form-analysis.kit-manifest.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`Manifest load failed: ${response.status}`);
     const manifest = await response.json();
     state.manifestSource = "manifest";
@@ -547,6 +548,14 @@ function bindFlows() {
     applyFlowSelection();
     renderAll();
   });
+  // "toggle" doesn't bubble, but capture-phase delegation still sees it — keeps the
+  // 包含元件 panel's open/closed state across the innerHTML re-renders triggered by renderAll().
+  elements.flowGrid.addEventListener("toggle", (event) => {
+    const details = event.target.closest?.("[data-flow-details]");
+    if (!details) return;
+    const flowId = details.dataset.flowDetails;
+    details.open ? state.expandedFlowDetails.add(flowId) : state.expandedFlowDetails.delete(flowId);
+  }, true);
 }
 
 function applyFlowSelection() {
@@ -605,7 +614,16 @@ function flowCardTemplate(flow) {
   ` : "";
   const kitListHtml = flow.kits.map((kitId) => {
     const k = findKit(kitId);
-    return k ? `<div class="flow-kit-item"><strong>${escapeHtml(k.name)}</strong><span class="kit-id">${escapeHtml(k.id)}</span></div>` : "";
+    if (!k) return "";
+    const subfeaturesHtml = subfeatureList(k).length
+      ? `<div class="flow-kit-subfeatures">${subfeaturesTemplate(k)}</div>`
+      : "";
+    return `
+      <div class="flow-kit-block">
+        <div class="flow-kit-item"><strong>${escapeHtml(k.name)}</strong><span class="kit-id">${escapeHtml(k.id)}</span></div>
+        ${subfeaturesHtml}
+      </div>
+    `;
   }).join("");
   return `
     <article class="flow-card ${isOn ? "is-selected" : ""}">
@@ -621,7 +639,7 @@ function flowCardTemplate(flow) {
           type="button">${isAuto ? "必須" : isSelected ? "✓ 已選" : "+ 加入"}</button>
       </div>
       ${subflowsHtml}
-      <details class="flow-kit-details">
+      <details class="flow-kit-details" data-flow-details="${escapeHtml(flow.id)}" ${state.expandedFlowDetails.has(flow.id) ? "open" : ""}>
         <summary>包含元件（${flow.kits.length} 個 kit）</summary>
         <div class="flow-kit-list">${kitListHtml}</div>
       </details>

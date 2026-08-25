@@ -2059,6 +2059,19 @@ select:focus {
   color: var(--ink-2);
 }
 
+.flow-kit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flow-kit-subfeatures {
+  margin: 0 0 4px 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
 /* ── Kit Catalog 進階區 ── */
 .kit-catalog-details {
   margin-top: 4px;
