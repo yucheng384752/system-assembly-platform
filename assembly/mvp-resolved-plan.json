@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-08-21T13:32:36",
+    "generatedAt":  "2026-08-25T16:13:23",
     "recipe":  "mvp-import-flow",
     "clientName":  null,
     "sourceManifest":  "form-analysis-kit-suite",
@@ -19,7 +19,8 @@
                              "tenant-auth-kit",
                              "station-data-link-kit",
                              "upload-validation-kit",
-                             "import-pipeline-kit"
+                             "import-pipeline-kit",
+                             "logs-ops-kit"
                          ],
     "selectedSubfeatures":  {
                                 "platform-core-kit":  [
@@ -59,7 +60,13 @@
                                                             "import-error-query",
                                                             "commit-production-records",
                                                             "cancel-import"
-                                                        ]
+                                                        ],
+                                "logs-ops-kit":  [
+                                                     "log-list",
+                                                     "log-search",
+                                                     "log-statistics",
+                                                     "cleanup-and-download"
+                                                 ]
                             },
     "selectedSubfeatureOptions":  {
 
@@ -87,7 +94,13 @@
                         "GET /api/v2/import/jobs/{job_id}",
                         "GET /api/v2/import/jobs/{job_id}/errors",
                         "POST /api/v2/import/jobs/{job_id}/commit",
-                        "POST /api/v2/import/jobs/{job_id}/cancel"
+                        "POST /api/v2/import/jobs/{job_id}/cancel",
+                        "GET /api/logs/files",
+                        "GET /api/logs/view/{log_type}",
+                        "GET /api/logs/stats",
+                        "GET /api/logs/search",
+                        "DELETE /api/logs/cleanup",
+                        "GET /api/logs/download/{log_type}"
                     ],
     "requiredModels":  [
                            "Tenant",
@@ -136,11 +149,15 @@
                             "frontend/src/components/FileUpload.tsx",
                             "frontend/src/components/CSVEditor.tsx",
                             "frontend/src/hooks/useUpload.ts",
-                            "frontend/src/services/api.ts"
+                            "frontend/src/services/api.ts",
+                            "frontend/src/components/SimpleLogViewer.tsx",
+                            "frontend/src/components/LogViewer.tsx",
+                            "frontend/src/services/logService.ts"
                         ],
     "backendSources":  [
                            "backend/app/api/routes_health.py",
                            "backend/app/api/routes_kit_broker.py",
+                           "backend/app/api/routes_admin_permissions.py",
                            "backend/app/main.py",
                            "backend/app/core/config.py",
                            "backend/app/core/database.py",
@@ -149,6 +166,8 @@
                            "backend/app/core/kit_contracts.py",
                            "backend/app/core/kit_broker.py",
                            "backend/app/core/db_capabilities.py",
+                           "backend/app/core/permission_config.py",
+                           "backend/app/core/endpoint_permission_middleware.py",
                            "backend/app/api/deps.py",
                            "backend/app/api/routes_auth.py",
                            "backend/app/api/routes_tenants.py",
@@ -179,6 +198,9 @@
                            "backend/app/services/generic_validator.py",
                            "backend/app/models/import_job.py",
                            "backend/app/models/core/schema_registry.py",
+                           "backend/app/api/routes_logs.py",
+                           "backend/app/core/monitoring.py",
+                           "backend/app/core/log_client.py",
                            "backend/app/api/routes_import.py",
                            "backend/app/services/production_date_extractor.py",
                            "backend/app/models/base_record.py",
@@ -213,6 +235,17 @@
                                            "prefix":  "/api/kit",
                                            "tags":  [
                                                         "Kit Broker"
+                                                    ],
+                                           "tenantScoped":  false,
+                                           "featureFlag":  null
+                                       },
+                                       {
+                                           "kit":  "platform-core-kit",
+                                           "module":  "app.api.routes_admin_permissions",
+                                           "symbol":  "router",
+                                           "prefix":  null,
+                                           "tags":  [
+                                                        "Admin"
                                                     ],
                                            "tenantScoped":  false,
                                            "featureFlag":  null
@@ -273,6 +306,17 @@
                                            "featureFlag":  null
                                        },
                                        {
+                                           "kit":  "logs-ops-kit",
+                                           "module":  "app.api.routes_logs",
+                                           "symbol":  "router",
+                                           "prefix":  "/api/logs",
+                                           "tags":  [
+                                                        "日誌管理"
+                                                    ],
+                                           "tenantScoped":  true,
+                                           "featureFlag":  null
+                                       },
+                                       {
                                            "kit":  "station-data-link-kit",
                                            "subfeature":  "p123-compatibility-adapter",
                                            "module":  "app.api.routes_import",
@@ -285,11 +329,24 @@
                                            "featureFlag":  null
                                        }
                                    ],
+    "backendMiddlewareRegistrations":  [
+                                           {
+                                               "kit":  "platform-core-kit",
+                                               "module":  "app.core.endpoint_permission_middleware",
+                                               "symbol":  "endpoint_permission_middleware",
+                                               "featureFlag":  null
+                                           }
+                                       ],
     "externalServices":  [
                              {
                                  "id":  "pdf-conversion-service",
                                  "required":  false,
                                  "config":  "PDF_SERVER_URL"
+                             },
+                             {
+                                 "id":  "remote-monitor-service",
+                                 "required":  false,
+                                 "config":  "MONITOR_SERVER_URL"
                              }
                          ],
     "selectedExternalServices":  [
