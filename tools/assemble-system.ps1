@@ -76,6 +76,7 @@ if (($plan.resolvedKitOrder -contains "platform-core-kit") -and
 foreach ($kitId in @($plan.resolvedKitOrder)) {
     $kitSrcPath = Join-Path $ProjectRoot "kits\$kitId\src"
     if (-not (Test-Path $kitSrcPath)) { continue }
+    $kitSrcPath = (Resolve-Path -LiteralPath $kitSrcPath).Path
     Get-ChildItem -LiteralPath $kitSrcPath -Recurse -File | ForEach-Object {
         $relativePath = $_.FullName.Substring($kitSrcPath.Length + 1)
         $destPath = Join-Path $outputPath $relativePath

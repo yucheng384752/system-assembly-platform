@@ -7,6 +7,7 @@ param(
 $ErrorActionPreference = "Stop"
 $modelsRoot = Join-Path $ProjectRoot (Join-Path $SystemDirectory "backend\app\models")
 if (-not (Test-Path $modelsRoot)) { throw "Models directory is missing: $modelsRoot" }
+$modelsRoot = (Resolve-Path -LiteralPath $modelsRoot).Path
 $planPath = Join-Path $ProjectRoot $ResolvedPlanPath
 if (-not (Test-Path $planPath)) { throw "Resolved plan is missing: $planPath" }
 $plan = Get-Content -Raw -Encoding UTF8 -LiteralPath $planPath | ConvertFrom-Json

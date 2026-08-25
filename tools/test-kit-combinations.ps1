@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+$ProjectRoot = (Resolve-Path -LiteralPath $ProjectRoot).Path
 
 function Read-JsonUtf8([string]$Path) {
     return Get-Content -Raw -Encoding UTF8 $Path | ConvertFrom-Json

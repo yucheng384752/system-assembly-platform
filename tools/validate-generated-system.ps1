@@ -5,7 +5,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 
-$root = Join-Path $ProjectRoot $GeneratedSystemDirectory
+$root = [System.IO.Path]::GetFullPath((Join-Path $ProjectRoot $GeneratedSystemDirectory))
 $requiredPaths = @(
     "backend\app\main.py",
     "backend\app\core\backend_router_registry.py",
