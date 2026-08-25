@@ -161,11 +161,9 @@
       "dynamic-field-query"
     ],
     "analytics-kit": [
-      "realtime-analysis",
-      "complaint-analysis",
-      "artifact-browser",
-      "extraction-analysis",
-      "chart-summary"
+      "record-summary",
+      "trend-analysis",
+      "upload-history"
     ],
     "station-admin-kit": [
       "station-management",
@@ -187,11 +185,5 @@
       "cleanup-and-download"
     ]
   },
-  "selectedSubfeatureOptions": {
-    "analytics-kit::chart-summary": {
-      "color-palette": "production",
-      "chart-style": "mixed-kpi",
-      "show-anomaly-colors": true
-    }
-  }
+  "selectedSubfeatureOptions": {}
 }

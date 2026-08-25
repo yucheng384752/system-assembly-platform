@@ -1012,39 +1012,22 @@
                      "displayName":  "分析與報表",
                      "category":  "analytics",
                      "required":  false,
-                     "businessCapability":  "提供分析儀表板、artifact 瀏覽、即時分析、客訴分析與 extraction analysis。",
+                     "businessCapability":  "查詢上傳歷史、匯出記錄，並以表單資料產生趨勢與摘要。",
                      "dependencies":  [
                                           "platform-core-kit",
                                           "tenant-auth-kit",
                                           "station-data-link-kit",
-                                          "query-traceability-kit"
+                                          "upload-validation-kit"
                                       ],
-                     "runtimeDependencies":  {
-                                                 "python":  [
-                                                                "pandas"
-                                                            ]
-                                             },
                      "frontend":  {
                                       "pages":  [
                                                     "frontend/src/pages/AnalyticsPage.tsx"
-                                                ],
-                                      "components":  [
-                                                         "frontend/src/components/analytics"
-                                                     ],
-                                      "services":  [
-                                                       "frontend/src/services/analyticsArtifacts.ts"
-                                                   ]
+                                                ]
                                   },
                      "backend":  {
                                      "routers":  [
-                                                     "backend/app/api/routes_analytics.py",
-                                                     "backend/app/api/routes_ut.py"
+                                                     "backend/app/api/routes_analytics.py"
                                                  ],
-                                     "services":  [
-                                                      "backend/app/services/analytics_external.py",
-                                                      "backend/app/services/analytics_data_fetcher.py",
-                                                      "backend/app/services/analytical_four_adapter.py"
-                                                  ],
                                      "routerRegistrations":  [
                                                                  {
                                                                      "module":  "app.api.routes_analytics",
@@ -1053,25 +1036,13 @@
                                                                                   "Analytics"
                                                                               ],
                                                                      "tenantScoped":  true
-                                                                 },
-                                                                 {
-                                                                     "module":  "app.api.routes_ut",
-                                                                     "symbol":  "router",
-                                                                     "tags":  [
-                                                                                  "UT Data"
-                                                                              ],
-                                                                     "tenantScoped":  true
                                                                  }
                                                              ]
                                  },
                      "api":  [
-                                 "GET /api/v2/analytics/flatten/monthly",
-                                 "GET /api/v2/analytics/flatten",
-                                 "POST /api/v2/analytics/analyze",
-                                 "GET /api/v2/analytics/artifacts",
-                                 "POST /api/v2/analytics/realtime-analysis",
-                                 "POST /api/v2/analytics/complaint-analysis",
-                                 "POST /api/v2/analytics/extraction-analysis"
+                                 "GET /api/analytics/upload-history",
+                                 "GET /api/analytics/upload-history/export",
+                                 "GET /api/analytics/trend"
                              ],
                      "preview":  {
                                      "supportsRealtimePreview":  true,
@@ -1079,127 +1050,44 @@
                                  },
                      "subfeatures":  [
                                          {
-                                             "id":  "realtime-analysis",
-                                             "displayName":  "即時分析",
-                                             "businessCapability":  "對選定資料執行即時分析。",
+                                             "id":  "record-summary",
+                                             "displayName":  "資料摘要",
+                                             "businessCapability":  "匯總表單與資料筆數。",
                                              "defaultSelected":  true,
                                              "dependencies":  [
 
                                                               ],
                                              "aliases":  [
-                                                             "realtime"
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "pro",
-                                                                 "featureKey":  "realtime_analysis",
-                                                                 "description":  "Realtime form analysis is a paid analytics capability."
-                                                             }
-                                         },
-                                         {
-                                             "id":  "complaint-analysis",
-                                             "displayName":  "客訴分析",
-                                             "businessCapability":  "針對客訴情境產生分析結果。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
-                                                             "complaint"
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "enterprise",
-                                                                 "featureKey":  "complaint_analysis",
-                                                                 "description":  "Complaint analysis is usually customized per customer."
-                                                             }
-                                         },
-                                         {
-                                             "id":  "artifact-browser",
-                                             "displayName":  "artifact 瀏覽",
-                                             "businessCapability":  "瀏覽分析產物與歷史 artifact。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
-                                                             "artifact"
+                                                             "summary",
+                                                             "records"
                                                          ]
                                          },
                                          {
-                                             "id":  "extraction-analysis",
-                                             "displayName":  "extraction analysis",
-                                             "businessCapability":  "分析抽取資料與特徵摘要。",
+                                             "id":  "trend-analysis",
+                                             "displayName":  "趨勢分析",
+                                             "businessCapability":  "依日、週或月統計表單資料趨勢。",
                                              "defaultSelected":  true,
                                              "dependencies":  [
 
                                                               ],
                                              "aliases":  [
-                                                             "extraction"
-                                                         ]
-                                         },
-                                         {
-                                             "id":  "chart-summary",
-                                             "displayName":  "圖表摘要",
-                                             "businessCapability":  "以圖表顯示樣本數、異常與重點指標。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
+                                                             "trend",
                                                              "chart"
-                                                         ],
-                                             "options":  [
-                                                             {
-                                                                 "id":  "color-palette",
-                                                                 "displayName":  "圖表配色",
-                                                                 "type":  "select",
-                                                                 "defaultValue":  "production",
-                                                                 "choices":  [
-                                                                                 {
-                                                                                     "value":  "production",
-                                                                                     "displayName":  "正式營運"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "quality-alert",
-                                                                                     "displayName":  "品質警示"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "cool-technical",
-                                                                                     "displayName":  "冷色技術"
-                                                                                 }
-                                                                             ]
-                                                             },
-                                                             {
-                                                                 "id":  "chart-style",
-                                                                 "displayName":  "圖表型態",
-                                                                 "type":  "select",
-                                                                 "defaultValue":  "mixed-kpi",
-                                                                 "choices":  [
-                                                                                 {
-                                                                                     "value":  "mixed-kpi",
-                                                                                     "displayName":  "KPI 混合圖"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "bar",
-                                                                                     "displayName":  "長條圖"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "line",
-                                                                                     "displayName":  "趨勢線"
-                                                                                 }
-                                                                             ]
-                                                             },
-                                                             {
-                                                                 "id":  "show-anomaly-colors",
-                                                                 "displayName":  "異常色標",
-                                                                 "type":  "boolean",
-                                                                 "defaultValue":  true
-                                                             }
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "pro",
-                                                                 "featureKey":  "advanced_chart_summary",
-                                                                 "description":  "Advanced chart rendering options require a paid plan."
-                                                             }
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "upload-history",
+                                             "displayName":  "上傳歷史",
+                                             "businessCapability":  "查詢、分頁與匯出上傳工作記錄。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "upload",
+                                                             "history",
+                                                             "export"
+                                                         ]
                                          }
                                      ],
                      "installOrder":  70
