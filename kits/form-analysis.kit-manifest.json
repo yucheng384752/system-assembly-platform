@@ -1364,6 +1364,10 @@
                                      "routers":  [
                                                      "backend/app/api/routes_logs.py"
                                                  ],
+                                     "core":  [
+                                                  "backend/app/core/monitoring.py",
+                                                  "backend/app/core/log_client.py"
+                                              ],
                                      "services":  [
 
                                                   ],
@@ -1387,6 +1391,13 @@
                                  "DELETE /api/logs/cleanup",
                                  "GET /api/logs/download/{log_type}"
                              ],
+                     "externalServices":  [
+                                               {
+                                                   "id":  "remote-monitor-service",
+                                                   "required":  false,
+                                                   "config":  "MONITOR_SERVER_URL"
+                                               }
+                                           ],
                      "preview":  {
                                      "supportsRealtimePreview":  false,
                                      "previewMode":  "sample-log-table"
@@ -1440,6 +1451,32 @@
                                                              "download",
                                                              "cleanup"
                                                          ]
+                                         },
+                                         {
+                                             "id":  "remote-heartbeat-monitoring",
+                                             "displayName":  "遠端心跳監控",
+                                             "businessCapability":  "定期回報主機存活狀態給選配的遠端監控服務。",
+                                             "defaultSelected":  false,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "heartbeat",
+                                                             "monitor",
+                                                             "MONITOR_SERVER_URL"
+                                                         ],
+                                             "externalServices":  [
+                                                                      {
+                                                                          "id":  "remote-monitor-service",
+                                                                          "config":  "MONITOR_SERVER_URL",
+                                                                          "required":  true
+                                                                      }
+                                                                  ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "remote_heartbeat_monitoring",
+                                                                 "description":  "Remote heartbeat monitoring is an optional paid capability."
+                                                             }
                                          }
                                      ],
                      "installOrder":  90
