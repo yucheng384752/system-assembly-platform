@@ -2003,7 +2003,7 @@ Write-Host 'Generating form-system.service...'
 $systemdContent = @'
 [Unit]
 Description=Form System Backend
-After=network.target postgresql.service
+After=network.target postgresql.service swtpm.service
 
 [Service]
 Type=simple
