@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-08-26T16:00:36",
+    "generatedAt":  "2026-08-26T16:26:04",
     "backend":  {
                     "appEntry":  "backend\\app\\main.py",
                     "requirementsTxt":  true,

@@ -523,6 +523,116 @@ def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
     return True
 
 
+def _setup_nginx_linux(log_fn, sys_root: Path) -> None:
+    """
+    安裝 nginx、寫入反向代理設定（前端靜態檔 + /api/ 轉發至 127.0.0.1:8000）、
+    啟用並套用。Best-effort — 失敗不中止安裝（前端仍可用手動 nginx.conf 設定）。
+    """
+    import shutil
+
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        log_fn("  WARN  未以 root 執行 — 跳過 nginx 自動設定")
+        log_fn("  INFO  請參考部署包內 nginx.conf 手動設定，或以 sudo 重新執行安裝精靈")
+        return
+
+    frontend_dist = sys_root / "frontend" / "dist"
+    if not frontend_dist.is_dir():
+        log_fn("  SKIP  找不到 frontend/dist，略過 nginx 設定")
+        return
+
+    if not shutil.which("nginx"):
+        log_fn("  INFO  nginx 未安裝，嘗試自動安裝 (apt-get)...")
+        rc = _run_cmd(["apt-get", "install", "-y", "nginx"], sys_root)
+        if rc != 0:
+            log_fn("  WARN  nginx 安裝失敗（非致命）")
+            log_fn("  INFO  若 apt 卡在中斷的安裝狀態，先執行：sudo dpkg --configure -a")
+            log_fn("  INFO  再重新執行安裝精靈，或手動 apt-get install nginx 後重試")
+            return
+        log_fn("  OK  nginx 安裝完成")
+    else:
+        log_fn("  OK  nginx 已安裝")
+
+    # 複製到獨立、root 擁有的 web root，不要讓 nginx 的 root 直接指向 sys_root。
+    # 部署包通常解壓縮在使用者家目錄下（常見權限 750/770），www-data 無法穿越
+    # 那幾層目錄；直接指向會導致 nginx 讀檔 Permission denied（試過 try_files
+    # 找不到檔案又 fallback 回 /index.html，形成 internal redirection cycle）。
+    web_root = Path("/var/www/form-system")
+    try:
+        if web_root.exists():
+            shutil.rmtree(web_root)
+        shutil.copytree(frontend_dist, web_root)
+        _run_cmd(["chmod", "-R", "a+rX", str(web_root)], sys_root)
+        log_fn(f"  OK  前端靜態檔已複製到 {web_root}（www-data 可讀取，不動家目錄權限）")
+    except OSError as exc:
+        log_fn(f"  WARN  複製前端靜態檔到 {web_root} 失敗：{exc}")
+        return
+
+    site_conf = (
+        "server {\n"
+        "    listen 80;\n"
+        "    server_name _;\n"
+        "\n"
+        f"    root {web_root};\n"
+        "    index index.html;\n"
+        "\n"
+        "    location / {\n"
+        "        try_files $uri $uri/ /index.html;\n"
+        "    }\n"
+        "\n"
+        "    location /api/ {\n"
+        "        proxy_pass http://127.0.0.1:8000;\n"
+        "        proxy_set_header Host $host;\n"
+        "        proxy_set_header X-Real-IP $remote_addr;\n"
+        "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        "    }\n"
+        "}\n"
+    )
+
+    sites_available = Path("/etc/nginx/sites-available/form-system")
+    sites_enabled = Path("/etc/nginx/sites-enabled/form-system")
+    default_enabled = Path("/etc/nginx/sites-enabled/default")
+
+    try:
+        sites_available.write_text(site_conf, encoding="utf-8")
+        log_fn(f"  OK  已寫入 {sites_available}（root={web_root}）")
+    except OSError as exc:
+        log_fn(f"  WARN  寫入 nginx 設定失敗：{exc}")
+        return
+
+    if default_enabled.exists() or default_enabled.is_symlink():
+        try:
+            default_enabled.unlink()
+            log_fn("  OK  已移除預設站台 sites-enabled/default（避免與 form-system 衝突）")
+        except OSError:
+            pass
+
+    if not sites_enabled.exists():
+        try:
+            sites_enabled.symlink_to(sites_available)
+            log_fn(f"  OK  已建立 symlink → {sites_enabled}")
+        except OSError as exc:
+            log_fn(f"  WARN  建立 symlink 失敗：{exc}")
+            return
+    else:
+        log_fn("  SKIP  sites-enabled/form-system（已存在，未覆蓋 symlink）")
+
+    rc = _run_cmd(["nginx", "-t"], sys_root)
+    if rc != 0:
+        log_fn("  WARN  nginx -t 設定檢查失敗，請檢查上方輸出後手動修正")
+        return
+    log_fn("  OK  nginx 設定檢查通過")
+
+    _run_cmd(["systemctl", "enable", "nginx"], sys_root)
+    rc = _run_cmd(["systemctl", "reload", "nginx"], sys_root)
+    if rc != 0:
+        rc = _run_cmd(["systemctl", "restart", "nginx"], sys_root)
+    if rc != 0:
+        log_fn("  WARN  nginx reload/restart 失敗，請手動執行：sudo systemctl restart nginx")
+        return
+    log_fn("  OK  nginx 已啟用並套用設定（開機自啟）")
+    log_fn(f"  OK  前端網址：http://<本機或VM的IP>/")
+
+
 def _append_env_key(sys_root: Path, key: str, value: str, log_fn) -> None:
     """將 key=value 寫入 system/.env 與 system/backend/.env（若已存在則取代該行）。"""
     line = f"{key}='{value}'"
@@ -908,6 +1018,11 @@ def _install_worker(env: dict, sys_root: Path, sudo_password: str | None = None)
         if rc != 0:
             raise RuntimeError(f"資料庫初始化失敗 (exit {rc})")
         log("  OK  資料庫就緒")
+
+        # Step 3.5: nginx reverse proxy (Linux only, best-effort — does not abort on failure)
+        if platform.system() == "Linux":
+            log(f"\n{'='*60}\n  nginx 反向代理設定\n{'='*60}")
+            _setup_nginx_linux(log, sys_root)
 
         # Done
         start_script = _write_start_script(sys_root, python)

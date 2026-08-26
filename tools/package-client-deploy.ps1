@@ -719,13 +719,24 @@ setup_nginx() {
         fi
     fi
 
+    # Copy to a dedicated, root-owned web root instead of pointing nginx's root
+    # directly at SYS_ROOT. Deploy packages are typically extracted under a
+    # user's home directory (commonly mode 750/770), which blocks www-data from
+    # traversing into it — nginx would fail to stat the file (Permission denied),
+    # try_files falls back to /index.html, and that fails too, causing an
+    # internal redirection cycle.
+    WEB_ROOT="/var/www/form-system"
+    sudo rm -rf "${WEB_ROOT}"
+    sudo cp -r "${SYS_ROOT}/frontend/dist" "${WEB_ROOT}" || die "Failed to copy frontend assets to ${WEB_ROOT}"
+    sudo chmod -R a+rX "${WEB_ROOT}"
+
     NGINX_CONF="/etc/nginx/sites-available/form-system"
     sudo tee "${NGINX_CONF}" > /dev/null <<NGINXEOF
 server {
     listen 80;
     server_name _;
 
-    root ${SYS_ROOT}/frontend/dist;
+    root ${WEB_ROOT};
     index index.html;
 
     location / {
@@ -1702,6 +1713,13 @@ $nginxStandaloneContent = @'
 # 2. sudo cp nginx.conf /etc/nginx/sites-available/form-system
 # 3. sudo ln -s /etc/nginx/sites-available/form-system /etc/nginx/sites-enabled/
 # 4. sudo nginx -t && sudo systemctl reload nginx
+#
+# IMPORTANT: if you extract the deploy package under a user's home directory
+# (e.g. /home/<user>/...) instead of /opt, the nginx worker (www-data) will
+# likely get "Permission denied" traversing into it (home dirs default to
+# 750/770). Either keep the deploy under /opt as shown below, or copy
+# system/frontend/dist to a world-readable path (e.g. /var/www/form-system)
+# and point "root" there instead.
 
 server {
     listen 80;
