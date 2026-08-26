@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-08-26T17:01:22",
+    "generatedAt":  "2026-08-26T17:08:11",
     "sourcePlan":  "build\\db-plan-gui-selected-form-system\\db-assembly-plan.json",
     "engine":  "postgresql",
     "connectionOwner":  "platform-core-kit",

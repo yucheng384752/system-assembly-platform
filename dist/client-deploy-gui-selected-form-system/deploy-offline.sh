@@ -2,7 +2,7 @@
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
 #  Recipe : gui-selected-form-system
-#  Built  : 2026-08-26 17:01
+#  Built  : 2026-08-26 17:08
 #  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit
 #  DB     : postgresql
 # ================================================================
@@ -491,7 +491,7 @@ setup_database() {
 start_backend() {
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
-        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
+        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1 &
         echo "$!" >"${SYS_ROOT}/logs/backend.pid")
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"

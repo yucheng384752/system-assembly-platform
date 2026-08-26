@@ -614,7 +614,7 @@ setup_database() {
 start_backend() {
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
-        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
+        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1 &
         echo "$!" >"${SYS_ROOT}/logs/backend.pid")
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"
@@ -1814,10 +1814,25 @@ mkdir -p "${SYS_ROOT}/logs" "${SYS_ROOT}/runtime"
 (cd "${SYS_ROOT}/backend" && \
 nohup "${VENV}/bin/python" -m uvicorn app.main:app \
     --host 127.0.0.1 --port 8000 \
-    >"${SYS_ROOT}/logs/backend.log" 2>&1 &
+    </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1 &
 echo "$!" >"${SYS_ROOT}/runtime/backend.pid")
 echo "  Backend started.  API: http://127.0.0.1:8000"
-echo "  Frontend:         http://localhost  (requires nginx)"
+
+# Bring up nginx too (frontend + /api/ reverse proxy), if it was configured
+# by the install wizard / deploy.sh. Best-effort: a start script failure
+# here should not be treated as the backend failing to start.
+if command -v nginx >/dev/null 2>&1 && [ -f /etc/nginx/sites-available/form-system ]; then
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        echo "  Frontend:         http://localhost  (nginx already running)"
+    elif sudo systemctl start nginx 2>/dev/null; then
+        echo "  Frontend:         http://localhost  (nginx started)"
+    else
+        echo "  [WARN] nginx is configured but could not be started automatically."
+        echo "         Run: sudo systemctl start nginx"
+    fi
+else
+    echo "  Frontend:         http://localhost  (nginx not configured yet, see README.md Troubleshooting, or re-run the install wizard)"
+fi
 '@
 $startShContent = $startShContent.Replace('__PKGNAME__', $pkgName) -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText(
