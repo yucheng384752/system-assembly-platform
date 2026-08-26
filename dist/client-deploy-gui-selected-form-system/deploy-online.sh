@@ -2,7 +2,7 @@
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
 #  Recipe : gui-selected-form-system
-#  Built  : 2026-08-26 17:08
+#  Built  : 2026-08-26 17:29
 #  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit
 #  DB     : postgresql
 # ================================================================
@@ -495,8 +495,36 @@ setup_database() {
 start_backend() {
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
-        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1 &
-        echo "$!" >"${SYS_ROOT}/logs/backend.pid")
+
+        # Stop a stale backend left over from a previous run, so port 8000 is
+        # free before we start a new one. Only kill it if the PID is still
+        # alive AND is actually our uvicorn process. Never touch an
+        # unrelated PID that got reused.
+        PID_FILE="${SYS_ROOT}/logs/backend.pid"
+        if [ -f "${PID_FILE}" ]; then
+            OLD_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
+            if [ -n "${OLD_PID}" ] && kill -0 "${OLD_PID}" 2>/dev/null \
+               && ps -p "${OLD_PID}" -o args= 2>/dev/null | grep -q "uvicorn app.main:app"; then
+                info "Stopping previous backend (PID ${OLD_PID})..."
+                kill "${OLD_PID}" 2>/dev/null || true
+                for _ in 1 2 3 4 5 6 7 8 9 10; do
+                    kill -0 "${OLD_PID}" 2>/dev/null || break
+                    sleep 0.5
+                done
+                kill -0 "${OLD_PID}" 2>/dev/null && kill -9 "${OLD_PID}" 2>/dev/null || true
+            fi
+            rm -f "${PID_FILE}"
+        fi
+
+        if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ':8000 '; then
+            die "Port 8000 is still in use. Find the owner with: sudo ss -tlnp | grep :8000"
+        fi
+
+        (
+            cd "${SYS_ROOT}/backend"
+            exec nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1
+        ) &
+        echo "$!" >"${PID_FILE}"
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"
         info "Stop: kill \$(cat ${SYS_ROOT}/logs/backend.pid)"
