@@ -3,7 +3,7 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-08-26 16:44 |
+| Built   | 2026-08-26 17:01 |
 | DB      | postgresql |
 | Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit |
 
@@ -185,6 +185,29 @@ bash deploy.sh --update-license=/path/to/new-license.lic
 ```
 
 The script copies the file to `system/license.lic` and prints restart instructions if the backend is running.
+
+## Troubleshooting
+
+### Manager account won't log in (even with the username/password you set in the installer)
+
+The installer writes `BOOTSTRAP_MANAGER_USERNAME`/`BOOTSTRAP_MANAGER_PASSWORD` into `.env`, but the backend only uses them to *create* the manager account on 'first ever' startup. If a manager account with that username already exists (e.g. from an earlier install attempt against the same database), changing `.env` afterwards has no effect: the stored password is never overwritten.
+
+Reset it directly with the break-glass script:
+
+```bash
+cd system/backend
+../.venv/bin/python scripts/reset-manager-password.py --username manager
+# or non-interactively:
+../.venv/bin/python scripts/reset-manager-password.py --username manager --new-password 'NewP@ssw0rd'
+```
+
+To list existing manager/admin accounts without changing anything:
+
+```bash
+../.venv/bin/python scripts/reset-manager-password.py --list
+```
+
+The script reads `DATABASE_URL` from `.env` and connects with the same async driver the backend uses, so there is no separate DB client to set up. New passwords must be at least 8 characters, and the account is flagged to prompt a password change on next login.
 
 ## Production security checklist
 

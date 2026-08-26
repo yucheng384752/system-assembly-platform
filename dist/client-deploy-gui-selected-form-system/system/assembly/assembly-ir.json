@@ -1,6 +1,6 @@
 ﻿{
     "irVersion":  "0.1.0",
-    "generatedAt":  "2026-08-26T08:44:43.3147783Z",
+    "generatedAt":  "2026-08-26T09:01:21.8230541Z",
     "sourceRecipe":  {
                          "id":  "gui-selected-form-system",
                          "resolvedPlanPath":  "build\\package-client-deploy\\gui-selected-form-system.resolved-plan.json",
