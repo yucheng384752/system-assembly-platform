@@ -10,6 +10,7 @@ Usage (run from the backend directory):
 from __future__ import annotations
 
 import argparse
+import asyncio
 import base64
 import getpass
 import hashlib
@@ -50,7 +51,7 @@ def _load_env() -> None:
 
 def _get_engine():
     try:
-        from sqlalchemy import create_engine
+        from sqlalchemy.ext.asyncio import create_async_engine
     except ImportError:
         sys.exit("ERROR: sqlalchemy not installed. Run: pip install sqlalchemy")
 
@@ -58,25 +59,28 @@ def _get_engine():
     if not db_url:
         sys.exit("ERROR: DATABASE_URL not set. Make sure .env is present.")
 
-    # psycopg2 driver alias
+    # This project's backend only installs the asyncpg driver (no psycopg2),
+    # so a plain "postgresql://" URL must be normalized to asyncpg — never
+    # to psycopg2, which isn't in requirements.txt and would ImportError.
     if db_url.startswith("postgresql://"):
-        db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
+        db_url = db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-    return create_engine(db_url)
+    return create_async_engine(db_url)
 
 
 # ---------------------------------------------------------------------------
 # Main operations
 # ---------------------------------------------------------------------------
 
-def list_managers(engine) -> None:
+async def list_managers(engine) -> None:
     from sqlalchemy import text
-    with engine.connect() as conn:
-        rows = conn.execute(text(
+    async with engine.connect() as conn:
+        result = await conn.execute(text(
             "SELECT u.username, u.role, u.is_active, u.must_change_password, t.code "
             "FROM tenant_users u JOIN tenants t ON t.id = u.tenant_id "
             "WHERE u.role IN ('manager','admin') ORDER BY t.code, u.username"
-        )).fetchall()
+        ))
+        rows = result.fetchall()
     if not rows:
         print("No manager/admin accounts found.")
         return
@@ -86,13 +90,13 @@ def list_managers(engine) -> None:
         print(f"{row[0]:<20} {row[1]:<10} {str(row[2]):<8} {str(row[3]):<12} {row[4]}")
 
 
-def reset_password(engine, username: str, new_password: str) -> None:
+async def reset_password(engine, username: str, new_password: str) -> None:
     from sqlalchemy import text
 
     new_hash = hash_password(new_password)
 
-    with engine.begin() as conn:
-        result = conn.execute(text(
+    async with engine.begin() as conn:
+        result = await conn.execute(text(
             "UPDATE tenant_users SET password_hash = :h, must_change_password = true "
             "WHERE username = :u AND role IN ('manager','admin') "
             "RETURNING username, role"
@@ -106,6 +110,29 @@ def reset_password(engine, username: str, new_password: str) -> None:
         print(f"OK  Reset password for {row[0]} ({row[1]}) — must_change_password set to true")
 
 
+async def _async_main(args) -> None:
+    engine = _get_engine()
+    try:
+        if args.list:
+            await list_managers(engine)
+            return
+
+        new_password = args.new_password
+        if not new_password:
+            new_password = getpass.getpass(f"New password for '{args.username}': ")
+            confirm = getpass.getpass("Confirm password: ")
+            if new_password != confirm:
+                sys.exit("ERROR: Passwords do not match.")
+
+        if len(new_password) < 8:
+            sys.exit("ERROR: Password must be at least 8 characters.")
+
+        await reset_password(engine, args.username, new_password)
+        print("Done. The account will be prompted to change password on next login.")
+    finally:
+        await engine.dispose()
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Reset manager account password (break-glass)")
     parser.add_argument("--username", "-u", required=False, help="Manager username to reset")
@@ -113,28 +140,11 @@ def main() -> None:
     parser.add_argument("--list", "-l", action="store_true", help="List all manager/admin accounts")
     args = parser.parse_args()
 
-    _load_env()
-    engine = _get_engine()
-
-    if args.list:
-        list_managers(engine)
-        return
-
-    if not args.username:
+    if not args.list and not args.username:
         parser.error("--username is required unless --list is used")
 
-    new_password = args.new_password
-    if not new_password:
-        new_password = getpass.getpass(f"New password for '{args.username}': ")
-        confirm = getpass.getpass("Confirm password: ")
-        if new_password != confirm:
-            sys.exit("ERROR: Passwords do not match.")
-
-    if len(new_password) < 8:
-        sys.exit("ERROR: Password must be at least 8 characters.")
-
-    reset_password(engine, args.username, new_password)
-    print("Done. The account will be prompted to change password on next login.")
+    _load_env()
+    asyncio.run(_async_main(args))
 
 
 if __name__ == "__main__":
