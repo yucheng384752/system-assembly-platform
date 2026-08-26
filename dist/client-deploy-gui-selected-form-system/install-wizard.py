@@ -998,6 +998,7 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             self._send_json({"key": _generate_secret()})
 
         elif path == "/api/sys-root":
+            global _sys_root_hint
             qs = self.path.partition("?")[2]
             custom_path: str | None = None
             for part in qs.split("&"):
@@ -1007,6 +1008,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if custom_path:
                 p = Path(custom_path)
                 found = (p / "backend" / "requirements.txt").exists()
+                if found:
+                    # Remember this as the effective sys root so later steps
+                    # (e.g. /api/check-license) that call _find_sys_root()
+                    # without a path see it too — otherwise a manually-typed
+                    # path here validates but is silently forgotten later.
+                    _sys_root_hint = p.resolve()
                 self._send_json({"found": found, "path": str(p.resolve()) if found else str(p)})
             else:
                 sr = _find_sys_root()

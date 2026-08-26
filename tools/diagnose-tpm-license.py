@@ -17,7 +17,10 @@ import tempfile
 from pathlib import Path
 
 _TPM_HANDLE = "0x81000001"
-_TPM_PEM_PATH = Path("/opt/hiba/tpm/signing_public.pem")
+_TPM_PEM_PATH = Path("/var/lib/swtpm-hiba/signing_public.pem")
+_TPM_PEM_PATH_LEGACY = Path("/opt/hiba/tpm/signing_public.pem")  # 遷移前舊路徑，保留相容
+_SWTPM_MARKER = Path("/var/lib/swtpm-hiba/swtpm-state/.initialized")
+_SWTPM_MARKER_LEGACY = Path("/opt/hiba/tpm/swtpm-state/.initialized")  # 遷移前舊路徑，保留相容
 
 SEP = "=" * 60
 
@@ -61,7 +64,10 @@ for cmd in ["tpm2_sign", "tpm2_readpublic", "tpm2_getcap", "swtpm"]:
 
 # ── 3. swtpm 狀態 ─────────────────────────────────────────────────────────────
 hdr("3. swtpm 持久化狀態")
-swtpm_marker = Path("/opt/hiba/tpm/swtpm-state/.initialized")
+swtpm_marker = next(
+    (m for m in (_SWTPM_MARKER, _SWTPM_MARKER_LEGACY) if m.exists()),
+    _SWTPM_MARKER,
+)
 if swtpm_marker.exists():
     ok(f"swtpm 已初始化：{swtpm_marker}")
     # 確認 swtpm 行程是否在跑
@@ -82,11 +88,15 @@ for dev in ["/dev/tpmrm0", "/dev/tpm0"]:
         ok(f"硬體 TPM 裝置：{dev}")
 
 # ── 4. TPM 公鑰檔 ─────────────────────────────────────────────────────────────
-hdr(f"4. /opt/hiba/tpm/signing_public.pem")
+pem_path = next(
+    (p for p in (_TPM_PEM_PATH, _TPM_PEM_PATH_LEGACY) if p.exists()),
+    _TPM_PEM_PATH,
+)
+hdr(f"4. {pem_path}")
 local_pem: str | None = None
-if _TPM_PEM_PATH.exists():
+if pem_path.exists():
     try:
-        local_pem = _TPM_PEM_PATH.read_text("utf-8").strip()
+        local_pem = pem_path.read_text("utf-8").strip()
         lines = local_pem.splitlines()
         ok(f"檔案存在，{len(lines)} 行")
         b64 = "".join(l for l in lines if not l.startswith("-----"))
@@ -96,7 +106,7 @@ if _TPM_PEM_PATH.exists():
     except Exception as e:
         fail(f"讀取失敗：{e}")
 else:
-    fail(f"檔案不存在：{_TPM_PEM_PATH}")
+    fail(f"檔案不存在：{pem_path}")
     info("請執行 01_tpm_full_setup.sh 或 get-machine-pubkey.sh")
 
 # ── 5. TPM handle 0x81000001 ──────────────────────────────────────────────────

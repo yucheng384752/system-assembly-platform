@@ -1,6 +1,6 @@
 ﻿{
-    "generatedAt":  "2026-08-26T13:06:14",
-    "resolvedPlan":  "assembly\\resolved-plan.json",
+    "generatedAt":  "2026-08-26T15:46:21",
+    "resolvedPlan":  "build\\package-client-deploy\\gui-selected-form-system.resolved-plan.json",
     "kits":  [
                  "platform-core-kit",
                  "tenant-auth-kit",
