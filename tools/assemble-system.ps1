@@ -59,6 +59,17 @@ $legacyAdapterEnabled = @($plan.selectedSubfeatures.'station-data-link-kit').Con
     -ResolvedPlanPath $ResolvedPlanPath `
     -OutputPath "assembly\kit-contract-report.json"
 
+# New-CleanDirectory below wipes $outputPath unconditionally (including any
+# previously built frontend/dist/), even when -SkipFrontendBuild is passed.
+# Stash an existing build here so -SkipFrontendBuild can restore it instead of
+# silently destroying it.
+$existingFrontendDist = Join-Path $outputPath "frontend\dist"
+$frontendDistStash = $null
+if (Test-Path (Join-Path $existingFrontendDist "index.html")) {
+    $frontendDistStash = Join-Path ([System.IO.Path]::GetTempPath()) ("assemble-frontend-dist-" + [guid]::NewGuid().ToString("N"))
+    Copy-Item -LiteralPath $existingFrontendDist -Destination $frontendDistStash -Recurse -Force
+}
+
 New-CleanDirectory $outputPath
 Copy-Tree (Join-Path $sourcePath "backend") (Join-Path $outputPath "backend")
 Copy-Tree (Join-Path $sourcePath "frontend") (Join-Path $outputPath "frontend")
@@ -608,7 +619,13 @@ Copy-Item -LiteralPath $generatedMiddlewareRegistry -Destination $runtimeMiddlew
 # Must run after generate-dependency-files.ps1 which creates package.json + tsconfig
 $frontendDir = Join-Path $outputPath "frontend"
 if ($SkipFrontendBuild) {
-    Write-Host "Skipping frontend production build."
+    if ($frontendDistStash -and (Test-Path $frontendDistStash)) {
+        Copy-Item -LiteralPath $frontendDistStash -Destination (Join-Path $frontendDir "dist") -Recurse -Force
+        Remove-Item -LiteralPath $frontendDistStash -Recurse -Force
+        Write-Host "Skipping frontend production build; restored previously built frontend/dist/."
+    } else {
+        Write-Host "Skipping frontend production build."
+    }
 } elseif (Test-Path (Join-Path $frontendDir "package.json")) {
     Write-Host "Building frontend (npm ci/install + npm run build)..."
     Push-Location $frontendDir
@@ -630,6 +647,11 @@ if ($SkipFrontendBuild) {
         Remove-Item -LiteralPath $nodeModulesPath -Recurse -Force
     }
     Write-Host "Frontend built -> $frontendDir\dist\"
+}
+if ($frontendDistStash -and (Test-Path $frontendDistStash)) {
+    # Only reached when a fresh build ran or package.json was missing; the
+    # stash was already restored (and removed) in the -SkipFrontendBuild path.
+    Remove-Item -LiteralPath $frontendDistStash -Recurse -Force
 }
 
 & (Join-Path $ProjectRoot "tools\generate-model-init.ps1") `
