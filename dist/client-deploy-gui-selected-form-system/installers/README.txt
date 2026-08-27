@@ -11,5 +11,5 @@ bootstrap.ps1 will detect and install from this folder automatically.
                   (on a same-version online box: apt-get download python3 python3-pip python3-venv)
   RHEL/CentOS   : python3, python3-pip .rpm files
 
-If the machine HAS internet, ignore this folder ??bootstrap installs Python
+If the machine HAS internet, ignore this folder — bootstrap installs Python
 via the OS package manager (apt/dnf/yum) or winget.

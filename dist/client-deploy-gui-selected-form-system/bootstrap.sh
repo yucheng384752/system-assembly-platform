@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gui-selected-form-system ??bootstrap: ensure Python 3 + pip, then launch the install wizard.
+# gui-selected-form-system — bootstrap: ensure Python 3 + pip, then launch the install wizard.
 # Run this FIRST on a fresh VM that may not have Python installed.
 #   bash bootstrap.sh
 set -euo pipefail
@@ -43,7 +43,7 @@ fi
 info "Python: $(python3 --version 2>&1)"
 
 if ! python3 -m pip --version >/dev/null 2>&1; then
-    info "pip not found ??bootstrapping with ensurepip..."
+    info "pip not found — bootstrapping with ensurepip..."
     python3 -m ensurepip --upgrade || die "Could not install pip. Install python3-pip manually."
 fi
 info "pip: $(python3 -m pip --version 2>&1)"

@@ -2,7 +2,7 @@
 # ================================================================
 #  Form System Kit Composer - Server Deploy Script (Linux / macOS)
 #  Recipe : gui-selected-form-system
-#  Built  : 2026-08-26 17:29
+#  Built  : 2026-08-27 16:01
 #  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit
 #  DB     : postgresql
 # ================================================================
@@ -130,7 +130,7 @@ prompt_secret() {
 configure_env() {
     echo "=== Checking configuration ==="
     if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
-        info "Found deploy-init.env ??loading pre-configured credentials..."
+        info "Found deploy-init.env — loading pre-configured credentials..."
         set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
         cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
         ok "Credentials loaded from deploy-init.env"
@@ -194,75 +194,75 @@ configure_env() {
     echo ""
 }
 
-# ?? Wizard helpers ??????????????????????????????????????????????????????????
+# ── Wizard helpers ──────────────────────────────────────────────────────────
 
 wizard_welcome() {
     clear 2>/dev/null || true
     echo ""
     echo "================================================================"
-    echo "  Form System 摰?蝎暸?"
+    echo "  Form System 安裝精靈"
     echo "  Recipe : gui-selected-form-system"
     echo "  Kits   : platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit"
     echo "================================================================"
     echo ""
-    echo "  甇斤移??撘??典???"
-    echo "    甇仿? 1嚗?  鞈?摨恍??閮剖?"
-    echo "    甇仿? 2嚗?  蝞∠??董?身摰?
-    echo "    甇仿? 3嚗?  摰??Ⅱ隤?
+    echo "  此精靈將引導您完成："
+    echo "    步驟 1／3  資料庫連線設定"
+    echo "    步驟 2／3  管理者帳號設定"
+    echo "    步驟 3／3  安全金鑰與確認"
     echo ""
-    echo "  ?亙歇??deploy-init.env嚗身摰郊撽??芸??仿???
-    echo "  ??Ctrl+C ?舫??瘨?
+    echo "  若已有 deploy-init.env，設定步驟將自動略過。"
+    echo "  按 Ctrl+C 可隨時取消。"
     echo ""
-    read -r -p "  ??Enter 蝜潛?..." _dummy
+    read -r -p "  按 Enter 繼續..." _dummy
     echo ""
 }
 
 _validate_nonempty() {
     local val="$1" label="$2"
-    [ -n "$val" ] || { echo "  [!] ${label} 銝??箇征" >&2; return 1; }
+    [ -n "$val" ] || { echo "  [!] ${label} 不得為空" >&2; return 1; }
 }
 
 _validate_port() {
     local val="$1"
     [[ "$val" =~ ^[0-9]+$ ]] && [ "$val" -ge 1 ] && [ "$val" -le 65535 ] || \
-        { echo "  [!] ??????1??5535 ??? >&2; return 1; }
+        { echo "  [!] 連接埠須為 1–65535 的整數" >&2; return 1; }
 }
 
 _validate_password() {
     local val="$1"
-    [ ${#val} -ge 8 ] || { echo "  [!] 撖Ⅳ?瑕漲?喳? 8 ???? >&2; return 1; }
+    [ ${#val} -ge 8 ] || { echo "  [!] 密碼長度至少 8 個字元" >&2; return 1; }
 }
 
 wizard_step1_db() {
-    echo "??[ 甇仿? 1嚗?嚗??澈??? ]??????????????????????????????"
+    echo "──[ 步驟 1／3：資料庫連線 ]──────────────────────────────"
     echo ""
-    echo "  ?舀 PostgreSQL嚗??Ｙ憓???
-    echo "  ?乩?閮剖? DATABASE_URL嚗頂蝯勗??芸??寧 SQLite嚗??璈葫閰佗???
+    echo "  支援 PostgreSQL（生產環境）。"
+    echo "  若不設定 DATABASE_URL，系統將自動改用 SQLite（僅限本機測試）。"
     echo ""
     local _host _port _name _user _pass
     while true; do
-        read -r -p "  鞈?摨思蜓璈?? [localhost]: " _host
+        read -r -p "  資料庫主機位址 [localhost]: " _host
         _host="${_host:-localhost}"
-        _validate_nonempty "$_host" "銝餅?雿?" && break
+        _validate_nonempty "$_host" "主機位址" && break
     done
     while true; do
-        read -r -p "  鞈?摨恍???[5432]: " _port
+        read -r -p "  資料庫連接埠 [5432]: " _port
         _port="${_port:-5432}"
         _validate_port "$_port" && break
     done
     while true; do
-        read -r -p "  鞈?摨怠?蝔?[form_system]: " _name
+        read -r -p "  資料庫名稱 [form_system]: " _name
         _name="${_name:-form_system}"
-        _validate_nonempty "$_name" "鞈?摨怠?蝔? && break
+        _validate_nonempty "$_name" "資料庫名稱" && break
     done
     while true; do
-        read -r -p "  鞈?摨思蝙?刻?[form_system]: " _user
+        read -r -p "  資料庫使用者 [form_system]: " _user
         _user="${_user:-form_system}"
-        _validate_nonempty "$_user" "雿輻??蝔? && break
+        _validate_nonempty "$_user" "使用者名稱" && break
     done
     while true; do
-        read -rsp "  鞈?摨怠?蝣? " _pass; echo ""
-        _validate_nonempty "$_pass" "撖Ⅳ" && break
+        read -rsp "  資料庫密碼: " _pass; echo ""
+        _validate_nonempty "$_pass" "密碼" && break
     done
     set_env_value DB_HOST     "$_host"
     set_env_value DB_PORT     "$_port"
@@ -270,71 +270,71 @@ wizard_step1_db() {
     set_env_value DB_USERNAME "$_user"
     set_env_value DB_PASSWORD "$_pass"
     set_env_value DATABASE_URL "postgresql+asyncpg://${_user}:${_pass}@${_host}:${_port}/${_name}"
-    ok "鞈?摨怨身摰???
+    ok "資料庫設定完成"
     echo ""
 }
 
 wizard_step2_auth() {
-    echo "??[ 甇仿? 2嚗?嚗恣?董??]??????????????????????????????"
+    echo "──[ 步驟 2／3：管理者帳號 ]──────────────────────────────"
     echo ""
-    echo "  閮剖?蝟餌絞?? Manager 撣唾?嚗蝵脣??臬敺?啣??耨?嫘?
-    echo "  擐活?餃敺頂蝯勗?閬?靽格撖Ⅳ??
+    echo "  設定系統初始 Manager 帳號，部署後可在後台新增或修改。"
+    echo "  首次登入後系統將要求修改密碼。"
     echo ""
     local _user _pass _pass2
     while true; do
-        read -r -p "  Manager 撣唾??迂 [manager]: " _user
+        read -r -p "  Manager 帳號名稱 [manager]: " _user
         _user="${_user:-manager}"
-        _validate_nonempty "$_user" "撣唾??迂" && break
+        _validate_nonempty "$_user" "帳號名稱" && break
     done
     while true; do
-        read -rsp "  Manager 撖Ⅳ嚗撠?8 蝣潘?: " _pass; echo ""
+        read -rsp "  Manager 密碼（至少 8 碼）: " _pass; echo ""
         _validate_password "$_pass" || continue
-        read -rsp "  蝣箄?撖Ⅳ: " _pass2; echo ""
+        read -rsp "  確認密碼: " _pass2; echo ""
         [ "$_pass" = "$_pass2" ] && break
-        echo "  [!] ?拇活撖Ⅳ銝??湛?隢??啗撓?? >&2
+        echo "  [!] 兩次密碼不一致，請重新輸入" >&2
     done
     set_env_value BOOTSTRAP_MANAGER_ENABLED              "true"
     set_env_value BOOTSTRAP_MANAGER_TENANT_CODE          "default"
     set_env_value BOOTSTRAP_MANAGER_USERNAME             "$_user"
     set_env_value BOOTSTRAP_MANAGER_PASSWORD             "$_pass"
     set_env_value BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD "true"
-    ok "Manager 撣唾?閮剖?摰?"
+    ok "Manager 帳號設定完成"
     echo ""
 }
 
 wizard_step3_secrets() {
-    echo "??[ 甇仿? 3嚗?嚗??券??啗?蝣箄? ]?????????????????????????"
+    echo "──[ 步驟 3／3：安全金鑰與確認 ]─────────────────────────"
     echo ""
-    echo "  SECRET_KEY ?冽 JWT / session ????
-    echo "  頛詨 'g' ?航??璈??堆??刻嚗?
+    echo "  SECRET_KEY 用於 JWT / session 加密。"
+    echo "  輸入 'g' 可自動產生隨機金鑰（推薦）。"
     echo ""
     prompt_secret SECRET_KEY "SECRET_KEY" 1
     set_env_value CORS_ORIGINS "http://localhost:5173,http://localhost:3000"
-    ok "摰?閮剖?摰?"
+    ok "安全金鑰設定完成"
     echo ""
 }
 
 wizard_summary_confirm() {
-    echo "??[ 摰?蝣箄? ]????????????????????????????????????????????"
+    echo "──[ 安裝確認 ]────────────────────────────────────────────"
     echo ""
-    echo "  鞈?摨?   : $(get_env_value DB_HOST):$(get_env_value DB_PORT) / $(get_env_value DB_NAME)"
-    echo "  DB 雿輻??: $(get_env_value DB_USERNAME)"
+    echo "  資料庫    : $(get_env_value DB_HOST):$(get_env_value DB_PORT) / $(get_env_value DB_NAME)"
+    echo "  DB 使用者 : $(get_env_value DB_USERNAME)"
     echo "  Manager   : $(get_env_value BOOTSTRAP_MANAGER_USERNAME)"
     echo "  CORS      : $(get_env_value CORS_ORIGINS)"
-    echo "  撖Ⅳ      : *** (撌脰身摰?銝＊蝷?"
+    echo "  密碼      : *** (已設定，不顯示)"
     echo ""
     local _confirm
-    read -r -p "  蝣箄?閮剖?甇?Ⅱ嚗?憪?鋆?[y/N] " _confirm
+    read -r -p "  確認設定正確，開始安裝？[y/N] " _confirm
     echo ""
     case "$_confirm" in
-        y|Y|yes|YES) ok "??摰?..." ;;
-        *) die "摰?撌脣?瘨???瑁? deploy.sh --wizard" ;;
+        y|Y|yes|YES) ok "開始安裝..." ;;
+        *) die "安裝已取消。請重新執行 deploy.sh --wizard" ;;
     esac
 }
 
 wizard_configure() {
     if [ -f "${SCRIPT_DIR}/deploy-init.env" ]; then
-        info "?菜葫??deploy-init.env嚗??仿?閮剛身摰?.."
+        info "偵測到 deploy-init.env，載入預設設定..."
         set -a; . "${SCRIPT_DIR}/deploy-init.env"; set +a
         cp "${SCRIPT_DIR}/deploy-init.env" "${SYS_ROOT}/.env"
         ok "Credentials loaded from deploy-init.env"
@@ -512,8 +512,30 @@ start_backend() {
             rm -f "${PID_FILE}"
         fi
 
+        # This VM is dedicated to running this system, so unlike the pidfile
+        # check above (which never touches a PID it can't verify is our own
+        # uvicorn), anything still squatting on port 8000 at this point is
+        # assumed safe to kill outright.
         if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ':8000 '; then
-            die "Port 8000 is still in use. Find the owner with: sudo ss -tlnp | grep :8000"
+            info "Port 8000 is occupied; this VM is dedicated to this system, freeing it..."
+            OCCUPANT_PIDS="$(ss -tlnp 2>/dev/null | grep ':8000 ' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)"
+            for _p in ${OCCUPANT_PIDS}; do
+                info "Killing PID ${_p} holding port 8000..."
+                kill "${_p}" 2>/dev/null || true
+            done
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+                ss -tln 2>/dev/null | grep -q ':8000 ' || break
+                sleep 0.5
+            done
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+                for _p in ${OCCUPANT_PIDS}; do
+                    kill -9 "${_p}" 2>/dev/null || true
+                done
+                sleep 0.5
+            fi
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+                die "Port 8000 is still in use after attempting to free it. Check: sudo ss -tlnp | grep :8000"
+            fi
         fi
 
         (
@@ -614,7 +636,7 @@ setup_nginx() {
 
     # Install nginx if missing
     if ! command -v nginx >/dev/null 2>&1; then
-        info "nginx not found ??installing..."
+        info "nginx not found — installing..."
         if command -v apt-get >/dev/null 2>&1; then
             sudo apt-get install -y nginx || die "Failed to install nginx. Run: sudo apt-get install -y nginx"
         elif command -v yum >/dev/null 2>&1; then
@@ -627,7 +649,7 @@ setup_nginx() {
     # Copy to a dedicated, root-owned web root instead of pointing nginx's root
     # directly at SYS_ROOT. Deploy packages are typically extracted under a
     # user's home directory (commonly mode 750/770), which blocks www-data from
-    # traversing into it ??nginx would fail to stat the file (Permission denied),
+    # traversing into it — nginx would fail to stat the file (Permission denied),
     # try_files falls back to /index.html, and that fails too, causing an
     # internal redirection cycle.
     WEB_ROOT="/var/www/form-system"
@@ -667,7 +689,7 @@ NGINXEOF
 
     if sudo nginx -t 2>/dev/null; then
         sudo systemctl reload nginx 2>/dev/null || sudo systemctl start nginx 2>/dev/null
-        ok "nginx configured ??frontend available at http://localhost"
+        ok "nginx configured — frontend available at http://localhost"
     else
         info "nginx config test failed. Check: sudo nginx -t"
     fi

@@ -9,9 +9,9 @@ if ((Get-Command docker -ErrorAction SilentlyContinue) -and (Test-Path "$ScriptD
 }
 
 $SysRoot = "$ScriptDir\system"
-if (-not (Test-Path $SysRoot)) { throw "system/ not found ??run deploy.ps1 first" }
+if (-not (Test-Path $SysRoot)) { throw "system/ not found — run deploy.ps1 first" }
 $Python = "$SysRoot\.venv\Scripts\python.exe"
-if (-not (Test-Path $Python)) { throw "venv not found ??run deploy.ps1 first" }
+if (-not (Test-Path $Python)) { throw "venv not found — run deploy.ps1 first" }
 New-Item -ItemType Directory -Force "$SysRoot\logs","$SysRoot\runtime" | Out-Null
 $proc = Start-Process $Python `
     -ArgumentList @("-m","uvicorn","app.main:app","--host","127.0.0.1","--port","8000") `

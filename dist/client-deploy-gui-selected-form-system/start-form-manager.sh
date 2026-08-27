@@ -10,9 +10,9 @@ if command -v docker >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/docker-compose.yml" 
 fi
 
 SYS_ROOT="${SCRIPT_DIR}/system"
-[ -d "${SYS_ROOT}" ] || { echo "[ERROR] system/ not found ??run deploy.sh first" >&2; exit 1; }
+[ -d "${SYS_ROOT}" ] || { echo "[ERROR] system/ not found — run deploy.sh first" >&2; exit 1; }
 VENV="${SYS_ROOT}/.venv"
-[ -f "${VENV}/bin/python" ] || { echo "[ERROR] venv not found ??run deploy.sh first" >&2; exit 1; }
+[ -f "${VENV}/bin/python" ] || { echo "[ERROR] venv not found — run deploy.sh first" >&2; exit 1; }
 mkdir -p "${SYS_ROOT}/logs" "${SYS_ROOT}/runtime"
 
 # Stop a stale backend left over from a previous run, so port 8000 is free
@@ -34,12 +34,32 @@ if [ -f "${PID_FILE}" ]; then
     rm -f "${PID_FILE}"
 fi
 
-# If port 8000 is still occupied by something we don't own, fail loudly
-# instead of starting a second backend that would just fail to bind anyway.
+# This VM is dedicated to running this system, so unlike the pidfile check
+# above (which never touches a PID it can't verify is our own uvicorn),
+# anything still squatting on port 8000 at this point is assumed safe to
+# kill outright.
 if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ':8000 '; then
-    echo "[ERROR] Port 8000 is still in use by another process." >&2
-    echo "        Find the owner with: sudo ss -tlnp | grep :8000" >&2
-    exit 1
+    echo "  Port 8000 is occupied; this VM is dedicated to this system, freeing it..."
+    OCCUPANT_PIDS="$(ss -tlnp 2>/dev/null | grep ':8000 ' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)"
+    for _p in ${OCCUPANT_PIDS}; do
+        echo "  Killing PID ${_p} holding port 8000..."
+        kill "${_p}" 2>/dev/null || true
+    done
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        ss -tln 2>/dev/null | grep -q ':8000 ' || break
+        sleep 0.5
+    done
+    if ss -tln 2>/dev/null | grep -q ':8000 '; then
+        for _p in ${OCCUPANT_PIDS}; do
+            kill -9 "${_p}" 2>/dev/null || true
+        done
+        sleep 0.5
+    fi
+    if ss -tln 2>/dev/null | grep -q ':8000 '; then
+        echo "[ERROR] Port 8000 is still in use after attempting to free it." >&2
+        echo "        Check: sudo ss -tlnp | grep :8000" >&2
+        exit 1
+    fi
 fi
 
 (

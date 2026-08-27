@@ -3,7 +3,7 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-08-26 17:29 |
+| Built   | 2026-08-27 16:01 |
 | DB      | postgresql |
 | Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit |
 
@@ -36,7 +36,7 @@ cd client-deploy-gui-selected-form-system
 
 #### No Python yet? Run bootstrap first
 
-On a fresh VM without Python 3, run the bootstrap script ??it installs Python 3 + pip (online via apt/dnf/yum/winget, or offline from `installers/`), then launches the wizard:
+On a fresh VM without Python 3, run the bootstrap script — it installs Python 3 + pip (online via apt/dnf/yum/winget, or offline from `installers/`), then launches the wizard:
 
 ```bash
 bash bootstrap.sh          # Linux / macOS
@@ -48,9 +48,9 @@ bash bootstrap.sh          # Linux / macOS
 
 > Offline machines: drop the Python installer into `installers/` before transfer (see `installers/README.txt`). `prepare-offline.ps1` auto-bundles the Windows installer.
 
-#### Option A ??Web Install Wizard (recommended, Python already installed)
+#### Option A — Web Install Wizard (recommended, Python already installed)
 
-Interactive browser-based wizard. No extra dependencies ??only Python 3 required.
+Interactive browser-based wizard. No extra dependencies — only Python 3 required.
 
 ```bash
 python3 install-wizard.py
@@ -64,7 +64,7 @@ Windows:
 python install-wizard.py
 ```
 
-#### Option B ??CLI Wizard (SSH / headless servers)
+#### Option B — CLI Wizard (SSH / headless servers)
 
 Step-by-step text prompts for database, manager account, and secret key.
 
@@ -78,7 +78,7 @@ To start the backend in the background after install:
 bash deploy.sh --wizard --background
 ```
 
-#### Option C ??Manual config (advanced)
+#### Option C — Manual config (advanced)
 
 ```bash
 cp system/.env.example system/.env

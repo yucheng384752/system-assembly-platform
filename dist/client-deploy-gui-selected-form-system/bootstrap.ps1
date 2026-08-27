@@ -1,5 +1,5 @@
 #Requires -Version 5.1
-# gui-selected-form-system ??bootstrap: ensure Python 3 + pip, then launch the install wizard.
+# gui-selected-form-system — bootstrap: ensure Python 3 + pip, then launch the install wizard.
 # Run this FIRST on a fresh VM that may not have Python installed.
 #   .\bootstrap.ps1
 $ErrorActionPreference = "Stop"
@@ -40,7 +40,7 @@ Write-Host "  Python: $(python --version 2>&1)"
 
 python -m pip --version *> $null
 if ($LASTEXITCODE -ne 0) {
-    Write-Host "  pip not found ??bootstrapping with ensurepip..."
+    Write-Host "  pip not found — bootstrapping with ensurepip..."
     python -m ensurepip --upgrade
 }
 

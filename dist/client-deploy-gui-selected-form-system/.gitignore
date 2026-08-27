@@ -1,4 +1,4 @@
-# ??deploy.sh ?湔
+# 由 deploy.sh 更新
 system/.env
-# ?函蔡??嚗撖Ⅳ嚗?
+# 部署憑證（含密碼）
 deploy-init.env

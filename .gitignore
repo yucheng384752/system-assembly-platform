@@ -37,3 +37,6 @@ logs/
 runtime/
 .npm-cache/
 data/
+
+# other
+VM_fix.txt
