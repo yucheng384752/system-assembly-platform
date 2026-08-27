@@ -235,11 +235,23 @@ button {
   pointer-events: auto;
 }
 
+.card-nav-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  margin-top: 24px;
+}
+
 .card-indicators {
   display: flex;
   justify-content: center;
   gap: 6px;
-  margin-top: 10px;
+}
+
+.card-next-btn {
+  position: absolute;
+  right: 0;
 }
 
 .card-dot {
@@ -2047,6 +2059,19 @@ select:focus {
   color: var(--ink-2);
 }
 
+.flow-kit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.flow-kit-subfeatures {
+  margin: 0 0 4px 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+}
+
 /* ── Kit Catalog 進階區 ── */
 .kit-catalog-details {
   margin-top: 4px;
@@ -2775,6 +2800,19 @@ select:focus {
   border: 1px solid var(--line);
   border-radius: var(--r-sm);
   background: white;
+}
+
+.node-flow-toolbar label {
+  flex-shrink: 0;
+}
+
+.node-flow-toolbar select {
+  flex: 1 1 auto;
+}
+
+.node-flow-toolbar button {
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .node-canvas-wrap {

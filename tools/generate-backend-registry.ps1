@@ -63,6 +63,23 @@ if ($hasPlatformCore -and -not $hasKitBroker) {
     }
 }
 
+# Filter out registrations whose Python source file does not exist in the assembled backend.
+# This only applies when $OutputDirectory points at the assembled tree (assemble-system.ps1's
+# call site) - other callers (test-all.ps1, extract-mvp-flow.ps1) use the default resolved-plan
+# location, where there is no sibling "backend" directory to check against, and the filter must
+# be skipped rather than treated as "everything is missing".
+$assembledBackendDir = Join-Path (Split-Path (Split-Path $outputFullPath -Parent) -Parent) "backend"
+if (Test-Path $assembledBackendDir) {
+    $registrations = @($registrations | Where-Object {
+        $moduleRelPath = ([string]$_.module).Replace('.', '\') + '.py'
+        $exists = Test-Path (Join-Path $assembledBackendDir $moduleRelPath)
+        if (-not $exists) {
+            Write-Host "generate-backend-registry: skipping $([string]$_.module) (source not found in assembled backend)"
+        }
+        $exists
+    })
+}
+
 if (-not (Test-Path $outputFullPath)) {
     New-Item -ItemType Directory -Force $outputFullPath | Out-Null
 }

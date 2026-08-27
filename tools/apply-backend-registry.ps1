@@ -18,6 +18,8 @@ $appRoot = Join-Path $ProjectRoot $GeneratedAppRoot
 $registrySourcePath = Join-Path $ProjectRoot $RegistrySource
 $registryTargetPath = Join-Path $appRoot "backend\app\core\backend_router_registry.py"
 $mainPath = Join-Path $appRoot "backend\app\main.py"
+$middlewareRegistrySourcePath = Join-Path $ProjectRoot ($RegistrySource -replace 'backend-registry-mvp\\backend_router_registry\.py$', 'backend-middleware-registry-mvp\backend_middleware_registry.py')
+$middlewareRegistryTargetPath = Join-Path $appRoot "backend\app\core\backend_middleware_registry.py"
 
 if (-not (Test-Path $registrySourcePath)) {
     throw "Registry source not found: $registrySourcePath"
@@ -31,6 +33,10 @@ if (-not (Test-Path $targetParent)) {
     New-Item -ItemType Directory -Force $targetParent | Out-Null
 }
 Copy-Item -LiteralPath $registrySourcePath -Destination $registryTargetPath -Force
+
+if (Test-Path $middlewareRegistrySourcePath) {
+    Copy-Item -LiteralPath $middlewareRegistrySourcePath -Destination $middlewareRegistryTargetPath -Force
+}
 
 $main = Get-Content -Raw -Encoding UTF8 $mainPath
 
@@ -48,12 +54,19 @@ if ($main -notmatch [regex]::Escape("from app.core.backend_router_registry impor
         "from app.core.backend_router_registry import register_backend_routers`r`n$databaseImport"
     )
 }
+if ($main -notmatch [regex]::Escape("from app.core.backend_middleware_registry import register_backend_middlewares")) {
+    $main = $main.Replace(
+        $databaseImport,
+        "from app.core.backend_middleware_registry import register_backend_middlewares`r`n$databaseImport"
+    )
+}
 
 $includePattern = '# Include API routers\r?\ntenant_deps = \[Depends\(get_current_tenant\)\]\r?\n.*?(?=\r?\n@app\.get\("/", tags=\["Root"\]\))'
 $includeReplacement = @"
 # Include API routers through the generated kit registry
 tenant_deps = [Depends(get_current_tenant)]
 register_backend_routers(app, tenant_deps=tenant_deps, settings=settings)
+register_backend_middlewares(app, settings=settings)
 
 "@
 $main = Replace-Required `

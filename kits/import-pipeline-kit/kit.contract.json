@@ -1,0 +1,19 @@
+{
+  "kit": "import-pipeline-kit",
+  "provides": {
+    "api": [
+      { "capability": "import.job.create", "method": "POST", "path": "/api/v2/import/jobs" },
+      { "capability": "import.job.from_upload", "method": "POST", "path": "/api/v2/import/jobs/from-upload-job" },
+      { "capability": "import.job.get", "method": "GET", "path": "/api/v2/import/jobs/{job_id}" },
+      { "capability": "import.job.errors", "method": "GET", "path": "/api/v2/import/jobs/{job_id}/errors" },
+      { "capability": "import.job.commit", "method": "POST", "path": "/api/v2/import/jobs/{job_id}/commit" }
+    ],
+    "db": [
+      { "capability": "db.import.jobs" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.tables.resolve", "db.records.search"]
+  }
+}

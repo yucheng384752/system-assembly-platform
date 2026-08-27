@@ -330,9 +330,7 @@ function CsvEditor({ file, csv, onCellChange }: CsvEditorProps) {
     const raw = String(header ?? '');
     if (!raw) return '';
     if (raw.trim().toLowerCase() === 'specification') {
-      if (file.type === 'P1') return termMap['P1.Specification'] || 'P1.Specification';
-      if (file.type === 'P2') return termMap['P2.Specification'] || 'Specification';
-      if (file.type === 'P3') return termMap['P3.Specification'] || 'P3.Specification';
+      return termMap[`${file.type}.Specification`] || termMap[raw] || raw;
     }
     const direct = termMap[raw];
     if (direct) return direct;

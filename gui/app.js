@@ -130,9 +130,8 @@ const flows = [
     name: "資料匯入",
     description: "上傳 CSV、Excel 或 PDF，驗證內容後匯入正式資料表",
     kits: ["upload-validation-kit", "import-pipeline-kit"],
-    subflows: [
-      { id: "pdf-convert", name: "PDF → CSV", description: "自動將 PDF 轉換為 CSV 再進行驗證匯入" },
-    ],
+    required: true,
+    subflows: [],
     pages: ["上傳頁", "匯入工作頁", "錯誤檢視頁"],
   },
   {
@@ -182,6 +181,7 @@ const state = {
   selected: new Set(),
   selectedFlows: new Set(),
   selectedSubflows: new Map(),
+  expandedFlowDetails: new Set(),
   selectedSubfeatures: new Map(),
   subfeatureOptions: new Map(),
   activePreviewKit: "",
@@ -243,12 +243,13 @@ async function start() {
   cacheElements();
   state.kits = await loadKitCatalog();
   document.querySelector("#manifest-warning").hidden = state.manifestSource !== "fallback";
-  resetToRequiredKits();
+  applyFlowSelection();
   bindNavigation();
   bindToolbarActions();
   bindSearch();
   bindFlows();
   bindCsvUpload();
+  bindDatabaseCarousel();
   bindNodeEditor();
   bindFormSchemaEditor();
   bindDeploymentMode();
@@ -298,7 +299,7 @@ function kit(id, name, category, required, capability, dependencies, subfeatures
 // ── Kit Manifest 載入 ────────────────────────────────────────────────────────
 async function loadKitCatalog() {
   try {
-    const response = await fetch("../kits/form-analysis.kit-manifest.json", { cache: "no-store" });
+    const response = await fetch("/kits/form-analysis.kit-manifest.json", { cache: "no-store" });
     if (!response.ok) throw new Error(`Manifest load failed: ${response.status}`);
     const manifest = await response.json();
     state.manifestSource = "manifest";
@@ -412,9 +413,8 @@ async function initMachineGate() {
   document.getElementById("gate-machine-pubkey-file")?.addEventListener("change", (e) => {
     handleMachinePubkeyFile(e.target.files?.[0], {
       statusEl: document.getElementById("gate-status"),
-      // serverRunning is not yet determined here; handleMachinePubkeyFile will
-      // try the API and fall back gracefully if the server is unavailable.
-      serverRunning: true,
+      // Always attempts the API call; handleMachinePubkeyFile falls back to a
+      // "PEM valid, server unreachable" status if the fetch itself fails.
       showGate: true,
     });
   });
@@ -447,28 +447,22 @@ async function initMachineGate() {
     }
   });
 
+  // Every page load requires a fresh PEM upload before Kit selection unlocks —
+  // a prior registration in data/machines.json is intentionally NOT used to
+  // skip straight to the "already registered" state.
   let serverRunning = false;
-  let machines = [];
   try {
     const resp = await fetch("/api/machines");
-    if (resp.ok) { machines = await resp.json(); serverRunning = true; }
+    if (resp.ok) serverRunning = true;
   } catch (_) { /* server not running */ }
-
-  if (serverRunning && Array.isArray(machines) && machines.length > 0 && machines[0].pubkey) {
-    state.machinePubkey = machines[0].pubkey;
-    overlay.removeAttribute("hidden");
-    _showGateRegistered(machines);
-    return;
-  }
 
   overlay.removeAttribute("hidden");
   if (!serverRunning) {
     document.getElementById("gate-offline-notice")?.removeAttribute("hidden");
   }
-
 }
 
-async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, showGate = false } = {}) {
+async function handleMachinePubkeyFile(file, { statusEl, showGate = false } = {}) {
   if (!file) return;
   const pem = (await file.text()).trim();
   const isPem = pem.includes("-----BEGIN PUBLIC KEY-----") && pem.includes("-----END PUBLIC KEY-----");
@@ -483,16 +477,6 @@ async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, s
   if (statusEl) {
     statusEl.style.color = "var(--ink-3,#6b7280)";
     statusEl.textContent = "驗證中…";
-  }
-
-  if (!serverRunning) {
-    state.machinePubkey = pem;
-    if (showGate) _showGateRegistered([{ pubkey: pem, registeredAt: new Date().toISOString() }]);
-    if (statusEl) {
-      statusEl.style.color = "var(--success,#16a34a)";
-      statusEl.textContent = "✓ PEM 格式有效（離線模式）";
-    }
-    return;
   }
 
   try {
@@ -529,19 +513,9 @@ async function handleMachinePubkeyFile(file, { statusEl, serverRunning = true, s
 
 function _showGateRegistered(machines) {
   const registeredArea = document.getElementById("gate-registered-area");
-  const listEl = document.getElementById("gate-machine-list");
   const stepsEl = document.getElementById("gate-register-steps");
   if (stepsEl) stepsEl.style.opacity = "0.45";
   if (registeredArea) registeredArea.removeAttribute("hidden");
-  if (listEl) {
-    listEl.innerHTML = machines.map((m) => {
-      // Show PEM header + key fingerprint preview
-      const lines = (m.pubkey || "").split("\n").filter(Boolean);
-      const b64 = lines.filter(l => !l.startsWith("-----")).join("");
-      const preview = b64.length > 20 ? b64.slice(0, 12) + "…" + b64.slice(-8) : (m.pubkey || "").slice(0, 20);
-      return `<div>RSA-2048 公鑰 <code>${preview}</code>&nbsp;&nbsp;<span style="color:var(--ink-4,#8293a8);font-family:sans-serif;">${new Date(m.registeredAt).toLocaleDateString("zh-TW")}</span></div>`;
-    }).join("");
-  }
   const statusEl = document.getElementById("gate-status");
   if (statusEl) { statusEl.style.color = "var(--success,#16a34a)"; statusEl.textContent = "✓ TPM 公鑰已登錄"; }
 }
@@ -574,11 +548,20 @@ function bindFlows() {
     applyFlowSelection();
     renderAll();
   });
+  // "toggle" doesn't bubble, but capture-phase delegation still sees it — keeps the
+  // 包含元件 panel's open/closed state across the innerHTML re-renders triggered by renderAll().
+  elements.flowGrid.addEventListener("toggle", (event) => {
+    const details = event.target.closest?.("[data-flow-details]");
+    if (!details) return;
+    const flowId = details.dataset.flowDetails;
+    details.open ? state.expandedFlowDetails.add(flowId) : state.expandedFlowDetails.delete(flowId);
+  }, true);
 }
 
 function applyFlowSelection() {
   resetToRequiredKits();
   const allFlows = new Set(state.selectedFlows);
+  flows.filter((f) => f.required).forEach((f) => allFlows.add(f.id));
   allFlows.forEach((flowId) => {
     const flow = visibleFlows().find((f) => f.id === flowId);
     flow?.requiresFlows?.forEach((reqId) => allFlows.add(reqId));
@@ -592,6 +575,8 @@ function applyFlowSelection() {
 }
 
 function isAutoRequiredFlow(flowId) {
+  const flow = flows.find((f) => f.id === flowId);
+  if (flow?.required) return true;
   return flows.some((f) => state.selectedFlows.has(f.id) && f.requiresFlows?.includes(flowId));
 }
 
@@ -629,7 +614,16 @@ function flowCardTemplate(flow) {
   ` : "";
   const kitListHtml = flow.kits.map((kitId) => {
     const k = findKit(kitId);
-    return k ? `<div class="flow-kit-item"><strong>${escapeHtml(k.name)}</strong><span class="kit-id">${escapeHtml(k.id)}</span></div>` : "";
+    if (!k) return "";
+    const subfeaturesHtml = subfeatureList(k).length
+      ? `<div class="flow-kit-subfeatures">${subfeaturesTemplate(k)}</div>`
+      : "";
+    return `
+      <div class="flow-kit-block">
+        <div class="flow-kit-item"><strong>${escapeHtml(k.name)}</strong><span class="kit-id">${escapeHtml(k.id)}</span></div>
+        ${subfeaturesHtml}
+      </div>
+    `;
   }).join("");
   return `
     <article class="flow-card ${isOn ? "is-selected" : ""}">
@@ -645,7 +639,7 @@ function flowCardTemplate(flow) {
           type="button">${isAuto ? "必須" : isSelected ? "✓ 已選" : "+ 加入"}</button>
       </div>
       ${subflowsHtml}
-      <details class="flow-kit-details">
+      <details class="flow-kit-details" data-flow-details="${escapeHtml(flow.id)}" ${state.expandedFlowDetails.has(flow.id) ? "open" : ""}>
         <summary>包含元件（${flow.kits.length} 個 kit）</summary>
         <div class="flow-kit-list">${kitListHtml}</div>
       </details>
@@ -689,6 +683,17 @@ function bindCsvUpload() {
       }
     });
   }
+}
+
+function bindDatabaseCarousel() {
+  const btn = document.getElementById("card-next-btn");
+  if (!btn) return;
+  btn.addEventListener("click", () => {
+    const cards = databaseCards();
+    if (!cards.length) return;
+    state.dbCard = (state.dbCard + 1) % cards.length;
+    renderDatabaseCarousel();
+  });
 }
 
 // 把表格從「已上傳表格」與所有資料流（nodeOrder + 引用它的 edges）中移除。
@@ -1574,13 +1579,16 @@ function kitTagsTemplate(item) {
 }
 
 function subfeaturesTemplate(item) {
-  const locked = item.required;
-  const action = locked
-    ? `<span class="locked-note">必選 kit 的子功能會自動納入。</span>`
-    : `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${escapeHtml(item.id)}" type="button">全選子功能</button>`;
+  const kitLocked = item.required;
+  const hasUnlockedEntitlement = kitLocked && subfeatureList(item).some((sf) => sf.entitlement);
+  const action = !kitLocked
+    ? `<button class="ghost-action subfeature-action-button" data-enable-all-subfeatures="${escapeHtml(item.id)}" type="button">全選子功能</button>`
+    : hasUnlockedEntitlement
+      ? `<span class="locked-note">必選 kit 的一般子功能會自動納入；標示「需要方案權益」的子功能仍可自行開關。</span>`
+      : `<span class="locked-note">必選 kit 的子功能會自動納入。</span>`;
   return `
     <div class="subfeature-actions">${action}</div>
-    <div class="subfeature-grid">${subfeatureList(item).map((subfeature) => subfeatureTemplate(subfeature, locked)).join("")}</div>
+    <div class="subfeature-grid">${subfeatureList(item).map((subfeature) => subfeatureTemplate(subfeature, kitLocked && !subfeature.entitlement)).join("")}</div>
   `;
 }
 
@@ -1640,9 +1648,24 @@ function onKitRowClick(event) {
 function onSubfeatureToggle(event) {
   const { kitId, subfeatureId } = parseSubfeatureKey(event.target.dataset.subfeatureToggle);
   const selected = state.selectedSubfeatures.get(kitId) || new Set();
-  event.target.checked ? selected.add(subfeatureId) : selected.delete(subfeatureId);
+  if (event.target.checked) {
+    selected.add(subfeatureId);
+  } else {
+    selected.delete(subfeatureId);
+    cascadeUnselectDependents(kitId, subfeatureId, selected);
+  }
   state.selectedSubfeatures.set(kitId, selected);
   renderAll();
+}
+
+function cascadeUnselectDependents(kitId, removedSubfeatureId, selected) {
+  const item = findKit(kitId);
+  subfeatureList(item).forEach((sf) => {
+    if (selected.has(sf.id) && sf.dependencies?.includes(removedSubfeatureId)) {
+      selected.delete(sf.id);
+      cascadeUnselectDependents(kitId, sf.id, selected);
+    }
+  });
 }
 
 function onSubfeatureOption(event) {
@@ -1735,6 +1758,8 @@ function renderDatabaseCarousel() {
   const dotsWrap = document.getElementById("card-indicators");
   if (!dotsWrap) return;
   dotsWrap.style.display = cards.length > 1 ? "flex" : "none";
+  const nextBtn = document.getElementById("card-next-btn");
+  if (nextBtn) nextBtn.style.display = cards.length > 1 ? "" : "none";
   dotsWrap.innerHTML = cards.map((_, i) =>
     `<button class="card-dot${i === state.dbCard ? " is-active" : ""}" type="button" data-card="${i}" aria-label="第 ${i + 1} 張卡片"></button>`
   ).join("");

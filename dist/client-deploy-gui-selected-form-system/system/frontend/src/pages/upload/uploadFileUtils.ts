@@ -4,9 +4,7 @@ export const MAX_SIZE_BYTES = 10 * 1024 * 1024;
 
 export function detectFileType(name: string): FileType {
   if (name.toLowerCase().endsWith(".pdf")) return "PDF";
-  if (name.startsWith("P1_")) return "P1";
-  if (name.startsWith("P2_")) return "P2";
-  return "P3";
+  return /^([a-z][a-z0-9]*)[_-]/i.exec(name)?.[1] ?? "UNKNOWN";
 }
 
 export function detectTableCode(name: string, availableCodes: string[]): string | null {
@@ -18,10 +16,8 @@ export function detectTableCode(name: string, availableCodes: string[]): string 
       return code;
     }
   }
-  if (name.startsWith("P1_")) return "P1";
-  if (name.startsWith("P2_")) return "P2";
-  if (name.startsWith("P3_")) return "P3";
-  return null;
+  const detected = detectFileType(name);
+  return detected === "UNKNOWN" ? null : detected;
 }
 
 export function deriveLotNoFromFilename(name: string): string {
@@ -129,7 +125,7 @@ export async function buildUploadedCsvFilesFromPdfOutputs(
     usedNames.add(safeName);
     const file = new File([csvText], safeName, { type: "text/csv" });
     const type = detectFileType(safeName);
-    const lotNo = type === "P1" || type === "P2" ? deriveLotNoFromFilename(safeName) : "";
+    const lotNo = type === "PDF" || type === "UNKNOWN" ? "" : deriveLotNoFromFilename(safeName);
     return { safeName, file, type, lotNo };
   });
 

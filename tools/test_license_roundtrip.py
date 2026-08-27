@@ -2,8 +2,8 @@
 test_license_roundtrip.py — 驗證 issuer 私鑰簽發的 license 能被 license.py 驗證通過。
 
 模擬完整流程：
-  1. 用 issuer-private-key.pem 簽發 license payload (RSA-PSS)  ← serve-gui.cjs 做的事
-  2. 用 license.py 內嵌的 _PUBLIC_KEY_PEM 驗證簽名            ← 後端啟動時做的事
+  1. 用 signing-private-key.pem 簽發 license payload (RSA-PSS)  ← serve-gui.cjs 做的事
+  2. 用 license.py 內嵌的 _PUBLIC_KEY_PEM 驗證簽名              ← 後端啟動時做的事
 """
 import base64
 import json
@@ -18,7 +18,7 @@ from cryptography.hazmat.primitives.asymmetric import padding
 from cryptography.exceptions import InvalidSignature
 
 ROOT = Path(__file__).resolve().parents[1]
-PRIV = ROOT / "tools" / "issuer-private-key.pem"
+PRIV = ROOT / "tools" / "keys" / "signing-private-key.pem"
 LICENSE_PY = ROOT / "dist" / "client-deploy-gui-selected-form-system" / "system" / "backend" / "app" / "core" / "license.py"
 
 PASS = FAIL = 0
@@ -33,12 +33,12 @@ print("=" * 60)
 if PRIV.exists():
     ok(f"issuer 私鑰存在：{PRIV.name}")
 else:
-    fail(f"issuer 私鑰不存在，請先執行 node tools/generate-issuer-key.cjs")
+    fail(f"issuer 私鑰不存在，請先執行 tools/generate-license-keys.ps1")
     sys.exit(1)
 
 # 2. 從 license.py 抽出內嵌公鑰
 src = LICENSE_PY.read_text("utf-8")
-m = re.search(r'_PUBLIC_KEY_PEM = """(-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----)"""', src, re.DOTALL)
+m = re.search(r'_PUBLIC_KEY_PEM = """\s*(-----BEGIN PUBLIC KEY-----.*?-----END PUBLIC KEY-----)\s*"""', src, re.DOTALL)
 if m:
     embedded_pub = m.group(1)
     ok("從 license.py 抽出 _PUBLIC_KEY_PEM")

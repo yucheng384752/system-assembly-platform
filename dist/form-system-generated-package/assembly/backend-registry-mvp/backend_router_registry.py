@@ -81,6 +81,15 @@ ROUTER_REGISTRY = [
         tenant_scoped=True,
         feature_flag=None,
     ),
+    BackendRouterRegistration(
+        kit='platform-core-kit',
+        module='app.api.routes_kit_broker',
+        symbol='router',
+        prefix='/api/kit',
+        tags=['Kit Broker'],
+        tenant_scoped=False,
+        feature_flag=None,
+    ),
 ]
 
 

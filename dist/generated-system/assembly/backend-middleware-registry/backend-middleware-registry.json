@@ -1,0 +1,6 @@
+﻿{
+    "kit":  "platform-core-kit",
+    "module":  "app.core.endpoint_permission_middleware",
+    "symbol":  "endpoint_permission_middleware",
+    "featureFlag":  null
+}

@@ -1,0 +1,13 @@
+{
+  "kit": "logs-ops-kit",
+  "provides": {
+    "api": [
+      { "capability": "logs.list", "method": "GET", "path": "/api/logs" }
+    ],
+    "db": []
+  },
+  "consumes": {
+    "api": [],
+    "db": []
+  }
+}

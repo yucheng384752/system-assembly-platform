@@ -138,7 +138,8 @@ if (Test-Path $defaultSchemaBaselineFullPath) {
 
 $domainSchemaPack = $null
 $domainSchemaPackFullPath = Join-Path $ProjectRoot $DomainSchemaPackPath
-if (Test-Path $domainSchemaPackFullPath) {
+$clientFormSchemas = @($plan.formSchemas | Where-Object { $null -ne $_ })
+if ($clientFormSchemas.Count -eq 0 -and (Test-Path $domainSchemaPackFullPath)) {
     $domainSchemaPack = Read-JsonUtf8 $domainSchemaPackFullPath
 }
 
@@ -240,9 +241,37 @@ if ($null -ne $domainSchemaPack) {
     $inferenceReport | ConvertTo-Json -Depth 50 | Set-Content -Encoding UTF8 $inferencePath
 }
 
+foreach ($form in $clientFormSchemas) {
+    $formCode = [string]$form.code
+    if ([string]::IsNullOrWhiteSpace($formCode)) { continue }
+    $schemaJson = [ordered]@{
+        formCode = $formCode
+        displayName = [string]$form.name
+        strategy = "client-schema"
+        fields = @($form.fields)
+    }
+    $headers = @($form.fields | ForEach-Object { [string]$_.name })
+    $schemaVersion = [ordered]@{
+        formCode = $formCode
+        displayName = [string]$form.name
+        version = 1
+        schemaHash = Get-JsonHash $schemaJson
+        headerFingerprint = Get-HeaderFingerprint $headers
+        schemaJson = $schemaJson
+    }
+    $schemaVersions += $schemaVersion
+    $seedData.formDefinitions += [ordered]@{
+        tableCode = $formCode
+        displayName = [string]$form.name
+        source = "clientFormSchema"
+    }
+    $seedData.schemaVersions += $schemaVersion
+}
+
 $dbPlan = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
     sourceRecipe = $plan.recipe
+    clientName = $plan.clientName
     engine = $plan.database.engine
     connectionOwner = "platform-core-kit"
     envVars = $envVars

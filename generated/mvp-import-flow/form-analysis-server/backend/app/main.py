@@ -28,6 +28,7 @@ from app.api.deps import get_current_tenant
 from app.core.auth import hash_api_key
 from app.core.config import get_settings
 from app.core.backend_router_registry import register_backend_routers
+from app.core.backend_middleware_registry import register_backend_middlewares
 from app.core.database import Base, init_db
 from app.core.logging import setup_logging
 from app.core.license import verify_license
@@ -111,7 +112,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                         .all()
                     )
                     if not settings.use_generic_schema:
-                        for code in ("P1", "P2", "P3"):
+                        legacy_codes = {
+                            code.strip()
+                            for code in settings.legacy_table_codes_csv.split(",")
+                            if code.strip()
+                        }
+                        for code in legacy_codes:
                             if code not in existing:
                                 db.add(TableRegistry(table_code=code, display_name=code))
                         await db.commit()
@@ -322,6 +328,9 @@ async def api_key_auth_middleware(request: Request, call_next):
             "/api/auth/whoami",
             "/api/auth/bootstrap-status",
             "/api/auth/bootstrap/manager-status",
+            # Admin-key-only endpoints: no tenant-scoped X-API-Key required.
+            "/api/audit/events",
+            "/api/admin/endpoint-permissions",
         )
         if is_admin and any(path.startswith(p) for p in bootstrap_prefixes):
             return await call_next(request)
@@ -532,6 +541,7 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
 # Include API routers through the generated kit registry
 tenant_deps = [Depends(get_current_tenant)]
 register_backend_routers(app, tenant_deps=tenant_deps, settings=settings)
+register_backend_middlewares(app, settings=settings)
 
 @app.get("/", tags=["Root"])
 async def root() -> dict[str, str]:

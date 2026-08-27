@@ -1,0 +1,15 @@
+﻿{
+    "kit":  "station-data-link-kit",
+    "displayName":  "站點資料串聯",
+    "installOrder":  30,
+    "requires":  [
+                     "python"
+                 ],
+    "runtimeEnv":  [
+
+                   ],
+    "scripts":  {
+                    "windows":  "install.ps1",
+                    "linux":  "install.sh"
+                }
+}

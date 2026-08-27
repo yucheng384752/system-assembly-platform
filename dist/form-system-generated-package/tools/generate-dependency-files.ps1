@@ -218,6 +218,26 @@ $packageJson = [ordered]@{
 $packageJsonPath = Join-Path $frontendPath "package.json"
 [System.IO.File]::WriteAllText($packageJsonPath, ($packageJson | ConvertTo-Json -Depth 20), $utf8NoBom)
 
+$frontendLockTemplatePath = Join-Path $ProjectRoot "templates\frontend\package-lock.json"
+$frontendLockPath = Join-Path $frontendPath "package-lock.json"
+if (Test-Path $frontendLockTemplatePath) {
+    foreach ($depName in $dependencies.Keys) {
+        $needle = '"' + $depName + '": "' + $dependencies[$depName] + '"'
+        if (-not ((Get-Content -Raw -Encoding UTF8 -LiteralPath $frontendLockTemplatePath).Contains($needle))) {
+            throw "Frontend package-lock template is out of sync: dependency $depName"
+        }
+    }
+    foreach ($depName in $devDependencies.Keys) {
+        $needle = '"' + $depName + '": "' + $devDependencies[$depName] + '"'
+        if (-not ((Get-Content -Raw -Encoding UTF8 -LiteralPath $frontendLockTemplatePath).Contains($needle))) {
+            throw "Frontend package-lock template is out of sync: devDependency $depName"
+        }
+    }
+    Copy-Item -LiteralPath $frontendLockTemplatePath -Destination $frontendLockPath -Force
+} else {
+    Write-Warning "Frontend package-lock template missing: $frontendLockTemplatePath"
+}
+
 # Generate vite.config.ts if missing
 $viteConfigPath = Join-Path $frontendPath "vite.config.ts"
 if (-not (Test-Path $viteConfigPath)) {
@@ -450,6 +470,7 @@ $plan = [ordered]@{
         source = "inferred-from-frontend-imports"
         imports = @($frontendImports | Sort-Object)
         packageJsonPath = "frontend\package.json"
+        packageLockPath = "frontend\package-lock.json"
         dependencies = $dependencies
         devDependencies = $devDependencies
     }

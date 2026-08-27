@@ -134,11 +134,14 @@ function handleSystemBundle(res) {
 }
 
 // ── License 簽發（偵測到 issuer 私鑰時啟用）────────────────────────────────────
+// 必須使用 tools/keys/signing-private-key.pem —— 這是唯一跟每個生成套件
+// license.py 內嵌公鑰配對的正式金鑰。舊檔名 issuer-private-key.pem 是另一組
+// 不相干的金鑰，會簽出無法通過 backend license.py 驗證的 license.lic。
 function resolveIssuerKey() {
   const candidates = [
     process.env.ISSUER_KEY_PATH,
-    path.join(__dirname, "issuer-private-key.pem"),
-    path.join(dataDir, "issuer-private-key.pem"),
+    path.join(__dirname, "keys", "signing-private-key.pem"),
+    path.join(dataDir, "signing-private-key.pem"),
   ].filter(Boolean);
   for (const c of candidates) {
     if (fs.existsSync(c)) return c;
@@ -156,7 +159,7 @@ function handleIssueLicense(req, res) {
   req.on("end", () => {
     const keyPath = resolveIssuerKey();
     if (!keyPath) {
-      json(res, 404, { error: "issuer private key not configured (place issuer-private-key.pem in tools/)" });
+      json(res, 404, { error: "issuer private key not configured (place signing-private-key.pem in tools/keys/, or run tools/generate-license-keys.ps1)" });
       return;
     }
     let body;
@@ -361,6 +364,25 @@ const server = http.createServer((req, res) => {
   }
   if (pathname === "/api/issue-license" && req.method === "POST") {
     handleIssueLicense(req, res);
+    return;
+  }
+
+  // Kit manifest — gui/app.js fetches this from the repo-root kits/ directory, which sits
+  // outside the gui/ static root below, so it needs its own route.
+  if (pathname.startsWith("/kits/") && req.method === "GET") {
+    const kitsRoot = path.join(root, "kits");
+    const relPath = decodeURIComponent(pathname).replace(/^\/kits\//, "");
+    const filePath = path.normalize(path.join(kitsRoot, relPath));
+    if (!filePath.startsWith(kitsRoot)) {
+      res.writeHead(403);
+      res.end("Forbidden");
+      return;
+    }
+    fs.readFile(filePath, (error, data) => {
+      if (error) { res.writeHead(404); res.end("Not found"); return; }
+      res.writeHead(200, { "Content-Type": types[path.extname(filePath)] || "application/octet-stream" });
+      res.end(data);
+    });
     return;
   }
 

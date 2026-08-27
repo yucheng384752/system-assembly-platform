@@ -3,9 +3,9 @@
 | Field   | Value |
 |---------|-------|
 | Recipe  | `gui-selected-form-system` |
-| Built   | 2026-07-01 18:11 |
+| Built   | 2026-08-27 16:01 |
 | DB      | postgresql |
-| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit |
+| Kits    | platform-core-kit, tenant-auth-kit, station-data-link-kit, upload-validation-kit, import-pipeline-kit, query-traceability-kit, analytics-kit, station-admin-kit, audit-edit-kit, logs-ops-kit, generic-forms-kit |
 
 ## Package contents
 
@@ -28,15 +28,29 @@ client-deploy-gui-selected-form-system/
 ### 1. Extract ZIP
 
 ```bash
-unzip client-deploy-gui-selected-form-system.zip
+unzip gui-selected-form-system.zip
 cd client-deploy-gui-selected-form-system
 ```
 
 ### 2. Install
 
-#### Option A ??Web Install Wizard (recommended)
+#### No Python yet? Run bootstrap first
 
-Interactive browser-based wizard. No extra dependencies ??only Python 3 required.
+On a fresh VM without Python 3, run the bootstrap script — it installs Python 3 + pip (online via apt/dnf/yum/winget, or offline from `installers/`), then launches the wizard:
+
+```bash
+bash bootstrap.sh          # Linux / macOS
+```
+
+```powershell
+.\bootstrap.ps1            # Windows
+```
+
+> Offline machines: drop the Python installer into `installers/` before transfer (see `installers/README.txt`). `prepare-offline.ps1` auto-bundles the Windows installer.
+
+#### Option A — Web Install Wizard (recommended, Python already installed)
+
+Interactive browser-based wizard. No extra dependencies — only Python 3 required.
 
 ```bash
 python3 install-wizard.py
@@ -50,7 +64,7 @@ Windows:
 python install-wizard.py
 ```
 
-#### Option B ??CLI Wizard (SSH / headless servers)
+#### Option B — CLI Wizard (SSH / headless servers)
 
 Step-by-step text prompts for database, manager account, and secret key.
 
@@ -64,7 +78,7 @@ To start the backend in the background after install:
 bash deploy.sh --wizard --background
 ```
 
-#### Option C ??Manual config (advanced)
+#### Option C — Manual config (advanced)
 
 ```bash
 cp system/.env.example system/.env
@@ -98,7 +112,7 @@ The script automatically:
 2. Checks prerequisites (python3, pip3, node, npm)
 3. Creates an isolated Python virtual environment at `system/.venv`
 4. Installs backend dependencies via `pip` into the venv
-5. Builds the frontend (`npm install` + `npm run build`)
+5. Builds the frontend (`npm ci` when package-lock.json exists, then `npm run build`)
 6. Runs database migrations (`alembic upgrade head` or `generated_db_bootstrap.py`)
 
 ### 4. Start the backend
@@ -171,6 +185,29 @@ bash deploy.sh --update-license=/path/to/new-license.lic
 ```
 
 The script copies the file to `system/license.lic` and prints restart instructions if the backend is running.
+
+## Troubleshooting
+
+### Manager account won't log in (even with the username/password you set in the installer)
+
+The installer writes `BOOTSTRAP_MANAGER_USERNAME`/`BOOTSTRAP_MANAGER_PASSWORD` into `.env`, but the backend only uses them to *create* the manager account on 'first ever' startup. If a manager account with that username already exists (e.g. from an earlier install attempt against the same database), changing `.env` afterwards has no effect: the stored password is never overwritten.
+
+Reset it directly with the break-glass script:
+
+```bash
+cd system/backend
+../.venv/bin/python scripts/reset-manager-password.py --username manager
+# or non-interactively:
+../.venv/bin/python scripts/reset-manager-password.py --username manager --new-password 'NewP@ssw0rd'
+```
+
+To list existing manager/admin accounts without changing anything:
+
+```bash
+../.venv/bin/python scripts/reset-manager-password.py --list
+```
+
+The script reads `DATABASE_URL` from `.env` and connects with the same async driver the backend uses, so there is no separate DB client to set up. New passwords must be at least 8 characters, and the account is flagged to prompt a password change on next login.
 
 ## Production security checklist
 

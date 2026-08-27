@@ -52,11 +52,23 @@ function Test-RelativePath([string]$Root, [string]$RelativePath) {
 $plan = Read-JsonUtf8 (Join-Path $ProjectRoot $ResolvedPlanPath)
 $sourcePath = Join-Path $ProjectRoot $SourceSystemDirectory
 $outputPath = Join-Path $ProjectRoot $OutputDirectory
+$legacyAdapterEnabled = @($plan.selectedSubfeatures.'station-data-link-kit').Contains("p123-compatibility-adapter")
 
 & (Join-Path $ProjectRoot "tools\validate-kit-contracts.ps1") `
     -ProjectRoot $ProjectRoot `
     -ResolvedPlanPath $ResolvedPlanPath `
     -OutputPath "assembly\kit-contract-report.json"
+
+# New-CleanDirectory below wipes $outputPath unconditionally (including any
+# previously built frontend/dist/), even when -SkipFrontendBuild is passed.
+# Stash an existing build here so -SkipFrontendBuild can restore it instead of
+# silently destroying it.
+$existingFrontendDist = Join-Path $outputPath "frontend\dist"
+$frontendDistStash = $null
+if (Test-Path (Join-Path $existingFrontendDist "index.html")) {
+    $frontendDistStash = Join-Path ([System.IO.Path]::GetTempPath()) ("assemble-frontend-dist-" + [guid]::NewGuid().ToString("N"))
+    Copy-Item -LiteralPath $existingFrontendDist -Destination $frontendDistStash -Recurse -Force
+}
 
 New-CleanDirectory $outputPath
 Copy-Tree (Join-Path $sourcePath "backend") (Join-Path $outputPath "backend")
@@ -75,12 +87,32 @@ if (($plan.resolvedKitOrder -contains "platform-core-kit") -and
 foreach ($kitId in @($plan.resolvedKitOrder)) {
     $kitSrcPath = Join-Path $ProjectRoot "kits\$kitId\src"
     if (-not (Test-Path $kitSrcPath)) { continue }
+    $kitSrcPath = (Resolve-Path -LiteralPath $kitSrcPath).Path
     Get-ChildItem -LiteralPath $kitSrcPath -Recurse -File | ForEach-Object {
         $relativePath = $_.FullName.Substring($kitSrcPath.Length + 1)
         $destPath = Join-Path $outputPath $relativePath
         $destDir = Split-Path -Parent $destPath
         if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force $destDir | Out-Null }
         Copy-Item -LiteralPath $_.FullName -Destination $destPath -Force
+    }
+}
+
+if (-not $legacyAdapterEnabled) {
+    foreach ($relativePath in @(
+        "backend\app\api\routes_import.py",
+        "backend\app\models\base_record.py",
+        "backend\app\models\record.py",
+        "backend\app\models\p1_record.py",
+        "backend\app\models\p2_item.py",
+        "backend\app\models\p2_record.py",
+        "backend\app\models\p2_item_v2.py",
+        "backend\app\models\p3_item.py",
+        "backend\app\models\p3_record.py",
+        "backend\app\models\p3_item_v2.py",
+        "backend\app\services\production_date_extractor.py"
+    )) {
+        $legacyPath = Join-Path $outputPath $relativePath
+        if (Test-Path $legacyPath) { Remove-Item -LiteralPath $legacyPath -Force }
     }
 }
 
@@ -196,8 +228,9 @@ def get_slitting_machine_list() -> list[int]:
 '@ | Set-Content -Encoding UTF8 (Join-Path $configPath "constants.py")
 }
 
-$recordModelPath = Join-Path $outputPath "backend\app\models\record.py"
-if (-not (Test-Path $recordModelPath)) {
+if ($legacyAdapterEnabled) {
+    $recordModelPath = Join-Path $outputPath "backend\app\models\record.py"
+    if (-not (Test-Path $recordModelPath)) {
     @'
 import uuid
 from datetime import date
@@ -239,10 +272,10 @@ class Record(Base):
     p2_items: Mapped[list["P2Item"]] = relationship("P2Item", back_populates="record", cascade="all, delete-orphan")
     p3_items: Mapped[list["P3Item"]] = relationship("P3Item", back_populates="record", cascade="all, delete-orphan")
 '@ | Set-Content -Encoding UTF8 $recordModelPath
-}
+    }
 
-$p2ItemModelPath = Join-Path $outputPath "backend\app\models\p2_item.py"
-if (-not (Test-Path $p2ItemModelPath)) {
+    $p2ItemModelPath = Join-Path $outputPath "backend\app\models\p2_item.py"
+    if (-not (Test-Path $p2ItemModelPath)) {
     @'
 import uuid
 from typing import TYPE_CHECKING, Any
@@ -278,10 +311,10 @@ class P2Item(Base):
 
     record: Mapped["Record"] = relationship("Record", back_populates="p2_items")
 '@ | Set-Content -Encoding UTF8 $p2ItemModelPath
-}
+    }
 
-$p3ItemModelPath = Join-Path $outputPath "backend\app\models\p3_item.py"
-if (-not (Test-Path $p3ItemModelPath)) {
+    $p3ItemModelPath = Join-Path $outputPath "backend\app\models\p3_item.py"
+    if (-not (Test-Path $p3ItemModelPath)) {
     @'
 import uuid
 from datetime import date
@@ -316,6 +349,7 @@ class P3Item(Base):
 
     record: Mapped["Record"] = relationship("Record", back_populates="p3_items")
 '@ | Set-Content -Encoding UTF8 $p3ItemModelPath
+    }
 }
 
 $schemasPath = Join-Path $outputPath "backend\app\schemas"
@@ -558,6 +592,19 @@ if (-not (Test-Path $generatedBackendRegistry)) {
 }
 Copy-Item -LiteralPath $generatedBackendRegistry -Destination $runtimeBackendRegistry -Force
 
+& (Join-Path $ProjectRoot "tools\generate-backend-middleware-registry.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -IRPath $assemblyIrPath `
+    -OutputDirectory (Join-Path $OutputDirectory "assembly\backend-middleware-registry")
+
+$generatedMiddlewareRegistry = Join-Path $outputPath "assembly\backend-middleware-registry\backend_middleware_registry.py"
+$runtimeMiddlewareRegistry = Join-Path $outputPath "backend\app\core\backend_middleware_registry.py"
+if (-not (Test-Path $generatedMiddlewareRegistry)) {
+    throw "Generated backend middleware registry not found: $generatedMiddlewareRegistry"
+}
+Copy-Item -LiteralPath $generatedMiddlewareRegistry -Destination $runtimeMiddlewareRegistry -Force
+
 & (Join-Path $ProjectRoot "tools\generate-frontend-registry.ps1") `
     -ProjectRoot $ProjectRoot `
     -IRPath $assemblyIrPath `
@@ -572,13 +619,24 @@ Copy-Item -LiteralPath $generatedBackendRegistry -Destination $runtimeBackendReg
 # Must run after generate-dependency-files.ps1 which creates package.json + tsconfig
 $frontendDir = Join-Path $outputPath "frontend"
 if ($SkipFrontendBuild) {
-    Write-Host "Skipping frontend production build."
+    if ($frontendDistStash -and (Test-Path $frontendDistStash)) {
+        Copy-Item -LiteralPath $frontendDistStash -Destination (Join-Path $frontendDir "dist") -Recurse -Force
+        Remove-Item -LiteralPath $frontendDistStash -Recurse -Force
+        Write-Host "Skipping frontend production build; restored previously built frontend/dist/."
+    } else {
+        Write-Host "Skipping frontend production build."
+    }
 } elseif (Test-Path (Join-Path $frontendDir "package.json")) {
-    Write-Host "Building frontend (npm install + npm run build)..."
+    Write-Host "Building frontend (npm ci/install + npm run build)..."
     Push-Location $frontendDir
     try {
-        & npm install --silent
-        if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        if (Test-Path (Join-Path $frontendDir "package-lock.json")) {
+            & npm ci --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm ci failed in $frontendDir" }
+        } else {
+            & npm install --silent
+            if ($LASTEXITCODE -ne 0) { throw "npm install failed in $frontendDir" }
+        }
         & npm run build
         if ($LASTEXITCODE -ne 0) { throw "npm run build failed in $frontendDir" }
     } finally {
@@ -590,10 +648,16 @@ if ($SkipFrontendBuild) {
     }
     Write-Host "Frontend built -> $frontendDir\dist\"
 }
+if ($frontendDistStash -and (Test-Path $frontendDistStash)) {
+    # Only reached when a fresh build ran or package.json was missing; the
+    # stash was already restored (and removed) in the -SkipFrontendBuild path.
+    Remove-Item -LiteralPath $frontendDistStash -Recurse -Force
+}
 
 & (Join-Path $ProjectRoot "tools\generate-model-init.ps1") `
     -ProjectRoot $ProjectRoot `
-    -SystemDirectory $OutputDirectory
+    -SystemDirectory $OutputDirectory `
+    -ResolvedPlanPath $ResolvedPlanPath
 
 $scriptsPath = Join-Path $outputPath "scripts"
 New-Item -ItemType Directory -Force $scriptsPath | Out-Null
@@ -640,10 +704,21 @@ foreach ($entry in @($plan | Sort-Object order)) {
 Write-Host "Kit install plan completed."
 '@ | Set-Content -Encoding UTF8 (Join-Path $scriptsPath "run-kit-installs.ps1")
 
+$dbPlanDirectory = "build\db-plan-$($plan.recipe)"
+& (Join-Path $ProjectRoot "tools\generate-db-plan.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -OutputDirectory $dbPlanDirectory
+
 & (Join-Path $ProjectRoot "tools\generate-db-bootstrap.ps1") `
     -ProjectRoot $ProjectRoot `
     -SystemDirectory $OutputDirectory `
-    -BaselinePath (Join-Path $ProjectRoot "assembly\baselines\default-db-schema.baseline.json")
+    -DbPlanPath (Join-Path $dbPlanDirectory "db-assembly-plan.json")
+
+& (Join-Path $ProjectRoot "tools\generate-form-schema.ps1") `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $ResolvedPlanPath `
+    -SystemDirectory $OutputDirectory
 
 $dependencyManifest = [ordered]@{
     generatedAt = (Get-Date).ToString("s")
@@ -659,7 +734,7 @@ $dependencyManifest = [ordered]@{
     frontend = [ordered]@{
         sourceDirectory = "frontend"
         packageJson = Test-RelativePath $outputPath "frontend\package.json"
-        installCommand = "npm install"
+        installCommand = "npm ci"
         startCommand = "npm run dev"
     }
     notes = @(
@@ -895,6 +970,7 @@ $order = @(
     "MULTI_TENANT_ENABLED",
     "AUDIT_EVENTS_ENABLED",
     "USE_GENERIC_SCHEMA",
+    "LEGACY_TABLE_CODES_CSV",
     "ENTITLEMENT_MODE",
     "ENVIRONMENT"
 )
@@ -1365,6 +1441,9 @@ $ErrorActionPreference = "Stop"
     -Background
 '@ | Set-Content -Encoding UTF8 (Join-Path $scriptsPath "restart.ps1")
 
+$genericSchemaValue = ([bool]$plan.featureFlags.USE_GENERIC_SCHEMA).ToString().ToLowerInvariant()
+$legacyTableCodesValue = [string]$plan.featureFlags.LEGACY_TABLE_CODES_CSV
+
 @"
 DB_HOST=localhost
 DB_PORT=5432
@@ -1385,7 +1464,8 @@ BOOTSTRAP_MANAGER_PASSWORD=
 BOOTSTRAP_MANAGER_MUST_CHANGE_PASSWORD=true
 MULTI_TENANT_ENABLED=true
 AUDIT_EVENTS_ENABLED=false
-USE_GENERIC_SCHEMA=false
+USE_GENERIC_SCHEMA=$genericSchemaValue
+LEGACY_TABLE_CODES_CSV=$legacyTableCodesValue
 PDF_SERVER_URL=
 PDF_SERVER_TIMEOUT_SECONDS=1800
 PDF_SERVER_MAX_CONCURRENT=3

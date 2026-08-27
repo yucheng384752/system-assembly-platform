@@ -121,11 +121,23 @@ try {
     $nameArg     = if ($LicenseeName)   { $LicenseeName }   else { '__none__' }
     $emailArg    = if ($LicenseeEmail)  { $LicenseeEmail }  else { '__none__' }
     $daysArg     = if ($ExpiresAfterDays -gt 0) { "$ExpiresAfterDays" } else { '__none__' }
-    $argStr = """$tmpScript"" ""$RecipePath"" ""$PrivateKeyPath"" ""$OutputDir"" ""$zipArg"" ""$midArg"" ""$nameArg"" ""$emailArg"" ""$daysArg"""
-    $proc = Start-Process -FilePath 'node' -ArgumentList $argStr `
-        -Wait -PassThru -NoNewWindow -RedirectStandardOutput $tmpOut -RedirectStandardError "$tmpOut.err"
-    $stdout = Get-Content $tmpOut -Raw -ErrorAction SilentlyContinue
-    $stderr = Get-Content "$tmpOut.err" -Raw -ErrorAction SilentlyContinue
+    function Quote-ProcessArgument([string]$Value) {
+        return '"' + $Value.Replace('"', '\"') + '"'
+    }
+
+    $psi = [System.Diagnostics.ProcessStartInfo]::new()
+    $psi.FileName = 'node'
+    $quotedArgs = @($tmpScript, $RecipePath, $PrivateKeyPath, $OutputDir, $zipArg, $midArg, $nameArg, $emailArg, $daysArg) |
+        ForEach-Object { Quote-ProcessArgument $_ }
+    $psi.Arguments = ($quotedArgs -join ' ')
+    $psi.UseShellExecute = $false
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+
+    $proc = [System.Diagnostics.Process]::Start($psi)
+    $stdout = $proc.StandardOutput.ReadToEnd()
+    $stderr = $proc.StandardError.ReadToEnd()
+    $proc.WaitForExit()
     if ($proc.ExitCode -ne 0) {
         throw "node signing failed (exit $($proc.ExitCode)):`n$stdout`n$stderr"
     }

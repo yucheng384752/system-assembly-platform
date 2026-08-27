@@ -9,6 +9,36 @@ from pydantic import AliasChoices, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def _resolve_env_files() -> list[str]:
+    """
+    回傳 .env 候選絕對路徑（依優先序，後者覆蓋前者）。
+
+    config.py 位於 system/backend/app/core/config.py，故：
+      parents[2] = backend/   parents[3] = system/
+    安裝精靈把 .env 寫在 system/.env，但後端常從 backend/ 啟動，
+    因此 pydantic 預設的相對 ".env"（依 cwd）會找不到。改用絕對路徑涵蓋兩處。
+    """
+    here = Path(__file__).resolve()
+    candidates: list[Path] = []
+    try:
+        backend_dir = here.parents[2]
+        system_dir = here.parents[3]
+        candidates.extend([system_dir / ".env", backend_dir / ".env"])
+    except IndexError:
+        pass
+    # cwd 的 .env 優先序最高（最後載入），保留既有行為（Docker 等）
+    candidates.append(Path(os.getcwd()) / ".env")
+    # 去重並保留順序
+    seen: set[str] = set()
+    out: list[str] = []
+    for p in candidates:
+        s = str(p)
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
+
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -18,17 +48,17 @@ class Settings(BaseSettings):
     """
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=_resolve_env_files(),
         env_file_encoding="utf-8",
         case_sensitive=False,
         enable_decoding=False,
         extra="ignore",
     )
 
-    # Database settings - Fixed to PostgreSQL only
+    # Database settings
     database_url: str = Field(
         default="postgresql+asyncpg://app:app_secure_password@localhost:5432/form_analysis_db",
-        description="PostgreSQL database connection URL (固定使用PostgreSQL)",
+        description="Database connection URL",
         validation_alias=AliasChoices("database_url", "DATABASE_URL"),
     )
 
@@ -274,6 +304,10 @@ class Settings(BaseSettings):
         description="Enable generic schema tables (stations/generic_records). False = legacy P1/P2/P3 only.",
         alias="USE_GENERIC_SCHEMA",
     )
+    legacy_table_codes_csv: str = Field(default="", alias="LEGACY_TABLE_CODES_CSV")
+    pdf_winder_table_codes_csv: str = Field(
+        default="", alias="PDF_WINDER_TABLE_CODES_CSV"
+    )
 
     # Database connection pool settings
     database_echo: bool = Field(
@@ -325,8 +359,18 @@ class Settings(BaseSettings):
     @field_validator("upload_temp_dir")
     @classmethod
     def ensure_upload_dir_exists(cls, v: str) -> str:
-        """Ensure upload directory exists."""
-        Path(v).mkdir(parents=True, exist_ok=True)
+        """Ensure upload directory exists, owned by the non-root user when run via sudo."""
+        upload_path = Path(v)
+        upload_path.mkdir(parents=True, exist_ok=True)
+        if os.name != "nt" and os.getuid() == 0:
+            import pwd
+            sudo_user = os.environ.get("SUDO_USER", "")
+            if sudo_user:
+                try:
+                    pw = pwd.getpwnam(sudo_user)
+                    os.chown(upload_path, pw.pw_uid, pw.pw_gid)
+                except (KeyError, OSError):
+                    pass
         return v
 
     @property

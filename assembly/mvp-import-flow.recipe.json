@@ -20,7 +20,8 @@
     "tenant-auth-kit",
     "station-data-link-kit",
     "upload-validation-kit",
-    "import-pipeline-kit"
+    "import-pipeline-kit",
+    "logs-ops-kit"
   ],
   "featureFlags": {
     "MULTI_TENANT_ENABLED": true,
@@ -98,6 +99,12 @@
       "import-error-query",
       "commit-production-records",
       "cancel-import"
+    ],
+    "logs-ops-kit": [
+      "log-list",
+      "log-search",
+      "log-statistics",
+      "cleanup-and-download"
     ]
   },
   "selectedSubfeatureOptions": {}

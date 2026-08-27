@@ -39,6 +39,53 @@ function Resolve-RequiredPath([string]$Path, [string]$Label) {
     return (Resolve-Path -LiteralPath $Path).Path
 }
 
+function Repair-ProcessPathEnvironment {
+    $envVars = [System.Environment]::GetEnvironmentVariables("Process")
+    $pathKeys = @()
+    foreach ($key in $envVars.Keys) {
+        if ([string]$key -ieq "Path") {
+            $pathKeys += [string]$key
+        }
+    }
+
+    if ($pathKeys.Count -le 1) {
+        return
+    }
+
+    $pathParts = New-Object System.Collections.Generic.List[string]
+    foreach ($key in $pathKeys) {
+        foreach ($part in ([string]$envVars[$key] -split ';')) {
+            if (-not [string]::IsNullOrWhiteSpace($part) -and -not $pathParts.Contains($part)) {
+                $pathParts.Add($part) | Out-Null
+            }
+        }
+    }
+    $preferredValue = ($pathParts -join ';')
+    foreach ($key in $pathKeys) {
+        [System.Environment]::SetEnvironmentVariable($key, $null, "Process")
+    }
+    [System.Environment]::SetEnvironmentVariable("Path", $preferredValue, "Process")
+}
+
+function New-NodeBootstrapArguments(
+    [string]$LauncherPath,
+    [string]$EntrypointPath,
+    [string]$Address,
+    [int]$PortNumber,
+    [string]$StdoutPath = "",
+    [string]$StderrPath = ""
+) {
+    $args = New-Object System.Collections.Generic.List[string]
+    foreach ($arg in @($LauncherPath, $EntrypointPath, $Address, [string]$PortNumber)) {
+        $args.Add('"' + $arg.Replace('"', '\"') + '"') | Out-Null
+    }
+    if (-not [string]::IsNullOrWhiteSpace($StdoutPath) -and -not [string]::IsNullOrWhiteSpace($StderrPath)) {
+        $args.Add('"' + $StdoutPath.Replace('"', '\"') + '"') | Out-Null
+        $args.Add('"' + $StderrPath.Replace('"', '\"') + '"') | Out-Null
+    }
+    return ($args -join " ")
+}
+
 function Test-TcpPortInUse([string]$Address, [int]$PortNumber) {
     $listener = $null
     try {
@@ -99,7 +146,10 @@ function Get-PortOwnerPid([int]$PortNumber) {
     if (-not $match) { return $null }
     $parts = $match.Line.Trim() -split '\s+'
     $ownerPid = [int]$parts[-1]
-    return if ($ownerPid -gt 0) { $ownerPid } else { $null }
+    if ($ownerPid -gt 0) {
+        return $ownerPid
+    }
+    return $null
 }
 
 # P3: Poll TCP until the server accepts connections or timeout expires.
@@ -121,12 +171,17 @@ if ([string]::IsNullOrWhiteSpace($ProjectRoot)) {
 
 $resolvedProjectRoot = Resolve-RequiredPath $ProjectRoot "Project root"
 $entrypoint = Resolve-RequiredPath (Join-Path $resolvedProjectRoot "tools\serve-gui.cjs") "Platform server entrypoint"
+$launcher = Resolve-RequiredPath (Join-Path $resolvedProjectRoot "tools\serve-gui-launcher.cjs") "Platform server launcher"
 Resolve-RequiredPath (Join-Path $resolvedProjectRoot "gui\index.html") "Platform GUI index" | Out-Null
 
+Repair-ProcessPathEnvironment
+
 # P2: Verify Node.js is reachable before doing anything else.
-if (-not (Get-Command $Node -ErrorAction SilentlyContinue)) {
+$nodeCommand = Get-Command $Node -ErrorAction SilentlyContinue
+if (-not $nodeCommand) {
     throw "Node.js not found: '$Node' is not in PATH. Install Node.js or pass -Node <full-path>."
 }
+$nodeExecutable = $nodeCommand.Source
 
 $runtimeRoot = Join-Path $resolvedProjectRoot "runtime"
 $logsRoot = Join-Path $resolvedProjectRoot "logs"
@@ -211,12 +266,15 @@ try {
     if ($Background) {
         $stdoutPath = Join-Path $logsRoot "platform.out.log"
         $stderrPath = Join-Path $logsRoot "platform.err.log"
-        $process = Start-Process -FilePath $Node -ArgumentList "`"$entrypoint`"" `
+        $nodeArgs = New-NodeBootstrapArguments $launcher $entrypoint $HostAddress $actualPort $stdoutPath $stderrPath
+        $process = Start-Process -FilePath $nodeExecutable -ArgumentList $nodeArgs `
             -WorkingDirectory $resolvedProjectRoot `
             -WindowStyle Hidden `
-            -RedirectStandardOutput $stdoutPath `
-            -RedirectStandardError $stderrPath `
             -PassThru
+        Start-Sleep -Milliseconds 500
+        if ($process.HasExited) {
+            throw "Platform server exited immediately (exit $($process.ExitCode)). Node: $nodeExecutable Args: $nodeArgs"
+        }
         [string]$process.Id | Set-Content -LiteralPath $pidPath -Encoding UTF8
 
         [ordered]@{
@@ -256,7 +314,8 @@ try {
     # P4: Use Start-Process -PassThru so the Node PID is captured and written to the
     #     pid file. -NoNewWindow keeps output in the current console. The pid file is
     #     cleaned up in the finally block when the process exits or Ctrl+C is pressed.
-    $fgProc = Start-Process -FilePath $Node -ArgumentList "`"$entrypoint`"" `
+    $nodeArgs = New-NodeBootstrapArguments $launcher $entrypoint $HostAddress $actualPort
+    $fgProc = Start-Process -FilePath $nodeExecutable -ArgumentList $nodeArgs `
         -WorkingDirectory $resolvedProjectRoot -NoNewWindow -PassThru
     [string]$fgProc.Id | Set-Content -LiteralPath $pidPath -Encoding UTF8
     try {

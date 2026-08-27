@@ -31,15 +31,17 @@ logger = logging.getLogger(__name__)
 _TPM_SIGNING_HANDLE = "0x81000001"
 
 # Public key embedded at package generation time (RSA-2048 SubjectPublicKeyInfo PEM)
-_PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1wQ/q3fbmYmd8545NJk
-/qEyMwtmPRaJFpoALjvxEvrfVIe/H58X1UTkGCept4Ata20HUvr1D8LUsr3jxJUi
-48INzbau+HKxwq+fvEaaGPNdgIKZpLOM0TM/g/cdtIvneWsmn4ZEV6q8UTTql7Zp
-5mveUc6KY6QWtqEPOxFwVl7RXWxpF/yBu2S0itRdo5ZNkT/70BbJEuL/PAQbuMlw
-cb9f08cCqoCsARydnO2znpT6f5mMXodZY/5GJIm3UlcXpSFZWOm3T5Gds46SdRUk
-/4X9IffUlLFmHvV0y7sJmQ1WDquDJDuJydls5Y3ByvaokjNdbGhAr9k09QlXy7hy
-EwIDAQAB
------END PUBLIC KEY-----"""
+_PUBLIC_KEY_PEM = """
+-----BEGIN PUBLIC KEY-----
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApDmwTDpU8S2865PNym53
+ZkA1lX6O+wV4ZC62saY9+rtELCg++E47ewoaD9x6Yh2vk4BNgNoSyjLd8UI/YePc
+gw0nJJUaUaFY2+BaLHMIwiLunQmo/D3kwlf9ry3UQkF4WjMGUoYSLMt5sdQb32hS
+6VxEO41H7OtH+IpDA9yPmLQWZf4P6Wf+Kxo9+kO0JaqT6ONHbUzUlWHB2YfUypbI
+l6VvpcwinOubRizBftDY1J9Ak9YBmIb5X+agTB+nM5c0OG5jjx5DbwHP7vgFXlCH
+2ysOOq6TXiUAPMPeYv/TtVf2YGVeZofsBhby9n86OGwczjnZi9N8253kjZwmgAo+
+4wIDAQAB
+-----END PUBLIC KEY-----
+"""
 
 
 @dataclass
@@ -187,9 +189,13 @@ def _tpm_subprocess_env() -> dict:
     env = dict(os.environ)
     if env.get("TPM2TOOLS_TCTI"):
         return env
-    # swtpm 由 01_tpm_full_setup.sh 佈建於 /opt/hiba/tpm/swtpm-state
-    swtpm_marker = Path("/opt/hiba/tpm/swtpm-state/.initialized")
-    if swtpm_marker.exists():
+    # swtpm 由 01_tpm_full_setup.sh 佈建於 /var/lib/swtpm-hiba/swtpm-state；
+    # /opt/hiba/tpm/swtpm-state 為遷移前的舊路徑，保留相容判斷。
+    swtpm_markers = (
+        Path("/var/lib/swtpm-hiba/swtpm-state/.initialized"),
+        Path("/opt/hiba/tpm/swtpm-state/.initialized"),  # legacy path, backward compat
+    )
+    if any(marker.exists() for marker in swtpm_markers):
         env["TPM2TOOLS_TCTI"] = "swtpm:host=127.0.0.1,port=2321"
     return env
 

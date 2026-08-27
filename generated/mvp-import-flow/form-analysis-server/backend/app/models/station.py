@@ -91,6 +91,11 @@ class StationSchema(Base):
         JSONB, nullable=True
     )
 
+    reason_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("edit_reasons.id"), nullable=True
+    )
+    reason_text: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    created_by: Mapped[str | None] = mapped_column(String(100), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

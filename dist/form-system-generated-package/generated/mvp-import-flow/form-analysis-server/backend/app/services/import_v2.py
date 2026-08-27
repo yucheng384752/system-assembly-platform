@@ -62,6 +62,29 @@ class ImportService:
             data[column] = row.get(str(source), row.get(column))
         return data
 
+    @staticmethod
+    def _station_schema_validation_rules(
+        schema: Any | None,
+    ) -> tuple[list[str], list[str], list[str]]:
+        required: list[str] = []
+        numeric: list[str] = []
+        dates: list[str] = []
+        for field in getattr(schema, "record_fields", None) or []:
+            if not isinstance(field, dict):
+                continue
+            name = field.get("sourceName") or field.get("fieldKey") or field.get("name")
+            if not name:
+                continue
+            name = str(name)
+            if field.get("required"):
+                required.append(name)
+            field_type = str(field.get("type", "")).lower()
+            if field_type in {"integer", "decimal", "float", "number"}:
+                numeric.append(name)
+            elif field_type in {"date", "datetime"}:
+                dates.append(name)
+        return required, numeric, dates
+
     async def _commit_schema_target_rows(
         self,
         *,
@@ -566,8 +589,15 @@ class ImportService:
         # Import V2 目前採用「一個檔案 → 1 筆 records + N 筆 items」的混合架構。
         # 因此 staging_rows 不應以「同一檔案內 key 重複」判錯（會把多列 items 全打成 invalid）。
         # 這裡僅做非常保守的欄位檢查；真正的欄位映射/解析放在 commit_job。
-        required_fields: list[str] = []
-        numeric_fields: list[str] = []
+        station = await self._get_generic_station(table.table_code, job.tenant_id)
+        station_schema = (
+            await self._get_active_station_schema_for_station(station.id)
+            if station is not None
+            else None
+        )
+        required_fields, numeric_fields, date_fields = self._station_schema_validation_rules(
+            station_schema
+        )
 
         # lot_no 驗證：一律從內容欄位抓取
         lot_no_pattern = re.compile(r"^\d{7}_\d{2}$")
@@ -601,7 +631,7 @@ class ImportService:
                     continue
 
                 # LOT NO validation — P1/P2/P3 only; generic forms use schema-defined key fields
-                if table.table_code in ("P1", "P2", "P3"):
+                if station_schema is None and table.table_code in ("P1", "P2", "P3"):
                     lot_no_val = self._extract_lot_no_from_row_dict(
                         data if isinstance(data, dict) else {}
                     )
@@ -647,9 +677,18 @@ class ImportService:
                     if field in data and data[field]:
                         try:
                             float(data[field])
-                        except ValueError:
+                        except (TypeError, ValueError):
                             errors.append(
                                 {"field": field, "message": "Value must be numeric"}
+                            )
+
+                for field in date_fields:
+                    if field in data and data[field]:
+                        try:
+                            datetime.fromisoformat(str(data[field]).strip())
+                        except (TypeError, ValueError):
+                            errors.append(
+                                {"field": field, "message": "Value must be an ISO date"}
                             )
 
                 if errors:
@@ -783,6 +822,13 @@ class ImportService:
 
             # Collection for generic forms (non-P1/P2/P3)
             generic_rows_list: list[dict[str, Any]] = []
+            generic_station = await self._get_generic_station(
+                table.table_code, job.tenant_id
+            )
+            schema_driven = (
+                generic_station is not None
+                and not table.table_code.startswith("daihui_")
+            )
 
             # Process by file
             for file_record in job.files:
@@ -807,6 +853,10 @@ class ImportService:
 
                 # Prepare Data
                 row_data = [r.parsed_json for r in rows]
+
+                if schema_driven:
+                    generic_rows_list.extend(row_data)
+                    continue
 
                 if table.table_code == "P1":
                     from app.models.p1_record import P1Record
@@ -1275,11 +1325,10 @@ class ImportService:
                     f"Daihui commit: wrote {inserted_count} rows to {table.table_code}"
                 )
             # Generic form commit → GenericRecord (for non-P1/P2/P3 table codes)
-            if table.table_code not in ("P1", "P2", "P3") and generic_rows_list:
+            if generic_rows_list:
                 from app.models.generic_record import GenericRecord
-                from app.models.station import Station, StationSchema
 
-                station = await self._get_generic_station(table.table_code, job.tenant_id)
+                station = generic_station
                 if station is None:
                     raise ValueError(
                         f"Station not found for table_code={table.table_code!r}, "

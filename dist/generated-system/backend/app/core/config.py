@@ -304,6 +304,10 @@ class Settings(BaseSettings):
         description="Enable generic schema tables (stations/generic_records). False = legacy P1/P2/P3 only.",
         alias="USE_GENERIC_SCHEMA",
     )
+    legacy_table_codes_csv: str = Field(default="", alias="LEGACY_TABLE_CODES_CSV")
+    pdf_winder_table_codes_csv: str = Field(
+        default="", alias="PDF_WINDER_TABLE_CODES_CSV"
+    )
 
     # Database connection pool settings
     database_echo: bool = Field(

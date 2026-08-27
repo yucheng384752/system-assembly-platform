@@ -166,6 +166,14 @@ if ((Test-Path $resolveRecipeTool) -and (Test-Path $generateRegistryTool) -and (
         -ResolvedPlanPath $mvpResolvedPlanPath `
         -OutputDirectory "assembly\backend-registry-mvp" | Out-Null
 
+    $generateMiddlewareRegistryTool = Join-Path $ProjectRoot "tools\generate-backend-middleware-registry.ps1"
+    if (Test-Path $generateMiddlewareRegistryTool) {
+        & $generateMiddlewareRegistryTool `
+            -ProjectRoot $ProjectRoot `
+            -ResolvedPlanPath $mvpResolvedPlanPath `
+            -OutputDirectory "assembly\backend-middleware-registry-mvp" | Out-Null
+    }
+
     $generatedAppRoot = Join-Path $OutputRoot $manifest.sourceSystem.appRoot
     & $applyRegistryTool `
         -ProjectRoot $ProjectRoot `

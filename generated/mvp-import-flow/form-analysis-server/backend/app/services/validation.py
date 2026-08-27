@@ -17,7 +17,6 @@ from app.config.constants import (
     get_material_list,
     get_slitting_machine_list,
 )
-from app.models.record import DataType
 from app.services.csv_field_mapper import CSVFieldMapper
 
 
@@ -651,23 +650,23 @@ class FileValidationService:
         # 5. 驗證資料列
         total_rows, valid_rows, invalid_rows = self.validate_data_rows(df, filename)
 
-        # 6. 判斷資料類型
+        # 6. 判斷資料類型（僅作為回傳標籤，不對應任何資料庫 enum）
         filename_lower = filename.lower()
-        detected_data_type = DataType.P1
+        detected_data_type = "P1"
         detected_columns = list(df.columns)
 
         if filename_lower.startswith("p1_"):
-            detected_data_type = DataType.P1
+            detected_data_type = "P1"
         elif filename_lower.startswith("p2_"):
-            detected_data_type = DataType.P2
+            detected_data_type = "P2"
         elif filename_lower.startswith("p3_"):
-            detected_data_type = DataType.P3
+            detected_data_type = "P3"
         else:
             # 根據欄位內容判斷
             if "P3_No." in detected_columns:
-                detected_data_type = DataType.P3
+                detected_data_type = "P3"
             else:
-                detected_data_type = DataType.P1  # 預設為P1
+                detected_data_type = "P1"  # 預設為P1
 
         # 7. 回傳驗證結果
         return {
@@ -676,7 +675,7 @@ class FileValidationService:
             "invalid_rows": invalid_rows,
             "errors": self.errors,
             "sample_errors": self.get_sample_errors(10),
-            "detected_data_type": detected_data_type.value,
+            "detected_data_type": detected_data_type,
             "detected_columns": detected_columns,
         }
 

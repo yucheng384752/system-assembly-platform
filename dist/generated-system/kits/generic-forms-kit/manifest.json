@@ -1,0 +1,11 @@
+{
+    "kit": "generic-forms-kit",
+    "displayName": "通用表格",
+    "installOrder": 55,
+    "requires": ["python"],
+    "runtimeEnv": [],
+    "scripts": {
+        "windows": "install.ps1",
+        "linux": "install.sh"
+    }
+}

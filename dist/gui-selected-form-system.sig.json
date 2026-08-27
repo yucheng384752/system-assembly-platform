@@ -1,0 +1,5 @@
+{
+  "payload": "{\"schemaVersion\":\"1.0\",\"issuedAt\":\"2026-08-27T08:01:18Z\",\"zipFile\":\"gui-selected-form-system.zip\",\"sha256\":\"ad52b49020a089d2df90dc1634507b59756a1a63b07df75f6bc22388c0518dda\",\"recipe\":\"gui-selected-form-system\"}",
+  "signature": "GhDBvGKWOvklgLbzud+yw2Mw6zMX7SIV/lcFEmPOJcXjRHfUHvP8JywFYzZOX/sOOExt1rVOH57QdNM860lLFHesL/cPhW6bYaD2XwK8NNRoziIK3jE4YUcVfv5LocF7I9wuNLdqDRstA7+fIKHTytc0wJ8tgpAnkVF35rBfiZYgKsfQCJenqRNPP4Ev7y/ZxQGT5m1Y3jsBKf32UIX3DzbMlvR0kgmmwtL3eyDXYyBY2ga3vf/C+rZjgZG/PvaiiyU7AEKxwHMNDmraSFltSi+GOCaVN06QEF3ghQhnJ5rJhWiPi38BkM2XCGNTpaUPsUINETxMiWjtTHR+YwDFcw==",
+  "algorithm": "RSA-PSS-SHA256"
+}

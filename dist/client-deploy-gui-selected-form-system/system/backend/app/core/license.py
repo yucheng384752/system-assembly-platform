@@ -189,9 +189,13 @@ def _tpm_subprocess_env() -> dict:
     env = dict(os.environ)
     if env.get("TPM2TOOLS_TCTI"):
         return env
-    # swtpm 由 01_tpm_full_setup.sh 佈建於 /opt/hiba/tpm/swtpm-state
-    swtpm_marker = Path("/opt/hiba/tpm/swtpm-state/.initialized")
-    if swtpm_marker.exists():
+    # swtpm 由 01_tpm_full_setup.sh 佈建於 /var/lib/swtpm-hiba/swtpm-state；
+    # /opt/hiba/tpm/swtpm-state 為遷移前的舊路徑，保留相容判斷。
+    swtpm_markers = (
+        Path("/var/lib/swtpm-hiba/swtpm-state/.initialized"),
+        Path("/opt/hiba/tpm/swtpm-state/.initialized"),  # legacy path, backward compat
+    )
+    if any(marker.exists() for marker in swtpm_markers):
         env["TPM2TOOLS_TCTI"] = "swtpm:host=127.0.0.1,port=2321"
     return env
 

@@ -30,14 +30,18 @@ from pathlib import Path
 # ── Constants ─────────────────────────────────────────────────────────────────
 _DEFAULT_PORT = 9981
 _HERE = Path(__file__).parent.resolve()
+# 必須與 kits/platform-core-kit/src/backend/app/core/license.py 的
+# _PUBLIC_KEY_PEM（= tools/keys/signing-public-key.pem）保持一致，
+# 否則精靈的授權檢查（/api/check-license）會跟實際部署後端各驗各的公鑰，
+# 精靈端顯示通過、backend 啟動時卻簽章驗證失敗。
 _PUBLIC_KEY_PEM = """-----BEGIN PUBLIC KEY-----
-MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAt1wQ/q3fbmYmd8545NJk
-/qEyMwtmPRaJFpoALjvxEvrfVIe/H58X1UTkGCept4Ata20HUvr1D8LUsr3jxJUi
-48INzbau+HKxwq+fvEaaGPNdgIKZpLOM0TM/g/cdtIvneWsmn4ZEV6q8UTTql7Zp
-5mveUc6KY6QWtqEPOxFwVl7RXWxpF/yBu2S0itRdo5ZNkT/70BbJEuL/PAQbuMlw
-cb9f08cCqoCsARydnO2znpT6f5mMXodZY/5GJIm3UlcXpSFZWOm3T5Gds46SdRUk
-/4X9IffUlLFmHvV0y7sJmQ1WDquDJDuJydls5Y3ByvaokjNdbGhAr9k09QlXy7hy
-EwIDAQAB
+MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEApDmwTDpU8S2865PNym53
+ZkA1lX6O+wV4ZC62saY9+rtELCg++E47ewoaD9x6Yh2vk4BNgNoSyjLd8UI/YePc
+gw0nJJUaUaFY2+BaLHMIwiLunQmo/D3kwlf9ry3UQkF4WjMGUoYSLMt5sdQb32hS
+6VxEO41H7OtH+IpDA9yPmLQWZf4P6Wf+Kxo9+kO0JaqT6ONHbUzUlWHB2YfUypbI
+l6VvpcwinOubRizBftDY1J9Ak9YBmIb5X+agTB+nM5c0OG5jjx5DbwHP7vgFXlCH
+2ysOOq6TXiUAPMPeYv/TtVf2YGVeZofsBhby9n86OGwczjnZi9N8253kjZwmgAo+
+4wIDAQAB
 -----END PUBLIC KEY-----"""
 
 # ── Embedded persistent swtpm setup script ────────────────────────────────────
@@ -246,6 +250,8 @@ _install_state: dict = {
     "log": [],
     "step_idx": -1,
     "success": None,
+    "pythonBin": "",
+    "startScript": "",
 }
 _sys_root_hint: Path | None = None
 _last_heartbeat: float = 0.0  # epoch seconds; 0 = no heartbeat yet (watchdog inactive)
@@ -517,6 +523,116 @@ def _setup_swtpm_linux(log_fn, sys_root: Path) -> bool:
     return True
 
 
+def _setup_nginx_linux(log_fn, sys_root: Path) -> None:
+    """
+    安裝 nginx、寫入反向代理設定（前端靜態檔 + /api/ 轉發至 127.0.0.1:8000）、
+    啟用並套用。Best-effort — 失敗不中止安裝（前端仍可用手動 nginx.conf 設定）。
+    """
+    import shutil
+
+    if hasattr(os, "geteuid") and os.geteuid() != 0:
+        log_fn("  WARN  未以 root 執行 — 跳過 nginx 自動設定")
+        log_fn("  INFO  請參考部署包內 nginx.conf 手動設定，或以 sudo 重新執行安裝精靈")
+        return
+
+    frontend_dist = sys_root / "frontend" / "dist"
+    if not frontend_dist.is_dir():
+        log_fn("  SKIP  找不到 frontend/dist，略過 nginx 設定")
+        return
+
+    if not shutil.which("nginx"):
+        log_fn("  INFO  nginx 未安裝，嘗試自動安裝 (apt-get)...")
+        rc = _run_cmd(["apt-get", "install", "-y", "nginx"], sys_root)
+        if rc != 0:
+            log_fn("  WARN  nginx 安裝失敗（非致命）")
+            log_fn("  INFO  若 apt 卡在中斷的安裝狀態，先執行：sudo dpkg --configure -a")
+            log_fn("  INFO  再重新執行安裝精靈，或手動 apt-get install nginx 後重試")
+            return
+        log_fn("  OK  nginx 安裝完成")
+    else:
+        log_fn("  OK  nginx 已安裝")
+
+    # 複製到獨立、root 擁有的 web root，不要讓 nginx 的 root 直接指向 sys_root。
+    # 部署包通常解壓縮在使用者家目錄下（常見權限 750/770），www-data 無法穿越
+    # 那幾層目錄；直接指向會導致 nginx 讀檔 Permission denied（試過 try_files
+    # 找不到檔案又 fallback 回 /index.html，形成 internal redirection cycle）。
+    web_root = Path("/var/www/form-system")
+    try:
+        if web_root.exists():
+            shutil.rmtree(web_root)
+        shutil.copytree(frontend_dist, web_root)
+        _run_cmd(["chmod", "-R", "a+rX", str(web_root)], sys_root)
+        log_fn(f"  OK  前端靜態檔已複製到 {web_root}（www-data 可讀取，不動家目錄權限）")
+    except OSError as exc:
+        log_fn(f"  WARN  複製前端靜態檔到 {web_root} 失敗：{exc}")
+        return
+
+    site_conf = (
+        "server {\n"
+        "    listen 80;\n"
+        "    server_name _;\n"
+        "\n"
+        f"    root {web_root};\n"
+        "    index index.html;\n"
+        "\n"
+        "    location / {\n"
+        "        try_files $uri $uri/ /index.html;\n"
+        "    }\n"
+        "\n"
+        "    location /api/ {\n"
+        "        proxy_pass http://127.0.0.1:8000;\n"
+        "        proxy_set_header Host $host;\n"
+        "        proxy_set_header X-Real-IP $remote_addr;\n"
+        "        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\n"
+        "    }\n"
+        "}\n"
+    )
+
+    sites_available = Path("/etc/nginx/sites-available/form-system")
+    sites_enabled = Path("/etc/nginx/sites-enabled/form-system")
+    default_enabled = Path("/etc/nginx/sites-enabled/default")
+
+    try:
+        sites_available.write_text(site_conf, encoding="utf-8")
+        log_fn(f"  OK  已寫入 {sites_available}（root={web_root}）")
+    except OSError as exc:
+        log_fn(f"  WARN  寫入 nginx 設定失敗：{exc}")
+        return
+
+    if default_enabled.exists() or default_enabled.is_symlink():
+        try:
+            default_enabled.unlink()
+            log_fn("  OK  已移除預設站台 sites-enabled/default（避免與 form-system 衝突）")
+        except OSError:
+            pass
+
+    if not sites_enabled.exists():
+        try:
+            sites_enabled.symlink_to(sites_available)
+            log_fn(f"  OK  已建立 symlink → {sites_enabled}")
+        except OSError as exc:
+            log_fn(f"  WARN  建立 symlink 失敗：{exc}")
+            return
+    else:
+        log_fn("  SKIP  sites-enabled/form-system（已存在，未覆蓋 symlink）")
+
+    rc = _run_cmd(["nginx", "-t"], sys_root)
+    if rc != 0:
+        log_fn("  WARN  nginx -t 設定檢查失敗，請檢查上方輸出後手動修正")
+        return
+    log_fn("  OK  nginx 設定檢查通過")
+
+    _run_cmd(["systemctl", "enable", "nginx"], sys_root)
+    rc = _run_cmd(["systemctl", "reload", "nginx"], sys_root)
+    if rc != 0:
+        rc = _run_cmd(["systemctl", "restart", "nginx"], sys_root)
+    if rc != 0:
+        log_fn("  WARN  nginx reload/restart 失敗，請手動執行：sudo systemctl restart nginx")
+        return
+    log_fn("  OK  nginx 已啟用並套用設定（開機自啟）")
+    log_fn(f"  OK  前端網址：http://<本機或VM的IP>/")
+
+
 def _append_env_key(sys_root: Path, key: str, value: str, log_fn) -> None:
     """將 key=value 寫入 system/.env 與 system/backend/.env（若已存在則取代該行）。"""
     line = f"{key}='{value}'"
@@ -539,6 +655,61 @@ def _venv_bin(sys_root: Path, name: str) -> Path:
     if platform.system() == "Windows":
         return sys_root / ".venv" / "Scripts" / (name + ".exe")
     return sys_root / ".venv" / "bin" / name
+
+
+def _write_start_script(sys_root: Path, python_bin: Path) -> Path:
+    """在系統目錄根目錄寫入啟動腳本：前端未 build 過才 npm install/build，接著啟動後端。
+    回傳腳本路徑。"""
+    if platform.system() == "Windows":
+        script_path = sys_root / "start.ps1"
+        content = (
+            "$ErrorActionPreference = 'Stop'\n"
+            "$SysRoot = $PSScriptRoot\n"
+            "\n"
+            "if (Test-Path (Join-Path $SysRoot 'frontend')) {\n"
+            "    if (-not (Test-Path (Join-Path $SysRoot 'frontend\\dist'))) {\n"
+            "        Write-Host '[frontend] npm install && npm run build ...'\n"
+            "        Push-Location (Join-Path $SysRoot 'frontend')\n"
+            "        npm install\n"
+            "        npm run build\n"
+            "        Pop-Location\n"
+            "    } else {\n"
+            "        Write-Host '[frontend] dist/ 已存在，略過建置（如需強制重建，刪除 frontend\\dist 後重跑）'\n"
+            "    }\n"
+            "}\n"
+            "\n"
+            f"$PythonExe = '{python_bin}'\n"
+            "if (-not (Test-Path $PythonExe)) { throw \"venv 不存在：$PythonExe\" }\n"
+            "Set-Location (Join-Path $SysRoot 'backend')\n"
+            "Write-Host '[backend] 啟動 uvicorn ...'\n"
+            "& $PythonExe -m uvicorn app.main:app --host 127.0.0.1 --port 8000\n"
+        )
+    else:
+        script_path = sys_root / "start.sh"
+        content = (
+            "#!/usr/bin/env bash\n"
+            "set -euo pipefail\n"
+            'SYS_ROOT="$(cd "$(dirname "$0")" ; pwd)"\n'
+            "\n"
+            'if [ -d "${SYS_ROOT}/frontend" ]; then\n'
+            '    if [ ! -d "${SYS_ROOT}/frontend/dist" ]; then\n'
+            '        echo "[frontend] npm install && npm run build ..."\n'
+            '        (cd "${SYS_ROOT}/frontend" && npm install && npm run build)\n'
+            "    else\n"
+            '        echo "[frontend] dist/ 已存在，略過建置（如需強制重建，刪除 frontend/dist 後重跑）"\n'
+            "    fi\n"
+            "fi\n"
+            "\n"
+            f'PYTHON_BIN="{python_bin}"\n'
+            '[ -f "${PYTHON_BIN}" ] || { echo "[ERROR] venv 不存在：${PYTHON_BIN}" >&2; exit 1; }\n'
+            'cd "${SYS_ROOT}/backend"\n'
+            'echo "[backend] 啟動 uvicorn ..."\n'
+            'exec "${PYTHON_BIN}" -m uvicorn app.main:app --host 127.0.0.1 --port 8000\n'
+        )
+    script_path.write_text(content, encoding="utf-8", newline="\n")
+    if platform.system() != "Windows":
+        script_path.chmod(0o755)
+    return script_path
 
 
 def _fs_supports_symlinks(d: Path) -> bool:
@@ -591,28 +762,65 @@ def _create_venv(sys_root: Path, log_fn) -> int:
     return _run_cmd(cmd, sys_root)
 
 
-def _pg_db_exists(name: str) -> bool:
-    """檢查本機 PostgreSQL 是否已有指定 database（以 postgres 帳號查詢）。"""
+def _sudo_status() -> dict:
+    """
+    回傳目前是否為 root，以及非 root 時是否需要密碼才能使用 sudo
+    （供前端決定安裝精靈是否要索取 sudo 密碼）。
+    """
+    import shutil
+    is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    if is_root or not shutil.which("sudo"):
+        return {"isRoot": is_root, "needPassword": False}
     try:
-        out = subprocess.check_output(
-            ["sudo", "-u", "postgres", "psql", "-tAc",
-             f"SELECT 1 FROM pg_database WHERE datname='{name}';"],
-            text=True, stderr=subprocess.DEVNULL, timeout=15,
+        rc = subprocess.run(["sudo", "-n", "true"], capture_output=True, timeout=5).returncode
+    except Exception:
+        rc = 1
+    return {"isRoot": is_root, "needPassword": rc != 0}
+
+
+def _root_cmd(use_sudo: bool, *args: str) -> list[str]:
+    """組出以 root 權限執行的指令；非 root 時附加 sudo -S -p '' 以便由 stdin 餵密碼。"""
+    return ["sudo", "-S", "-p", "", *args] if use_sudo else list(args)
+
+
+def _pg_cmd(use_sudo: bool, *args: str) -> list[str]:
+    """組出以 postgres 系統帳號執行的指令；非 root 時附加 sudo -S -p '' 以便由 stdin 餵密碼。"""
+    if use_sudo:
+        return ["sudo", "-S", "-p", "", "-u", "postgres", *args]
+    return ["sudo", "-u", "postgres", *args]
+
+
+def _pg_db_exists(name: str, use_sudo: bool, sudo_password: str | None) -> bool:
+    """檢查本機 PostgreSQL 是否已有指定 database（以 postgres 帳號查詢）。"""
+    cmd = _pg_cmd(use_sudo, "psql", "-tAc", f"SELECT 1 FROM pg_database WHERE datname='{name}';")
+    try:
+        proc = subprocess.run(
+            cmd,
+            input=((sudo_password or "") + "\n") if use_sudo else None,
+            text=True, capture_output=True, timeout=15,
         )
-        return out.strip() == "1"
+        return proc.stdout.strip() == "1"
     except Exception:
         return False
 
 
 def _print_manual_pg_sql(log_fn, name: str, user: str, pw: str) -> None:
     log_fn("  INFO  請手動建立 PostgreSQL role 與 database（需 root）：")
-    log_fn(f"    sudo -u postgres psql -c \"CREATE ROLE \\\"{user}\\\" LOGIN PASSWORD '{pw}';\"")
+    log_fn(
+        "    sudo -u postgres psql -c \"DO \\$\\$ BEGIN "
+        f"IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname='{user}') THEN "
+        f"CREATE ROLE \\\"{user}\\\" LOGIN PASSWORD '{pw}'; "
+        f"ELSE ALTER ROLE \\\"{user}\\\" LOGIN PASSWORD '{pw}'; "
+        "END IF; END \\$\\$;\""
+    )
     log_fn(f"    sudo -u postgres createdb -O {user} {name}")
 
 
-def _provision_postgres_linux(env: dict, log_fn) -> bool:
+def _provision_postgres_linux(env: dict, log_fn, sudo_password: str | None = None) -> bool:
     """
-    為本機 PostgreSQL 自動建立 role + database（best-effort，需 root + peer auth）。
+    為本機 PostgreSQL 自動建立 role + database（best-effort）。
+    非 root 執行時透過 sudo 完成安裝／佈建：若系統已設定 passwordless sudo 則直接執行，
+    否則使用安裝精靈畫面上使用者輸入的 sudo 密碼（僅經 stdin 餵給 `sudo -S`，不寫入 log 或磁碟）。
     回傳 True 表示佈建成功或非必要（如 SQLite / 遠端 DB），False 表示需手動處理。
     """
     import shutil
@@ -635,26 +843,27 @@ def _provision_postgres_linux(env: dict, log_fn) -> bool:
         return True
 
     is_root = hasattr(os, "geteuid") and os.geteuid() == 0
+    use_sudo = not is_root
+    # 傳給 sudo -S；passwordless sudo 時內容會被忽略，不影響結果
+    stdin_pw = (sudo_password or "") if use_sudo else None
 
-    # 1. 確認 psql 存在，否則安裝 postgresql（需 root）
+    # 1. 確認 psql 存在，否則安裝 postgresql
+    offline_mode = _read_recipe().get("deploymentMode") == "offline"
     if not shutil.which("psql"):
-        if not is_root:
-            log_fn("  WARN  未安裝 PostgreSQL 且非 root，無法自動安裝")
+        if offline_mode:
+            log_fn("  WARN  離線模式：未安裝 PostgreSQL，請手動安裝後重試")
+            log_fn("  INFO  離線安裝：sudo dpkg -i system/backend/apt-packages/postgresql*.deb")
             _print_manual_pg_sql(log_fn, name, user, pw)
             return False
-        log_fn("  INFO  安裝 PostgreSQL（apt-get）...")
-        _run_cmd(["apt-get", "update", "-q"], Path("/tmp"))
-        rc = _run_cmd(["apt-get", "install", "-y", "postgresql"], Path("/tmp"))
+        log_fn(f"  INFO  安裝 PostgreSQL（apt-get{'，透過 sudo' if use_sudo else ''}）...")
+        _run_cmd(_root_cmd(use_sudo, "apt-get", "update", "-q"), Path("/tmp"), stdin_pw)
+        rc = _run_cmd(_root_cmd(use_sudo, "apt-get", "install", "-y", "postgresql"), Path("/tmp"), stdin_pw)
         if rc != 0:
-            log_fn("  WARN  PostgreSQL 安裝失敗")
+            log_fn("  WARN  PostgreSQL 安裝失敗" + ("（sudo 密碼可能不正確或未提供）" if use_sudo else ""))
             _print_manual_pg_sql(log_fn, name, user, pw)
             return False
-        _run_cmd(["service", "postgresql", "start"], Path("/tmp"))
-
-    if not is_root:
-        log_fn("  WARN  非 root，無法以 postgres 帳號建立 role/database")
-        _print_manual_pg_sql(log_fn, name, user, pw)
-        return False
+        log_fn("  OK  PostgreSQL 套件安裝完成")
+        _run_cmd(_root_cmd(use_sudo, "service", "postgresql", "start"), Path("/tmp"), stdin_pw)
 
     # 2. 建立 / 更新 role（idempotent）
     role_sql = (
@@ -665,18 +874,18 @@ def _provision_postgres_linux(env: dict, log_fn) -> bool:
         f"END IF; END $$;"
     )
     rc = _run_cmd(
-        ["sudo", "-u", "postgres", "psql", "-v", "ON_ERROR_STOP=1", "-c", role_sql],
-        Path("/tmp"),
+        _pg_cmd(use_sudo, "psql", "-v", "ON_ERROR_STOP=1", "-c", role_sql),
+        Path("/tmp"), stdin_pw,
     )
     if rc != 0:
-        log_fn("  WARN  建立 PostgreSQL role 失敗")
+        log_fn("  WARN  建立 PostgreSQL role 失敗" + ("（sudo 密碼可能不正確或未提供）" if use_sudo else ""))
         _print_manual_pg_sql(log_fn, name, user, pw)
         return False
     log_fn(f"  OK  PostgreSQL role '{user}' 就緒")
 
     # 3. 建立 database（CREATE DATABASE 不可在 transaction 內，故先檢查再建）
-    if not _pg_db_exists(name):
-        rc = _run_cmd(["sudo", "-u", "postgres", "createdb", "-O", user, name], Path("/tmp"))
+    if not _pg_db_exists(name, use_sudo, sudo_password):
+        rc = _run_cmd(_pg_cmd(use_sudo, "createdb", "-O", user, name), Path("/tmp"), stdin_pw)
         if rc != 0:
             log_fn("  WARN  建立 PostgreSQL database 失敗")
             _print_manual_pg_sql(log_fn, name, user, pw)
@@ -699,15 +908,29 @@ def _write_env(sys_root: Path, values: dict) -> None:
         (backend_dir / ".env").write_text(content, encoding="utf-8")
 
 
-def _run_cmd(cmd: list[str], cwd: Path) -> int:
+def _run_cmd(cmd: list[str], cwd: Path, sudo_password: str | None = None) -> int:
+    """
+    執行子行程並將輸出即時寫入安裝 log。
+    若 cmd 以 "sudo" 開頭且提供 sudo_password，密碼會經 stdin 餵給 `sudo -S`
+    （呼叫端需自行在 cmd 中加入 "-S" "-p" ""）；密碼不會寫入 log 或磁碟。
+    """
+    needs_stdin = sudo_password is not None and cmd and cmd[0] == "sudo"
     proc = subprocess.Popen(
         cmd,
         cwd=str(cwd),
+        stdin=subprocess.PIPE if needs_stdin else None,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         errors="replace",
     )
+    if needs_stdin:
+        assert proc.stdin is not None
+        try:
+            proc.stdin.write(sudo_password + "\n")
+            proc.stdin.flush()
+        finally:
+            proc.stdin.close()
     assert proc.stdout is not None
     for line in proc.stdout:
         with _lock:
@@ -716,9 +939,9 @@ def _run_cmd(cmd: list[str], cwd: Path) -> int:
     return proc.returncode
 
 
-def _install_worker(env: dict, sys_root: Path) -> None:
+def _install_worker(env: dict, sys_root: Path, sudo_password: str | None = None) -> None:
     with _lock:
-        _install_state.update({"running": True, "log": [], "success": None, "step_idx": -1})
+        _install_state.update({"running": True, "log": [], "success": None, "step_idx": -1, "pythonBin": "", "startScript": ""})
 
     def log(msg: str) -> None:
         with _lock:
@@ -751,11 +974,26 @@ def _install_worker(env: dict, sys_root: Path) -> None:
         log("  OK  .venv 建立完成")
 
         # Step 2: pip install
-        step(2, "安裝後端相依套件 (可能需要數分鐘)")
+        recipe = _read_recipe()
+        offline_mode = recipe.get("deploymentMode") == "offline"
+        step(2, "安裝後端相依套件" + (" (離線模式)" if offline_mode else " (可能需要數分鐘)"))
         pip = _venv_bin(sys_root, "pip")
         _run_cmd([str(pip), "install", "-q", "--upgrade", "pip"], sys_root)
         req = sys_root / "backend" / "requirements.txt"
-        rc = _run_cmd([str(pip), "install", "-r", str(req)], sys_root)
+        wheels_dir = sys_root / "backend" / "wheels"
+        if offline_mode and wheels_dir.is_dir():
+            log(f"  INFO  離線模式：使用本地 wheels 目錄 {wheels_dir}")
+            pip_cmd = [str(pip), "install",
+                       "--find-links", str(wheels_dir),
+                       "--no-index",
+                       "-r", str(req)]
+        elif offline_mode:
+            log("  WARN  離線模式但 wheels/ 目錄不存在，回退至聯網安裝")
+            log("  INFO  請先執行 tools/prepare-offline.ps1 預先下載依賴套件")
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        else:
+            pip_cmd = [str(pip), "install", "-r", str(req)]
+        rc = _run_cmd(pip_cmd, sys_root)
         if rc != 0:
             raise RuntimeError(f"pip install 失敗 (exit {rc})")
         log("  OK  相依套件安裝完成")
@@ -767,7 +1005,7 @@ def _install_worker(env: dict, sys_root: Path) -> None:
 
         # 3a. PostgreSQL 佈建（本機 PostgreSQL 時自動建立 role + database）
         if platform.system() == "Linux":
-            if not _provision_postgres_linux(env, log):
+            if not _provision_postgres_linux(env, log, sudo_password):
                 log("  WARN  PostgreSQL 未自動佈建 — 請依上方指令手動建立後重試")
 
         if (bd / "alembic.ini").exists():
@@ -781,14 +1019,23 @@ def _install_worker(env: dict, sys_root: Path) -> None:
             raise RuntimeError(f"資料庫初始化失敗 (exit {rc})")
         log("  OK  資料庫就緒")
 
+        # Step 3.5: nginx reverse proxy (Linux only, best-effort — does not abort on failure)
+        if platform.system() == "Linux":
+            log(f"\n{'='*60}\n  nginx 反向代理設定\n{'='*60}")
+            _setup_nginx_linux(log, sys_root)
+
         # Done
+        start_script = _write_start_script(sys_root, python)
+
         log("\n" + "="*60)
         log("  安裝完成！")
         log("="*60)
         log(f"\n  系統目錄  : {sys_root}")
-        log(f"  啟動指令  : {python} -m uvicorn app.main:app --host 127.0.0.1 --port 8000")
+        log(f"  啟動腳本  : {start_script}")
         log(f"  工作目錄  : {bd}")
         with _lock:
+            _install_state["pythonBin"] = str(python)
+            _install_state["startScript"] = str(start_script)
             _install_state["success"] = True
 
     except Exception as exc:  # noqa: BLE001
@@ -859,10 +1106,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                     checks.append({"tool": tool, "ok": False, "version": "not found"})
             self._send_json({"checks": checks})
 
+        elif path == "/api/sudo-status":
+            self._send_json(_sudo_status())
+
         elif path == "/api/generate-key":
             self._send_json({"key": _generate_secret()})
 
         elif path == "/api/sys-root":
+            global _sys_root_hint
             qs = self.path.partition("?")[2]
             custom_path: str | None = None
             for part in qs.split("&"):
@@ -872,6 +1123,12 @@ class _Handler(http.server.BaseHTTPRequestHandler):
             if custom_path:
                 p = Path(custom_path)
                 found = (p / "backend" / "requirements.txt").exists()
+                if found:
+                    # Remember this as the effective sys root so later steps
+                    # (e.g. /api/check-license) that call _find_sys_root()
+                    # without a path see it too — otherwise a manually-typed
+                    # path here validates but is silently forgotten later.
+                    _sys_root_hint = p.resolve()
                 self._send_json({"found": found, "path": str(p.resolve()) if found else str(p)})
             else:
                 sr = _find_sys_root()
@@ -999,6 +1256,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                     "running": _install_state["running"],
                     "step_idx": _install_state["step_idx"],
                     "success": _install_state["success"],
+                    "pythonBin": _install_state["pythonBin"],
+                    "startScript": _install_state["startScript"],
                 }
             self._send_json({"lines": lines, "offset": offset + len(lines), **snap})
 
@@ -1017,7 +1276,14 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 s.close()
                 self._send_json({"ok": True, "msg": f"已連線到 {host}:{port}"})
             except Exception as e:
-                self._send_json({"ok": False, "msg": str(e)})
+                msg = str(e)
+                if host in ("localhost", "127.0.0.1", "::1"):
+                    msg = (
+                        f"{msg}｜{host}:{port} 沒有 PostgreSQL 在監聽。"
+                        f"安裝步驟會在 Linux 上自動安裝 PostgreSQL 並建立資料庫"
+                        f"（需以 sudo 執行本精靈）；若只是測試，可將密碼留空改用 SQLite。"
+                    )
+                self._send_json({"ok": False, "msg": msg})
 
         elif path == "/api/install":
             with _lock:
@@ -1036,7 +1302,8 @@ class _Handler(http.server.BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "msg": "找不到 system 目錄"})
                 return
             env = body.get("env", {})
-            threading.Thread(target=_install_worker, args=(env, sys_root), daemon=True).start()
+            sudo_password = body.get("sudoPassword") or None
+            threading.Thread(target=_install_worker, args=(env, sys_root, sudo_password), daemon=True).start()
             self._send_json({"ok": True})
 
         elif path == "/api/heartbeat":
@@ -1466,6 +1733,11 @@ a { color: var(--primary); }
     <div class="card-sub">請確認以下設定正確，點擊「開始安裝」後將寫入 .env 並執行安裝。</div>
     <table class="review-table" id="review-table"></table>
     <div id="license-check-result" style="display:none;margin:16px 0;padding:12px 14px;border-radius:6px;font-size:13px;"></div>
+    <div class="field" id="sudo-pass-field" style="display:none">
+      <label>sudo 密碼</label>
+      <input id="sudo-pass" type="password" placeholder="此機器需要 sudo 權限以安裝 PostgreSQL">
+      <div class="hint">偵測到尚未安裝 PostgreSQL 且目前非 root 執行。密碼僅在安裝當下透過本機（127.0.0.1）傳遞給 sudo，不會寫入設定檔或記錄。</div>
+    </div>
     <div class="nav-row">
       <button class="btn btn-secondary" onclick="goStep(4)">&larr; 上一步</button>
       <button class="btn btn-primary" id="btn-start-install" onclick="startInstall()">&#9658; 開始安裝</button>
@@ -1491,12 +1763,12 @@ a { color: var(--primary); }
       <div class="done-box ok">
         <div class="done-icon">&#10003;</div>
         <h3>安裝成功！</h3>
-        <p>Form System 已成功安裝，請使用以下指令啟動後端服務。</p>
+        <p>Form System 已成功安裝，系統目錄根目錄已建立啟動腳本，執行以下指令即可啟動。</p>
       </div>
-      <div style="font-size:14px;font-weight:600;margin-bottom:8px">啟動後端：</div>
+      <div style="font-size:14px;font-weight:600;margin-bottom:8px">啟動指令：</div>
       <div class="cmd-box" id="start-cmd"></div>
       <div style="margin-top:20px;font-size:14px;color:var(--muted)">
-        後端啟動後，前端位於 <code>system/frontend/dist/</code>，透過 nginx 或 <code>npm run dev</code>（僅限測試）提供服務。
+        腳本會自動判斷前端是否已建置（<code>frontend/dist/</code> 不存在時才執行 <code>npm install && npm run build</code>），接著啟動後端；完成後透過 nginx 或 <code>npm run dev</code>（僅限測試）提供前端服務。
       </div>
     </div>
     <div id="done-error" style="display:none">
@@ -1737,7 +2009,7 @@ function goStep(n) {
   updateStepBar();
   window.scrollTo(0, 0);
   if (n === 1) runPrereqs();
-  if (n === 5) { buildReview(); checkMachineId(); }
+  if (n === 5) { buildReview(); checkMachineId(); checkSudoStatus(); }
 }
 
 function goNext() { goStep(S.currentStep + 1); }
@@ -1866,6 +2138,18 @@ function buildReview() {
   ).join('');
 }
 
+async function checkSudoStatus() {
+  const field = document.getElementById('sudo-pass-field');
+  const usingPostgres = !!document.getElementById('db-pass').value;
+  if (!usingPostgres) { field.style.display = 'none'; return; }
+  try {
+    const data = await fetch('/api/sudo-status').then(r => r.json());
+    field.style.display = (!data.isRoot && data.needPassword) ? 'block' : 'none';
+  } catch (e) {
+    field.style.display = 'none';
+  }
+}
+
 // ── Step 6: Install ───────────────────────────────────────────────────────────
 function buildEnv() {
   const host = document.getElementById('db-host').value.trim();
@@ -1904,10 +2188,13 @@ async function startInstall() {
   S.logOffset = 0;
 
   const env = buildEnv();
+  const sudoPassEl = document.getElementById('sudo-pass');
+  const sudoPassword = sudoPassEl.value || undefined;
+  sudoPassEl.value = ''; // 讀取後立即清除，避免密碼久留在 DOM
   const resp = await fetch('/api/install', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ env, sysRoot: S.sysRoot }),
+    body: JSON.stringify({ env, sysRoot: S.sysRoot, sudoPassword }),
   }).then(r => r.json());
 
   if (!resp.ok) {
@@ -1950,23 +2237,32 @@ function pollLog() {
         ['ist-0','ist-1','ist-2','ist-3'].forEach(id =>
           document.getElementById(id).classList.add(data.success ? 'done' : 'err')
         );
-        setTimeout(() => showDone(data.success), 600);
+        setTimeout(() => showDone(data.success, data.pythonBin, data.startScript), 600);
       }
     })
     .catch(err => console.warn('poll error:', err));
 }
 
-function showDone(success) {
+function showDone(success, pythonBin, startScript) {
   goStep(7);
   document.getElementById('done-success').style.display = success ? 'block' : 'none';
   document.getElementById('done-error').style.display   = success ? 'none'  : 'block';
   if (success && S.sysRoot) {
-    const py = S.sysRoot + (navigator.platform.toLowerCase().includes('win') ? '\\.venv\\Scripts\\python.exe' : '/.venv/bin/python');
-    const frontendCmd = '# 首次需建置前端（一次性）\n' +
-      'cd ' + S.sysRoot + '/frontend && npm install && npm run build\n\n' +
-      '# 啟動後端（前端建置完成後即可看到登入頁面）\n' +
-      'cd ' + S.sysRoot + '/backend && ' + py + ' -m uvicorn app.main:app --host 127.0.0.1 --port 8000';
-    document.getElementById('start-cmd').textContent = frontendCmd;
+    // startScript / pythonBin 皆由伺服器（實際執行安裝的機器）回傳，不可用瀏覽器端
+    // navigator.platform 猜測，否則遠端操作（例如從 Windows 瀏覽器連到 Linux 主機）
+    // 會顯示錯誤 OS 的路徑格式。腳本副檔名本身即代表伺服器 OS，用來決定執行方式。
+    let cmd;
+    if (startScript) {
+      const isWindows = startScript.toLowerCase().endsWith('.ps1');
+      cmd = isWindows
+        ? 'powershell -ExecutionPolicy Bypass -File "' + startScript + '"'
+        : '"' + startScript + '"';
+    } else {
+      // 理論上不會發生：安裝成功卻沒有腳本路徑時，退回組出手動指令
+      const py = pythonBin || (S.sysRoot + '/.venv/bin/python');
+      cmd = 'cd ' + S.sysRoot + '/backend && ' + py + ' -m uvicorn app.main:app --host 127.0.0.1 --port 8000';
+    }
+    document.getElementById('start-cmd').textContent = cmd;
   }
 }
 

@@ -1,0 +1,15 @@
+{
+  "kit": "mod-subscription-kit",
+  "provides": {
+    "api": [
+      { "capability": "subscriptions.manage", "method": "GET", "path": "/api/mod-subscription" }
+    ],
+    "db": [
+      { "capability": "db.subscriptions" }
+    ]
+  },
+  "consumes": {
+    "api": [],
+    "db": ["db.tenants.read"]
+  }
+}

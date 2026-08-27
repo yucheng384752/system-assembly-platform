@@ -33,7 +33,7 @@ function buildUploadedFile(file: File, availableCodes: string[] = []): UploadedF
     ? detectTableCode(file.name, availableCodes)
     : detectFileType(file.name);
   const type = detected ?? "UNKNOWN";
-  const lotNo = type === "P1" || type === "P2" ? deriveLotNoFromFilename(file.name) : "";
+  const lotNo = type === "PDF" || type === "UNKNOWN" ? "" : deriveLotNoFromFilename(file.name);
   const id = `${file.name}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
   return {

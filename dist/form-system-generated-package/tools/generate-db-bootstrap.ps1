@@ -39,7 +39,7 @@ import importlib
 import json
 from pathlib import Path
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 
 from app.core.database import Base, close_db, init_db
 
@@ -70,6 +70,56 @@ def import_model_modules() -> list[str]:
         imported.append(module_name)
 
     return imported
+
+
+def _schema_columns(schema_json: dict[str, object]) -> list[str]:
+    fields = schema_json.get("fields") or schema_json.get("columns") or []
+    columns: list[str] = []
+    for field in fields:
+        if not isinstance(field, dict):
+            continue
+        column = field.get("fieldKey") or field.get("name")
+        if column:
+            columns.append(str(column))
+    return columns
+
+
+_META_COLS: list[tuple[str, str]] = [
+    ('"_tenant_id"',     "UUID"),
+    ('"_import_job_id"', "UUID"),
+    ('"_row_index"',     "INTEGER"),
+    ('"_imported_at"',   "TIMESTAMPTZ DEFAULT NOW()"),
+]
+
+
+def create_schema_target_tables(connection, schema_versions: list[dict[str, object]]) -> int:
+    created = 0
+    for version in schema_versions:
+        table_code = version.get("formCode") or version.get("tableCode")
+        if not isinstance(table_code, str) or not table_code.replace("_", "").isalnum():
+            continue
+        schema_json = version.get("schemaJson") or {}
+        if not isinstance(schema_json, dict):
+            continue
+        columns = [c for c in _schema_columns(schema_json) if c.replace("_", "").isalnum()]
+        if not columns:
+            continue
+        biz_sql  = ", ".join(f'"{c}" TEXT' for c in columns)
+        meta_sql = ", ".join(f"{col} {typ}" for col, typ in _META_COLS)
+        connection.execute(text(
+            f'CREATE TABLE IF NOT EXISTS "{table_code}" ({biz_sql}, {meta_sql})'
+        ))
+        for col, typ in _META_COLS:
+            connection.execute(text(
+                f'ALTER TABLE "{table_code}" ADD COLUMN IF NOT EXISTS {col} {typ}'
+            ))
+        safe = table_code
+        connection.execute(text(
+            f'CREATE UNIQUE INDEX IF NOT EXISTS "uq_{safe}_job_row" '
+            f'ON "{table_code}" ("_tenant_id", "_import_job_id", "_row_index")'
+        ))
+        created += 1
+    return created
 
 
 def seed_schema_contracts(connection) -> dict[str, int]:
@@ -225,11 +275,14 @@ def seed_schema_contracts(connection) -> dict[str, int]:
                     )
                     seeded_station_schemas += 1
 
+    created_schema_tables = create_schema_target_tables(connection, schema_versions)
+
     return {
         "seededFormDefinitions": seeded_forms,
         "seededSchemaVersions": seeded_versions,
         "seededStations": seeded_stations,
         "seededStationSchemas": seeded_station_schemas,
+        "createdSchemaTargetTables": created_schema_tables,
     }
 
 

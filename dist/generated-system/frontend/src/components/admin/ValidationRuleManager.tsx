@@ -1,0 +1,1 @@
+export function ValidationRuleManager() { return <div>Validation Rule Manager</div> }

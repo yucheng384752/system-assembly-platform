@@ -24,24 +24,30 @@ import time
 import uuid
 import zipfile
 
+
+def _require_env(name: str) -> str:
+    value = os.environ.get(name)
+    if not value:
+        raise SystemExit(f"{name} environment variable is required (see tools/README-vm-scripts.md)")
+    return value
 import paramiko
 
 # ── Config ────────────────────────────────────────────────────────────────────
 VM_HOST = "192.168.200.33"
 VM_USER = "gslab"
-VM_PASS = "qqq123"
+VM_PASS = _require_env("VM_SSH_PASSWORD")
 DB_USER = "gslab"
-DB_PASS = "qqq123"
+DB_PASS = _require_env("VM_SSH_PASSWORD")
 DB_NAME = "formdb_wintest"
 TUNNEL_PORT = 15432
 
-ZIP_PATH = os.path.join(
+ZIP_PATH = os.environ.get("WIN_TEST_ZIP_PATH") or os.path.join(
     os.path.dirname(__file__), "..", "dist", "client-deploy-mvp-import-flow.zip"
 )
 ZIP_PATH = os.path.abspath(ZIP_PATH)
 
 TEMP_DIR = r"C:\Temp\form-win-test"
-BACKEND_PORT = 8000
+BACKEND_PORT = int(os.environ.get("WIN_TEST_BACKEND_PORT") or 8000)
 BACKEND_URL = f"http://127.0.0.1:{BACKEND_PORT}"
 
 SECRET_KEY = "test_secret_key_at_least_32_characters_long"
@@ -216,7 +222,7 @@ class SSHTunnel:
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 ssh = paramiko.SSHClient()
-ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+ssh.set_missing_host_key_policy(paramiko.WarningPolicy())
 ssh.connect(VM_HOST, username=VM_USER, password=VM_PASS, timeout=15)
 p(f"Connected to {VM_HOST}")
 
@@ -269,6 +275,21 @@ try:
     backend_dir = os.path.join(sys_dir, "backend")
     check("system dir exists", os.path.isdir(sys_dir), sys_dir)
     check("requirements.txt exists", os.path.isfile(os.path.join(backend_dir, "requirements.txt")), "")
+
+    # deploy.ps1 hardcodes uvicorn's port; repoint it when WIN_TEST_BACKEND_PORT
+    # overrides the default (e.g. to avoid a port already bound by another
+    # process on this machine).
+    if BACKEND_PORT != 8000:
+        deploy_ps1_path = os.path.join(TEMP_DIR, "deploy.ps1")
+        with open(deploy_ps1_path, encoding="utf-8") as f:
+            deploy_src = f.read()
+        old_port = '"--host", "127.0.0.1", "--port", "8000"'
+        new_port = f'"--host", "127.0.0.1", "--port", "{BACKEND_PORT}"'
+        check("found uvicorn port to repoint in deploy.ps1", old_port in deploy_src, "")
+        deploy_src = deploy_src.replace(old_port, new_port, 1)
+        with open(deploy_ps1_path, "w", encoding="utf-8") as f:
+            f.write(deploy_src)
+        p(f"  Repointed deploy.ps1 uvicorn port to {BACKEND_PORT}")
 
     # ── Phase 4: Write .env ──────────────────────────────────────────────────
     section("Phase 4: Write .env")

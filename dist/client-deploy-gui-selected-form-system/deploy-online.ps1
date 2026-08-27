@@ -3,7 +3,7 @@
 .SYNOPSIS
   Form System Kit Composer - Server Deploy Script (Windows)
   Recipe : gui-selected-form-system
-  Built  : 2026-07-01 18:11
+  Built  : 2026-08-27 16:01
 
 .DESCRIPTION
   One-shot deploy: creates venv, installs deps, migrates DB, starts backend.
@@ -201,7 +201,16 @@ if (-not $SkipFrontend) {
         Write-Host "=== Building frontend ==="
         Push-Location "$SysRoot\frontend"
         try {
-            npm install --silent
+            $npmArgs = @()
+            $npmCache = Join-Path (Get-Location) ".npm-cache"
+            if (Test-Path $npmCache) {
+                $npmArgs += @("--cache", $npmCache, "--offline")
+            }
+            if (Test-Path "package-lock.json") {
+                npm ci --silent @npmArgs
+            } else {
+                npm install --silent @npmArgs
+            }
             npm run build
         } finally { Pop-Location }
         Write-Host "  OK frontend built"

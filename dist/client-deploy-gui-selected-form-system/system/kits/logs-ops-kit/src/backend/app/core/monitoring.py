@@ -1,10 +1,11 @@
 """
-logs-ops-kit monitoring — always-on local persistence.
+logs-ops-kit monitoring — local persistence plus optional remote heartbeat.
 
 Overrides the platform-core-kit no-op. Every report_user_action call and
 every structlog WARNING+ event is persisted to system_logs without blocking
 async route handlers. Uses a daemon background thread + queue so callers
-never wait on I/O.
+never wait on I/O. Remote heartbeat is disabled unless init_monitoring receives
+a non-empty server URL; user actions and structlog events are never forwarded.
 """
 from __future__ import annotations
 
@@ -26,6 +27,10 @@ _worker_thread: threading.Thread | None = None
 _running = False
 _initialized = False
 _init_lock = threading.Lock()
+_monitor_client: Any = None
+_heartbeat_thread: threading.Thread | None = None
+_heartbeat_stop = threading.Event()
+_heartbeat_lock = threading.Lock()
 
 # ---------------------------------------------------------------------------
 # DDL — database-agnostic (SQLite uses TEXT timestamps; PG uses TIMESTAMPTZ)
@@ -40,6 +45,7 @@ CREATE TABLE IF NOT EXISTS system_logs (
     state           TEXT        NOT NULL,
     describe        TEXT        NOT NULL DEFAULT '',
     metadata_json   TEXT        NOT NULL DEFAULT '{}',
+    tenant_id       TEXT        NULL,
     created_at      TEXT        NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))
 )
 """
@@ -54,13 +60,19 @@ CREATE TABLE IF NOT EXISTS system_logs (
     state           TEXT        NOT NULL,
     describe        TEXT        NOT NULL DEFAULT '',
     metadata_json   TEXT        NOT NULL DEFAULT '{}',
+    tenant_id       TEXT        NULL,
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
 )
 """
 
+# Best-effort migration for tables created before tenant_id existed. SQLite/PG both accept
+# bare ADD COLUMN; neither reliably supports "IF NOT EXISTS" for it (PG needs 9.6+, SQLite never
+# does), so the caller must swallow the "column already exists" error on a second run.
+_ALTER_ADD_TENANT_ID = "ALTER TABLE system_logs ADD COLUMN tenant_id TEXT"
+
 _INSERT_SQL = """
-INSERT INTO system_logs (id, timestamp, log_type, level, action, state, describe, metadata_json)
-VALUES (:id, :timestamp, :log_type, :level, :action, :state, :describe, :metadata_json)
+INSERT INTO system_logs (id, timestamp, log_type, level, action, state, describe, metadata_json, tenant_id)
+VALUES (:id, :timestamp, :log_type, :level, :action, :state, :describe, :metadata_json, :tenant_id)
 """
 
 
@@ -106,6 +118,15 @@ def _do_init(db_url: str) -> None:
         with engine.connect() as conn:
             conn.execute(text(ddl))
             conn.commit()
+        try:
+            # Separate connection/transaction: a pre-existing table (created before tenant_id
+            # existed) makes this fail with "column already exists" — that failure must not
+            # abort the CREATE TABLE transaction above, which already committed successfully.
+            with engine.connect() as conn:
+                conn.execute(text(_ALTER_ADD_TENANT_ID))
+                conn.commit()
+        except Exception:
+            pass
         factory = sessionmaker(bind=engine, autoflush=False, autocommit=False)
         _running = True
         _worker_thread = threading.Thread(
@@ -153,8 +174,13 @@ def _now_iso() -> str:
 # ---------------------------------------------------------------------------
 
 def init_monitoring(*, server_url: str = "", source: str | None = None) -> None:
-    """Called from app/main.py on startup. Forces immediate DB init."""
+    """Initialize local persistence and the opt-in heartbeat client."""
+    global _monitor_client
     _ensure_initialized()
+    if server_url:
+        from app.core.log_client import LogCollectClient
+
+        _monitor_client = LogCollectClient(server_url, source or "form-analysis-server")
     if source:
         _enqueue({
             "id": str(uuid.uuid4()),
@@ -165,10 +191,13 @@ def init_monitoring(*, server_url: str = "", source: str | None = None) -> None:
             "state": "success",
             "describe": f"source={source}",
             "metadata_json": json.dumps({"source": source, "server_url": server_url}),
+            "tenant_id": None,  # platform-level lifecycle event, not attributable to a tenant
         })
 
 
 def start_heartbeat(interval_seconds: int | float = 30) -> None:
+    """Start remote heartbeat delivery when a monitor client is configured."""
+    global _heartbeat_thread
     _ensure_initialized()
     _enqueue({
         "id": str(uuid.uuid4()),
@@ -179,10 +208,37 @@ def start_heartbeat(interval_seconds: int | float = 30) -> None:
         "state": "success",
         "describe": f"interval={interval_seconds}s",
         "metadata_json": json.dumps({"interval_seconds": interval_seconds}),
+        "tenant_id": None,
     })
+    if _monitor_client is None:
+        return
+
+    interval = max(float(interval_seconds), 1.0)
+    with _heartbeat_lock:
+        if _heartbeat_thread and _heartbeat_thread.is_alive():
+            return
+        _heartbeat_stop.clear()
+
+        def _heartbeat_loop() -> None:
+            while not _heartbeat_stop.is_set():
+                _monitor_client.send_heartbeat()
+                _heartbeat_stop.wait(interval)
+
+        _heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            daemon=True,
+            name="remote-heartbeat",
+        )
+        _heartbeat_thread.start()
 
 
 def stop_heartbeat() -> None:
+    """Stop remote heartbeat delivery and the local shutdown writer."""
+    global _heartbeat_thread, _running
+    _heartbeat_stop.set()
+    if _heartbeat_thread and _heartbeat_thread.is_alive():
+        _heartbeat_thread.join(timeout=5.0)
+    _heartbeat_thread = None
     _enqueue({
         "id": str(uuid.uuid4()),
         "timestamp": _now_iso(),
@@ -192,8 +248,8 @@ def stop_heartbeat() -> None:
         "state": "success",
         "describe": "heartbeat stopped at shutdown",
         "metadata_json": "{}",
+        "tenant_id": None,
     })
-    global _running
     _running = False
 
 
@@ -205,6 +261,11 @@ def report_user_action(
     level: str = "INFO",
     **metadata: Any,
 ) -> None:
+    # tenant_id is not a formal parameter so this keeps the exact signature of the
+    # platform-core-kit no-op it overrides — callers that want the row attributed to a
+    # tenant pass tenant_id=tenant.id like any other metadata kwarg; it is pulled out of
+    # metadata_json into its own column here instead of staying buried in JSON.
+    tenant_id = metadata.pop("tenant_id", None)
     _ensure_initialized()
     log_level_int = getattr(logging, str(level or "INFO").upper(), logging.INFO)
     _logger.log(
@@ -223,6 +284,7 @@ def report_user_action(
         "state": state,
         "describe": describe,
         "metadata_json": json.dumps(metadata, default=str),
+        "tenant_id": str(tenant_id) if tenant_id is not None else None,
     })
 
 
@@ -243,6 +305,11 @@ def make_structlog_processor(min_level: str = "WARNING") -> Callable[..., Any]:
             has_exc = bool(event_dict.get("exc_info") or event_dict.get("exception"))
             _ensure_initialized()
             log_type = "system_error" if level_int >= logging.ERROR else "system_warning"
+            # Most log lines have no request/tenant context (startup, background workers).
+            # Pick up tenant_id only if something upstream already bound it into the event
+            # dict (e.g. a future structlog contextvars binding in request middleware);
+            # otherwise the row is platform-level and stays unattributed rather than guessed.
+            tenant_id = event_dict.get("tenant_id")
             _enqueue({
                 "id": str(uuid.uuid4()),
                 "timestamp": _now_iso(),
@@ -251,9 +318,10 @@ def make_structlog_processor(min_level: str = "WARNING") -> Callable[..., Any]:
                 "action": "structlog_event",
                 "state": "error" if has_exc else "warning",
                 "describe": event,
+                "tenant_id": str(tenant_id) if tenant_id is not None else None,
                 "metadata_json": json.dumps(
                     {k: str(v) for k, v in event_dict.items()
-                     if k not in ("event", "exc_info", "exception", "_record")},
+                     if k not in ("event", "exc_info", "exception", "_record", "tenant_id")},
                     default=str,
                 ),
             })

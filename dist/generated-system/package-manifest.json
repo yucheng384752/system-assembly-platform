@@ -1,5 +1,5 @@
 ﻿{
-    "generatedAt":  "2026-07-01T18:11:20",
+    "generatedAt":  "2026-08-27T16:01:17",
     "sourceRecipe":  "gui-selected-form-system",
     "resolvedKitOrder":  [
                              "platform-core-kit",
@@ -11,7 +11,8 @@
                              "analytics-kit",
                              "station-admin-kit",
                              "audit-edit-kit",
-                             "logs-ops-kit"
+                             "logs-ops-kit",
+                             "generic-forms-kit"
                          ],
     "database":  {
                      "engine":  "postgresql",

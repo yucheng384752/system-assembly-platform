@@ -44,7 +44,8 @@
                      "backend":  {
                                      "routers":  [
                                                      "backend/app/api/routes_health.py",
-                                                     "backend/app/api/routes_kit_broker.py"
+                                                     "backend/app/api/routes_kit_broker.py",
+                                                     "backend/app/api/routes_admin_permissions.py"
                                                  ],
                                      "core":  [
                                                   "backend/app/main.py",
@@ -55,6 +56,8 @@
                                                   "backend/app/core/kit_contracts.py",
                                                   "backend/app/core/kit_broker.py",
                                                   "backend/app/core/db_capabilities.py",
+                                                  "backend/app/core/permission_config.py",
+                                                  "backend/app/core/endpoint_permission_middleware.py",
                                                   "backend/app/api/deps.py"
                                               ],
                                      "services":  [
@@ -81,8 +84,23 @@
                                                                                  "Kit Broker"
                                                                              ],
                                                                     "tenantScoped":  false
+                                                                },
+                                                                {
+                                                                    "module":  "app.api.routes_admin_permissions",
+                                                                    "symbol":  "router",
+                                                                    "prefix":  null,
+                                                                    "tags":  [
+                                                                                 "Admin"
+                                                                             ],
+                                                                    "tenantScoped":  false
                                                                 }
-                                                            ]
+                                                            ],
+                                     "middlewareRegistrations":  [
+                                                                     {
+                                                                         "module":  "app.core.endpoint_permission_middleware",
+                                                                         "symbol":  "endpoint_permission_middleware"
+                                                                     }
+                                                                 ]
                                  },
                      "database":  {
                                       "models":  [
@@ -330,10 +348,13 @@
                      "displayName":  "站點資料串聯",
                      "category":  "data-model",
                      "required":  true,
-                     "businessCapability":  "保存並標準化多站點製程資料，將 P1/P2/P3 或未來新增站點依 lot、winder、product_id 串成可追溯資料鏈。",
+                     "businessCapability":  "保存並標準化任意站點製程資料，依可配置的業務鍵與 dataflow 串成可追溯資料鏈。",
                      "dependencies":  [
                                           "platform-core-kit",
                                           "tenant-auth-kit"
+                                      ],
+                     "featureFlags":  [
+                                          "USE_GENERIC_SCHEMA"
                                       ],
                      "frontend":  {
                                       "pages":  [
@@ -351,12 +372,6 @@
 
                                                  ],
                                      "models":  [
-                                                    "backend/app/models/base_record.py",
-                                                    "backend/app/models/p1_record.py",
-                                                    "backend/app/models/p2_record.py",
-                                                    "backend/app/models/p3_record.py",
-                                                    "backend/app/models/p2_item_v2.py",
-                                                    "backend/app/models/p3_item_v2.py",
                                                     "backend/app/models/generic_record.py",
                                                     "backend/app/models/station.py",
                                                     "backend/app/models/validation_rule.py",
@@ -364,19 +379,16 @@
                                                 ],
                                      "services":  [
                                                       "backend/app/utils/normalization.py",
-                                                      "backend/app/services/product_id_generator.py",
-                                                      "backend/app/services/production_date_extractor.py"
+                                                      "backend/app/services/product_id_generator.py"
                                                   ]
                                  },
                      "database":  {
                                       "models":  [
-                                                     "P1Record",
-                                                     "P2Record",
-                                                     "P2ItemV2",
-                                                     "P3Record",
-                                                     "P3ItemV2",
                                                      "GenericRecord",
-                                                     "GenericRecordItem"
+                                                     "GenericRecordItem",
+                                                     "Station",
+                                                     "StationSchema",
+                                                     "StationLink"
                                                  ]
                                   },
                      "preview":  {
@@ -401,7 +413,7 @@
                                              "id":  "p123-compatibility-adapter",
                                              "displayName":  "P1/P2/P3 相容層",
                                              "businessCapability":  "保留既有 P1/P2/P3 資料表與欄位相容。",
-                                             "defaultSelected":  true,
+                                             "defaultSelected":  false,
                                              "dependencies":  [
 
                                                               ],
@@ -409,7 +421,56 @@
                                                              "P1",
                                                              "P2",
                                                              "P3"
-                                                         ]
+                                                         ],
+                                             "contributions":  {
+                                                                       "config":  {
+                                                                                      "LEGACY_TABLE_CODES_CSV":  "P1,P2,P3",
+                                                                                      "PDF_WINDER_TABLE_CODES_CSV":  "P2"
+                                                                                  },
+                                                                       "backend":  {
+                                                                                       "routers":  [
+                                                                                                       "backend/app/api/routes_import.py"
+                                                                                                   ],
+                                                                                       "models":  [
+                                                                                                      "backend/app/models/base_record.py",
+                                                                                                      "backend/app/models/record.py",
+                                                                                                      "backend/app/models/p1_record.py",
+                                                                                                      "backend/app/models/p2_item.py",
+                                                                                                      "backend/app/models/p2_record.py",
+                                                                                                      "backend/app/models/p2_item_v2.py",
+                                                                                                      "backend/app/models/p3_item.py",
+                                                                                                      "backend/app/models/p3_record.py",
+                                                                                                      "backend/app/models/p3_item_v2.py"
+                                                                                                  ],
+                                                                                       "services":  [
+                                                                                                        "backend/app/services/production_date_extractor.py"
+                                                                                                    ],
+                                                                                       "routerRegistrations":  [
+                                                                                                                    {
+                                                                                                                        "module":  "app.api.routes_import",
+                                                                                                                        "symbol":  "router",
+                                                                                                                        "prefix":  "/api",
+                                                                                                                        "tags":  [
+                                                                                                                                     "資料匯入（P1/P2/P3 相容）"
+                                                                                                                                 ],
+                                                                                                                        "tenantScoped":  true
+                                                                                                                    }
+                                                                                                                ]
+                                                                                   },
+                                                                       "database":  {
+                                                                                        "models":  [
+                                                                                                       "DataType",
+                                                                                                       "Record",
+                                                                                                       "P1Record",
+                                                                                                       "P2Item",
+                                                                                                       "P2Record",
+                                                                                                       "P2ItemV2",
+                                                                                                       "P3Item",
+                                                                                                       "P3Record",
+                                                                                                       "P3ItemV2"
+                                                                                                   ]
+                                                                                    }
+                                                                   }
                                          },
                                          {
                                              "id":  "new-station-definition",
@@ -467,7 +528,7 @@
                      "id":  "upload-validation-kit",
                      "displayName":  "檔案上傳與驗證",
                      "category":  "workflow",
-                     "required":  false,
+                     "required":  true,
                      "businessCapability":  "使用者上傳 CSV、Excel 或 PDF，系統建立上傳工作、驗證內容、顯示錯誤並允許修正。",
                      "dependencies":  [
                                           "platform-core-kit",
@@ -692,7 +753,6 @@
                                   },
                      "backend":  {
                                      "routers":  [
-                                                     "backend/app/api/routes_import.py",
                                                      "backend/app/api/routes_import_v2.py"
                                                  ],
                                      "services":  [
@@ -705,15 +765,6 @@
                                                     "backend/app/models/core/schema_registry.py"
                                                 ],
                                      "routerRegistrations":  [
-                                                                 {
-                                                                     "module":  "app.api.routes_import",
-                                                                     "symbol":  "router",
-                                                                     "prefix":  "/api",
-                                                                     "tags":  [
-                                                                                  "資料匯入"
-                                                                              ],
-                                                                     "tenantScoped":  true
-                                                                 },
                                                                  {
                                                                      "module":  "app.api.routes_import_v2",
                                                                      "symbol":  "router",
@@ -961,39 +1012,22 @@
                      "displayName":  "分析與報表",
                      "category":  "analytics",
                      "required":  false,
-                     "businessCapability":  "提供分析儀表板、artifact 瀏覽、即時分析、客訴分析與 extraction analysis。",
+                     "businessCapability":  "查詢上傳歷史、匯出記錄，並以表單資料產生趨勢與摘要。",
                      "dependencies":  [
                                           "platform-core-kit",
                                           "tenant-auth-kit",
                                           "station-data-link-kit",
-                                          "query-traceability-kit"
+                                          "upload-validation-kit"
                                       ],
-                     "runtimeDependencies":  {
-                                                 "python":  [
-                                                                "pandas"
-                                                            ]
-                                             },
                      "frontend":  {
                                       "pages":  [
                                                     "frontend/src/pages/AnalyticsPage.tsx"
-                                                ],
-                                      "components":  [
-                                                         "frontend/src/components/analytics"
-                                                     ],
-                                      "services":  [
-                                                       "frontend/src/services/analyticsArtifacts.ts"
-                                                   ]
+                                                ]
                                   },
                      "backend":  {
                                      "routers":  [
-                                                     "backend/app/api/routes_analytics.py",
-                                                     "backend/app/api/routes_ut.py"
+                                                     "backend/app/api/routes_analytics.py"
                                                  ],
-                                     "services":  [
-                                                      "backend/app/services/analytics_external.py",
-                                                      "backend/app/services/analytics_data_fetcher.py",
-                                                      "backend/app/services/analytical_four_adapter.py"
-                                                  ],
                                      "routerRegistrations":  [
                                                                  {
                                                                      "module":  "app.api.routes_analytics",
@@ -1002,25 +1036,13 @@
                                                                                   "Analytics"
                                                                               ],
                                                                      "tenantScoped":  true
-                                                                 },
-                                                                 {
-                                                                     "module":  "app.api.routes_ut",
-                                                                     "symbol":  "router",
-                                                                     "tags":  [
-                                                                                  "UT Data"
-                                                                              ],
-                                                                     "tenantScoped":  true
                                                                  }
                                                              ]
                                  },
                      "api":  [
-                                 "GET /api/v2/analytics/flatten/monthly",
-                                 "GET /api/v2/analytics/flatten",
-                                 "POST /api/v2/analytics/analyze",
-                                 "GET /api/v2/analytics/artifacts",
-                                 "POST /api/v2/analytics/realtime-analysis",
-                                 "POST /api/v2/analytics/complaint-analysis",
-                                 "POST /api/v2/analytics/extraction-analysis"
+                                 "GET /api/analytics/upload-history",
+                                 "GET /api/analytics/upload-history/export",
+                                 "GET /api/analytics/trend"
                              ],
                      "preview":  {
                                      "supportsRealtimePreview":  true,
@@ -1028,127 +1050,44 @@
                                  },
                      "subfeatures":  [
                                          {
-                                             "id":  "realtime-analysis",
-                                             "displayName":  "即時分析",
-                                             "businessCapability":  "對選定資料執行即時分析。",
+                                             "id":  "record-summary",
+                                             "displayName":  "資料摘要",
+                                             "businessCapability":  "匯總表單與資料筆數。",
                                              "defaultSelected":  true,
                                              "dependencies":  [
 
                                                               ],
                                              "aliases":  [
-                                                             "realtime"
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "pro",
-                                                                 "featureKey":  "realtime_analysis",
-                                                                 "description":  "Realtime form analysis is a paid analytics capability."
-                                                             }
-                                         },
-                                         {
-                                             "id":  "complaint-analysis",
-                                             "displayName":  "客訴分析",
-                                             "businessCapability":  "針對客訴情境產生分析結果。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
-                                                             "complaint"
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "enterprise",
-                                                                 "featureKey":  "complaint_analysis",
-                                                                 "description":  "Complaint analysis is usually customized per customer."
-                                                             }
-                                         },
-                                         {
-                                             "id":  "artifact-browser",
-                                             "displayName":  "artifact 瀏覽",
-                                             "businessCapability":  "瀏覽分析產物與歷史 artifact。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
-                                                             "artifact"
+                                                             "summary",
+                                                             "records"
                                                          ]
                                          },
                                          {
-                                             "id":  "extraction-analysis",
-                                             "displayName":  "extraction analysis",
-                                             "businessCapability":  "分析抽取資料與特徵摘要。",
+                                             "id":  "trend-analysis",
+                                             "displayName":  "趨勢分析",
+                                             "businessCapability":  "依日、週或月統計表單資料趨勢。",
                                              "defaultSelected":  true,
                                              "dependencies":  [
 
                                                               ],
                                              "aliases":  [
-                                                             "extraction"
-                                                         ]
-                                         },
-                                         {
-                                             "id":  "chart-summary",
-                                             "displayName":  "圖表摘要",
-                                             "businessCapability":  "以圖表顯示樣本數、異常與重點指標。",
-                                             "defaultSelected":  true,
-                                             "dependencies":  [
-
-                                                              ],
-                                             "aliases":  [
+                                                             "trend",
                                                              "chart"
-                                                         ],
-                                             "options":  [
-                                                             {
-                                                                 "id":  "color-palette",
-                                                                 "displayName":  "圖表配色",
-                                                                 "type":  "select",
-                                                                 "defaultValue":  "production",
-                                                                 "choices":  [
-                                                                                 {
-                                                                                     "value":  "production",
-                                                                                     "displayName":  "正式營運"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "quality-alert",
-                                                                                     "displayName":  "品質警示"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "cool-technical",
-                                                                                     "displayName":  "冷色技術"
-                                                                                 }
-                                                                             ]
-                                                             },
-                                                             {
-                                                                 "id":  "chart-style",
-                                                                 "displayName":  "圖表型態",
-                                                                 "type":  "select",
-                                                                 "defaultValue":  "mixed-kpi",
-                                                                 "choices":  [
-                                                                                 {
-                                                                                     "value":  "mixed-kpi",
-                                                                                     "displayName":  "KPI 混合圖"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "bar",
-                                                                                     "displayName":  "長條圖"
-                                                                                 },
-                                                                                 {
-                                                                                     "value":  "line",
-                                                                                     "displayName":  "趨勢線"
-                                                                                 }
-                                                                             ]
-                                                             },
-                                                             {
-                                                                 "id":  "show-anomaly-colors",
-                                                                 "displayName":  "異常色標",
-                                                                 "type":  "boolean",
-                                                                 "defaultValue":  true
-                                                             }
-                                                         ],
-                                             "entitlement":  {
-                                                                 "requiredPlan":  "pro",
-                                                                 "featureKey":  "advanced_chart_summary",
-                                                                 "description":  "Advanced chart rendering options require a paid plan."
-                                                             }
+                                                         ]
+                                         },
+                                         {
+                                             "id":  "upload-history",
+                                             "displayName":  "上傳歷史",
+                                             "businessCapability":  "查詢、分頁與匯出上傳工作記錄。",
+                                             "defaultSelected":  true,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "upload",
+                                                             "history",
+                                                             "export"
+                                                         ]
                                          }
                                      ],
                      "installOrder":  70
@@ -1425,6 +1364,10 @@
                                      "routers":  [
                                                      "backend/app/api/routes_logs.py"
                                                  ],
+                                     "core":  [
+                                                  "backend/app/core/monitoring.py",
+                                                  "backend/app/core/log_client.py"
+                                              ],
                                      "services":  [
 
                                                   ],
@@ -1448,6 +1391,13 @@
                                  "DELETE /api/logs/cleanup",
                                  "GET /api/logs/download/{log_type}"
                              ],
+                     "externalServices":  [
+                                               {
+                                                   "id":  "remote-monitor-service",
+                                                   "required":  false,
+                                                   "config":  "MONITOR_SERVER_URL"
+                                               }
+                                           ],
                      "preview":  {
                                      "supportsRealtimePreview":  false,
                                      "previewMode":  "sample-log-table"
@@ -1501,6 +1451,32 @@
                                                              "download",
                                                              "cleanup"
                                                          ]
+                                         },
+                                         {
+                                             "id":  "remote-heartbeat-monitoring",
+                                             "displayName":  "遠端心跳監控",
+                                             "businessCapability":  "定期回報主機存活狀態給選配的遠端監控服務。",
+                                             "defaultSelected":  false,
+                                             "dependencies":  [
+
+                                                              ],
+                                             "aliases":  [
+                                                             "heartbeat",
+                                                             "monitor",
+                                                             "MONITOR_SERVER_URL"
+                                                         ],
+                                             "externalServices":  [
+                                                                      {
+                                                                          "id":  "remote-monitor-service",
+                                                                          "config":  "MONITOR_SERVER_URL",
+                                                                          "required":  true
+                                                                      }
+                                                                  ],
+                                             "entitlement":  {
+                                                                 "requiredPlan":  "pro",
+                                                                 "featureKey":  "remote_heartbeat_monitoring",
+                                                                 "description":  "Remote heartbeat monitoring is an optional paid capability."
+                                                             }
                                          }
                                      ],
                      "installOrder":  90

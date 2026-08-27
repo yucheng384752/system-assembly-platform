@@ -42,6 +42,7 @@ IMAGES=(
     "postgres:15-alpine"
     "nginx:alpine"
     "python:3.11-slim"
+    "node:20-slim"
 )
 
 echo ">> 拉取並儲存 Docker 映像..."

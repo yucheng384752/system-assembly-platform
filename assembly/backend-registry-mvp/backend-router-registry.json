@@ -11,6 +11,17 @@
         "featureFlag":  null
     },
     {
+        "kit":  "platform-core-kit",
+        "module":  "app.api.routes_kit_broker",
+        "symbol":  "router",
+        "prefix":  "/api/kit",
+        "tags":  [
+                     "Kit Broker"
+                 ],
+        "tenantScoped":  false,
+        "featureFlag":  null
+    },
+    {
         "kit":  "tenant-auth-kit",
         "module":  "app.api.routes_auth",
         "symbol":  "router",
@@ -56,17 +67,6 @@
     },
     {
         "kit":  "import-pipeline-kit",
-        "module":  "app.api.routes_import",
-        "symbol":  "router",
-        "prefix":  "/api",
-        "tags":  [
-                     "資料匯入"
-                 ],
-        "tenantScoped":  true,
-        "featureFlag":  null
-    },
-    {
-        "kit":  "import-pipeline-kit",
         "module":  "app.api.routes_import_v2",
         "symbol":  "router",
         "prefix":  "/api/v2/import",
@@ -77,14 +77,15 @@
         "featureFlag":  null
     },
     {
-        "kit":  "platform-core-kit",
-        "module":  "app.api.routes_kit_broker",
+        "kit":  "station-data-link-kit",
+        "subfeature":  "p123-compatibility-adapter",
+        "module":  "app.api.routes_import",
         "symbol":  "router",
-        "prefix":  "/api/kit",
+        "prefix":  "/api",
         "tags":  [
-                     "Kit Broker"
+                     "資料匯入（P1/P2/P3 相容）"
                  ],
-        "tenantScoped":  false,
+        "tenantScoped":  true,
         "featureFlag":  null
     }
 ]

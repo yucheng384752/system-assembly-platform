@@ -1,4 +1,4 @@
-﻿// src/App.tsx
+// src/App.tsx
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { UploadPage } from "./pages/UploadPage";
@@ -7,14 +7,16 @@ import { RegisterPage } from "./pages/RegisterPage";
 import { AdminPage } from "./pages/AdminPage";
 import { ManagerPage } from "./pages/ManagerPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { FormsPage } from "./pages/FormsPage";
 import { DeveloperLogsPage } from "./pages/DeveloperLogsPage";
+import { EditReasonsPage } from "./pages/EditReasonsPage";
 import { ToastContainer } from "./components/common/ToastContainer";
 import "./styles/app.css";
 
 import { getAdminApiKeyValue, isAdminUnlockedInSession } from "./services/adminAuth";
 import { getFontScaleId, setFontScaleId, type FontScaleId } from "./services/a11y";
 
-type MainTab = "upload" | "query" | "analysis" | "register" | "manager" | "admin" | "logs";
+type MainTab = "upload" | "query" | "analysis" | "forms" | "register" | "manager" | "editReasons" | "admin" | "logs";
 
 function App() {
   const { t, i18n } = useTranslation();
@@ -48,7 +50,7 @@ function App() {
 
   useEffect(() => {
     // If role is not privileged, force-exit manager tab.
-    if (!canShowManager && tab === "manager") {
+    if (!canShowManager && (tab === "manager" || tab === "editReasons")) {
       setTab("register");
     }
   }, [canShowManager, tab]);
@@ -135,13 +137,27 @@ function App() {
           >
             {t('tabs.analysis')}
           </button>
+          <button
+            className={`app-main-tab ${tab === "forms" ? "is-active" : ""}`}
+            onClick={() => setTab("forms")}
+          >
+            通用表格
+          </button>
           {canShowManager ? (
-            <button
-              className={`app-main-tab ${tab === "manager" ? "is-active" : ""}`}
-              onClick={() => setTab("manager")}
-            >
-              {t('tabs.manager')}
-            </button>
+            <>
+              <button
+                className={`app-main-tab ${tab === "manager" ? "is-active" : ""}`}
+                onClick={() => setTab("manager")}
+              >
+                {t('tabs.manager')}
+              </button>
+              <button
+                className={`app-main-tab ${tab === "editReasons" ? "is-active" : ""}`}
+                onClick={() => setTab("editReasons")}
+              >
+                編輯原因管理
+              </button>
+            </>
           ) : null}
           {canShowAdmin ? (
             <button
@@ -174,8 +190,12 @@ function App() {
           <QueryPage />
         ) : tab === "analysis" ? (
           <AnalyticsPage />
+        ) : tab === "forms" ? (
+          <FormsPage />
         ) : tab === "manager" ? (
           <ManagerPage />
+        ) : tab === "editReasons" ? (
+          <EditReasonsPage />
         ) : tab === "admin" ? (
           <AdminPage onAdminLocked={() => setAdminUnlocked(false)} onAdminUnlocked={() => setAdminUnlocked(true)} />
         ) : (

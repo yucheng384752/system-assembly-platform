@@ -5,6 +5,20 @@ param(
 
 $ErrorActionPreference = "Stop"
 
+function Assert-WizardFresh([string]$Root) {
+    $wizardPy = Join-Path $Root "tools\install-wizard.py"
+    $wizardExe = Join-Path $Root "tools\install-wizard.exe"
+    if ((Test-Path $wizardPy) -and (Test-Path $wizardExe)) {
+        $pyTime = (Get-Item $wizardPy).LastWriteTime
+        $exeTime = (Get-Item $wizardExe).LastWriteTime
+        if ($pyTime -gt $exeTime) {
+            throw "install-wizard.py is newer than install-wizard.exe. Run tools\build-wizard-exe.ps1 before packaging."
+        }
+    }
+}
+
+Assert-WizardFresh $ProjectRoot
+
 function Run-Step([string]$Name, [scriptblock]$Script) {
     Write-Host "== $Name =="
     & $Script
@@ -17,7 +31,11 @@ Run-Step "Recipe validation MVP" {
         -ProjectRoot $ProjectRoot `
         -RecipePath "assembly\mvp-import-flow.recipe.json"
 }
+Run-Step "Secret scan" { & (Join-Path $ProjectRoot "tools\test-secret-scan.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Resolver" { & (Join-Path $ProjectRoot "tools\test-resolver.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "Station data link genericization" { & (Join-Path $ProjectRoot "tools\test-station-data-link-genericization.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "Resolved plan contracts" { & (Join-Path $ProjectRoot "tools\test-resolved-plan-contracts.ps1") -ProjectRoot $ProjectRoot }
+Run-Step "External kit admission" { & (Join-Path $ProjectRoot "tools\test-external-kit-validation.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Backend registry full" { & (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") -ProjectRoot $ProjectRoot }
 Run-Step "Backend registry MVP" {
     & (Join-Path $ProjectRoot "tools\generate-backend-registry.ps1") `

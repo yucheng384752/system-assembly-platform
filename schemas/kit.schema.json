@@ -123,6 +123,13 @@
                   "$ref": "#/$defs/backendRouterRegistration"
                 },
                 "default": []
+              },
+              "middlewareRegistrations": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/backendMiddlewareRegistration"
+                },
+                "default": []
               }
             }
           },
@@ -244,6 +251,24 @@
         }
       }
     },
+    "backendMiddlewareRegistration": {
+      "type": "object",
+      "required": [
+        "module",
+        "symbol"
+      ],
+      "properties": {
+        "module": {
+          "type": "string"
+        },
+        "symbol": {
+          "type": "string"
+        },
+        "featureFlag": {
+          "type": "string"
+        }
+      }
+    },
     "subfeature": {
       "type": "object",
       "required": [
@@ -298,6 +323,68 @@
         },
         "entitlement": {
           "$ref": "#/$defs/entitlementRequirement"
+        },
+        "contributions": {
+          "$ref": "#/$defs/subfeatureContributions"
+        }
+      }
+    },
+    "subfeatureContributions": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "api": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "featureFlags": { "type": "array", "items": { "type": "string" }, "default": [] },
+        "config": {
+          "type": "object",
+          "additionalProperties": { "type": ["string", "number", "integer", "boolean", "null"] },
+          "default": {}
+        },
+        "frontend": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "pages": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "components": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "services": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "hooks": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "shellFiles": { "type": "array", "items": { "type": "string" }, "default": [] }
+          }
+        },
+        "backend": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "routers": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "core": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "services": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "models": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "routerRegistrations": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/backendRouterRegistration" },
+              "default": []
+            },
+            "middlewareRegistrations": {
+              "type": "array",
+              "items": { "$ref": "#/$defs/backendMiddlewareRegistration" },
+              "default": []
+            }
+          }
+        },
+        "templates": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "backend": { "type": "array", "items": { "type": "string" }, "default": [] },
+            "frontend": { "type": "array", "items": { "type": "string" }, "default": [] }
+          }
+        },
+        "database": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "models": { "type": "array", "items": { "type": "string" }, "default": [] }
+          }
         }
       }
     },

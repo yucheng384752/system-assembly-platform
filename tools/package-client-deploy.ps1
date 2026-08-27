@@ -1,6 +1,7 @@
-param(
+﻿param(
     [string]$ProjectRoot      = (Resolve-Path "$PSScriptRoot\..").Path,
     [string]$RecipeName       = '',
+    [string]$PackageName      = 'form-manager-system',
     [string]$OutputDir        = 'dist',
     [switch]$SkipZip,
     [string]$LicenseeName     = '',
@@ -26,6 +27,15 @@ function Assert-WizardFresh([string]$Root) {
 }
 
 Assert-WizardFresh $ProjectRoot
+
+function Get-ProjectRelativePath([string]$Root, [string]$Path) {
+    $rootFull = [System.IO.Path]::GetFullPath($Root).TrimEnd('\', '/')
+    $pathFull = [System.IO.Path]::GetFullPath($Path)
+    if ($pathFull.StartsWith($rootFull, [System.StringComparison]::OrdinalIgnoreCase)) {
+        return $pathFull.Substring($rootFull.Length + 1)
+    }
+    return $Path
+}
 
 # Find recipe ---------------------------------------------------------------
 $assemblyDir = Join-Path $ProjectRoot 'assembly'
@@ -55,16 +65,37 @@ $askAuth = (($recipe.enabledKits -contains 'tenant-auth-kit') -or ($recipe.featu
 $askPdf = ([bool](($recipe.featureFlags.PDF_SERVER_URL) -or ($recipe.selectedSubfeatures.'upload-validation-kit' -contains 'pdf-to-csv-binding'))).ToString().ToLowerInvariant()
 $askValidation = ($recipe.enabledKits -contains 'upload-validation-kit').ToString().ToLowerInvariant()
 
-# Validate generated-system -------------------------------------------------
+# Assemble generated-system from the selected recipe ------------------------
 $sysRoot = Join-Path $ProjectRoot 'dist\generated-system'
+Write-Host 'Resolving and assembling selected recipe...'
+$resolvedPlanDir = Join-Path $ProjectRoot 'build\package-client-deploy'
+New-Item -ItemType Directory -Force $resolvedPlanDir | Out-Null
+$resolvedPlanPath = Join-Path $resolvedPlanDir ($rName + '.resolved-plan.json')
+$recipeRelativePath = Get-ProjectRelativePath $ProjectRoot $recipePath
+$resolvedPlanRelativePath = Get-ProjectRelativePath $ProjectRoot $resolvedPlanPath
+& (Join-Path $ProjectRoot 'tools\resolve-recipe.ps1') `
+    -ProjectRoot $ProjectRoot `
+    -RecipePath $recipeRelativePath `
+    -OutputPath $resolvedPlanRelativePath | Out-Null
+& (Join-Path $ProjectRoot 'tools\assemble-system.ps1') `
+    -ProjectRoot $ProjectRoot `
+    -ResolvedPlanPath $resolvedPlanRelativePath `
+    -OutputDirectory 'dist\generated-system' `
+    -SkipFrontendBuild | Out-Null
+
+# Validate generated-system -------------------------------------------------
 if (-not (Test-Path (Join-Path $sysRoot 'backend\requirements.txt'))) {
     throw 'Generated system not found. Run tools\assemble-system.ps1 first.'
 }
+& (Join-Path $ProjectRoot 'tools\validate-generated-system.ps1') `
+    -ProjectRoot $ProjectRoot `
+    -GeneratedSystemDirectory 'dist\generated-system' | Out-Null
 
 # Stage directory -----------------------------------------------------------
+$pkgName  = if ($PackageName) { $PackageName } else { $rName }
 $outRoot  = Join-Path $ProjectRoot $OutputDir
-$stageDir = Join-Path $outRoot ('client-deploy-' + $rName)
-$zipPath  = $stageDir + '.zip'
+$stageDir = Join-Path $outRoot ('client-deploy-' + $pkgName)
+$zipPath  = Join-Path $outRoot ($pkgName + '.zip')
 
 if (Test-Path $stageDir) { Remove-Item $stageDir -Recurse -Force }
 New-Item -ItemType Directory -Force $stageDir | Out-Null
@@ -546,7 +577,16 @@ build_frontend() {
     fi
     if [ -f "${SYS_ROOT}/frontend/package.json" ]; then
         echo "=== Building frontend ==="
-        npm --prefix "${SYS_ROOT}/frontend" install --silent
+        _npm_cache="${SYS_ROOT}/frontend/.npm-cache"
+        _npm_args=""
+        if [ -d "${_npm_cache}" ]; then
+            _npm_args="--cache ${_npm_cache} --offline"
+        fi
+        if [ -f "${SYS_ROOT}/frontend/package-lock.json" ]; then
+            npm --prefix "${SYS_ROOT}/frontend" ci --silent ${_npm_args}
+        else
+            npm --prefix "${SYS_ROOT}/frontend" install --silent ${_npm_args}
+        fi
         npm --prefix "${SYS_ROOT}/frontend" run build
         ok "Frontend built -> ${SYS_ROOT}/frontend/dist/"
         echo ""
@@ -572,20 +612,211 @@ setup_database() {
 }
 
 start_backend() {
-    echo "=== Deploy complete ==="
     if [ "${BACKGROUND}" -eq 1 ]; then
         mkdir -p "${SYS_ROOT}/logs"
-        (cd "${SYS_ROOT}/backend" ; nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 >"${SYS_ROOT}/logs/backend.log" 2>&1 &
-        echo "$!" >"${SYS_ROOT}/logs/backend.pid")
+
+        # Stop a stale backend left over from a previous run, so port 8000 is
+        # free before we start a new one. Only kill it if the PID is still
+        # alive AND is actually our uvicorn process. Never touch an
+        # unrelated PID that got reused.
+        PID_FILE="${SYS_ROOT}/logs/backend.pid"
+        if [ -f "${PID_FILE}" ]; then
+            OLD_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
+            if [ -n "${OLD_PID}" ] && kill -0 "${OLD_PID}" 2>/dev/null \
+               && ps -p "${OLD_PID}" -o args= 2>/dev/null | grep -q "uvicorn app.main:app"; then
+                info "Stopping previous backend (PID ${OLD_PID})..."
+                kill "${OLD_PID}" 2>/dev/null || true
+                for _ in 1 2 3 4 5 6 7 8 9 10; do
+                    kill -0 "${OLD_PID}" 2>/dev/null || break
+                    sleep 0.5
+                done
+                kill -0 "${OLD_PID}" 2>/dev/null && kill -9 "${OLD_PID}" 2>/dev/null || true
+            fi
+            rm -f "${PID_FILE}"
+        fi
+
+        # This VM is dedicated to running this system, so unlike the pidfile
+        # check above (which never touches a PID it can't verify is our own
+        # uvicorn), anything still squatting on port 8000 at this point is
+        # assumed safe to kill outright.
+        if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ':8000 '; then
+            info "Port 8000 is occupied; this VM is dedicated to this system, freeing it..."
+            OCCUPANT_PIDS="$(ss -tlnp 2>/dev/null | grep ':8000 ' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)"
+            for _p in ${OCCUPANT_PIDS}; do
+                info "Killing PID ${_p} holding port 8000..."
+                kill "${_p}" 2>/dev/null || true
+            done
+            for _ in 1 2 3 4 5 6 7 8 9 10; do
+                ss -tln 2>/dev/null | grep -q ':8000 ' || break
+                sleep 0.5
+            done
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+                for _p in ${OCCUPANT_PIDS}; do
+                    kill -9 "${_p}" 2>/dev/null || true
+                done
+                sleep 0.5
+            fi
+            if ss -tln 2>/dev/null | grep -q ':8000 '; then
+                die "Port 8000 is still in use after attempting to free it. Check: sudo ss -tlnp | grep :8000"
+            fi
+        fi
+
+        (
+            cd "${SYS_ROOT}/backend"
+            exec nohup "${VENV}/bin/python" -m uvicorn app.main:app --host 127.0.0.1 --port 8000 </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1
+        ) &
+        echo "$!" >"${PID_FILE}"
         ok "Backend started in background on port 8000"
         info "Log : ${SYS_ROOT}/logs/backend.log"
         info "Stop: kill \$(cat ${SYS_ROOT}/logs/backend.pid)"
-    else
-        info "--- Next steps ---"
-        info "Start backend:"
-        info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
     fi
-    [ -d "${SYS_ROOT}/frontend/dist" ] && info "Frontend dist: ${SYS_ROOT}/frontend/dist/ (serve via nginx, see README)"
+    echo ""
+}
+
+setup_postgres() {
+    local db_url
+    db_url="$(get_env_value DATABASE_URL)"
+    case "$db_url" in
+        postgresql*) : ;;
+        *) return 0 ;;   # SQLite or unset -> nothing to provision
+    esac
+
+    echo "=== PostgreSQL setup ==="
+
+    # Parse postgresql[+driver]://user:pass@host:port/dbname
+    # ponytail: assumes password has no URL-encoded special chars; fine for generated creds.
+    local _rest _creds _hostpart _hostport db_host db_port db_name db_user db_pass
+    _rest="${db_url#*://}"
+    _creds="${_rest%%@*}"
+    _hostpart="${_rest#*@}"
+    db_user="${_creds%%:*}"
+    db_pass="${_creds#*:}" ; [ "$db_pass" = "$_creds" ] && db_pass=""
+    _hostport="${_hostpart%%/*}"
+    db_name="${_hostpart#*/}" ; db_name="${db_name%%\?*}"
+    db_host="${_hostport%%:*}"
+    db_port="${_hostport#*:}" ; [ "$db_port" = "$_hostport" ] && db_port="5432"
+    [ -n "$db_host" ] || db_host="localhost"
+    [ -n "$db_name" ] || db_name="form_system"
+    [ -n "$db_user" ] || db_user="form_system"
+
+    if [ "$db_host" != "localhost" ] && [ "$db_host" != "127.0.0.1" ]; then
+        info "DATABASE_URL targets remote host ${db_host}; skipping local PostgreSQL provisioning."
+        echo ""
+        return 0
+    fi
+
+    if ! command -v psql >/dev/null 2>&1; then
+        info "PostgreSQL not found -- installing..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get update && sudo apt-get install -y postgresql || \
+                die "PostgreSQL install failed (offline / no network?). Install it manually or use SQLite (empty DATABASE_URL)."
+        elif command -v dnf >/dev/null 2>&1; then
+            sudo dnf install -y postgresql-server postgresql || die "PostgreSQL install failed."
+            sudo postgresql-setup --initdb >/dev/null 2>&1 || true
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y postgresql-server postgresql || die "PostgreSQL install failed."
+            sudo postgresql-setup initdb >/dev/null 2>&1 || true
+        else
+            die "Cannot auto-install PostgreSQL. Install it manually, or use SQLite (empty DATABASE_URL)."
+        fi
+    fi
+
+    sudo systemctl enable --now postgresql >/dev/null 2>&1 || sudo service postgresql start >/dev/null 2>&1 || true
+
+    # Wait until the server accepts connections (native, no extra deps)
+    local _ready=1 _i
+    for _i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do
+        if sudo -u postgres psql -tAc 'SELECT 1' >/dev/null 2>&1; then _ready=0; break; fi
+        sleep 1
+    done
+    [ "$_ready" -eq 0 ] || die "PostgreSQL did not become ready. Check: sudo systemctl status postgresql"
+
+    # Create role + database idempotently (single-quote-escape the password)
+    local esc_pass
+    esc_pass="$(printf '%s' "$db_pass" | sed "s/'/''/g")"
+    if [ -n "$db_pass" ]; then
+        if sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${db_user}'" 2>/dev/null | grep -q 1; then
+            sudo -u postgres psql -c "ALTER ROLE \"${db_user}\" WITH LOGIN PASSWORD '${esc_pass}'" >/dev/null
+        else
+            sudo -u postgres psql -c "CREATE ROLE \"${db_user}\" WITH LOGIN PASSWORD '${esc_pass}'" >/dev/null
+        fi
+    fi
+    if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${db_name}'" 2>/dev/null | grep -q 1; then
+        sudo -u postgres psql -c "CREATE DATABASE \"${db_name}\" OWNER \"${db_user}\"" >/dev/null
+    fi
+
+    ok "PostgreSQL ready -- ${db_user}@${db_host}:${db_port}/${db_name}"
+    echo ""
+}
+
+setup_nginx() {
+    echo "=== nginx setup ==="
+    if ! [ -d "${SYS_ROOT}/frontend/dist" ]; then
+        info "No frontend/dist found; skipping nginx setup"
+        echo ""
+        return
+    fi
+
+    # Install nginx if missing
+    if ! command -v nginx >/dev/null 2>&1; then
+        info "nginx not found — installing..."
+        if command -v apt-get >/dev/null 2>&1; then
+            sudo apt-get install -y nginx || die "Failed to install nginx. Run: sudo apt-get install -y nginx"
+        elif command -v yum >/dev/null 2>&1; then
+            sudo yum install -y nginx || die "Failed to install nginx. Run: sudo yum install -y nginx"
+        else
+            die "Cannot auto-install nginx. Please install nginx manually then re-run."
+        fi
+    fi
+
+    # Copy to a dedicated, root-owned web root instead of pointing nginx's root
+    # directly at SYS_ROOT. Deploy packages are typically extracted under a
+    # user's home directory (commonly mode 750/770), which blocks www-data from
+    # traversing into it — nginx would fail to stat the file (Permission denied),
+    # try_files falls back to /index.html, and that fails too, causing an
+    # internal redirection cycle.
+    WEB_ROOT="/var/www/form-system"
+    sudo rm -rf "${WEB_ROOT}"
+    sudo cp -r "${SYS_ROOT}/frontend/dist" "${WEB_ROOT}" || die "Failed to copy frontend assets to ${WEB_ROOT}"
+    sudo chmod -R a+rX "${WEB_ROOT}"
+
+    NGINX_CONF="/etc/nginx/sites-available/form-system"
+    sudo tee "${NGINX_CONF}" > /dev/null <<NGINXEOF
+server {
+    listen 80;
+    server_name _;
+
+    root ${WEB_ROOT};
+    index index.html;
+
+    location / {
+        try_files \$uri \$uri/ /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000;
+        proxy_set_header Host \$host;
+        proxy_set_header X-Real-IP \$remote_addr;
+        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
+    }
+
+    location /healthz {
+        proxy_pass http://127.0.0.1:8000;
+    }
+}
+NGINXEOF
+
+    sudo ln -sf "${NGINX_CONF}" /etc/nginx/sites-enabled/form-system
+    # Remove default site if it conflicts on port 80
+    [ -f /etc/nginx/sites-enabled/default ] && sudo rm -f /etc/nginx/sites-enabled/default
+
+    if sudo nginx -t 2>/dev/null; then
+        sudo systemctl reload nginx 2>/dev/null || sudo systemctl start nginx 2>/dev/null
+        ok "nginx configured — frontend available at http://localhost"
+    else
+        info "nginx config test failed. Check: sudo nginx -t"
+    fi
+    echo ""
 }
 
 # -- early-exit: --get-machine-id -------------------------------------------
@@ -662,18 +893,36 @@ setup_venv
 install_backend
 run_kit_installs
 build_frontend
+setup_postgres
 setup_database
 start_backend
+setup_nginx
 show_license_notice
 
+echo ""
+echo "------------------------------------------------------"
+echo "  === Deploy complete ==="
+echo "------------------------------------------------------"
+if [ "${BACKGROUND}" -eq 1 ]; then
+    info "Backend : http://127.0.0.1:8000  (running in background)"
+fi
+info "Frontend: http://localhost  (served via nginx)"
+if [ "${BACKGROUND}" -ne 1 ]; then
+    info ""
+    info "Start backend (foreground):"
+    info "  cd ${SYS_ROOT}/backend && ${VENV}/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000"
+    info ""
+    info "Or start in background:"
+    info "  $0 --background"
+fi
 echo ""
 echo "------------------------------------------------------"
 echo "  WARNING: Production checklist"
 echo "------------------------------------------------------"
 info "1. Do NOT run as root. Create a system user:"
 info "     sudo useradd -r -s /bin/false form-system"
-info "2. uvicorn has no TLS. Use a reverse proxy:"
-info "     nginx + certbot (Let's Encrypt) or Caddy"
+info "2. Add TLS to nginx:"
+info "     sudo apt install certbot python3-certbot-nginx && sudo certbot --nginx"
 info "3. DATABASE_URL, SECRET_KEY, and ADMIN_API_KEYS must be non-default values"
 info "4. ENVIRONMENT=production disables the /docs endpoint"
 info "5. Run: pip-audit  and  npm audit  (CVE scan)"
@@ -781,9 +1030,9 @@ $deployOnlineShContent = $deployOnlineShContent.Replace("fi`ncheck_prerequisites
 if (-not $deployOnlineShContent.Contains("configure_hiba_node`ncheck_prerequisites")) {
     throw "HIBA inject failed: anchor 'fi\ncheck_prerequisites' not found in deploy-online.sh template."
 }
-$deployOnlineShContent = $deployOnlineShContent.Replace("start_backend`nshow_license_notice", "start_backend`nsend_hiba_dashboard_callback`nshow_license_notice")
+$deployOnlineShContent = $deployOnlineShContent.Replace("setup_nginx`nshow_license_notice", "setup_nginx`nsend_hiba_dashboard_callback`nshow_license_notice")
 if (-not $deployOnlineShContent.Contains("send_hiba_dashboard_callback`nshow_license_notice")) {
-    throw "HIBA inject failed: anchor 'start_backend\nshow_license_notice' not found in deploy-online.sh template."
+    throw "HIBA inject failed: anchor 'setup_nginx\nshow_license_notice' not found in deploy-online.sh template."
 }
 [System.IO.File]::WriteAllText(
     (Join-Path $stageDir 'deploy-online.sh'),
@@ -907,7 +1156,16 @@ if (-not $SkipFrontend) {
         Write-Host "=== Building frontend ==="
         Push-Location "$SysRoot\frontend"
         try {
-            npm install --silent
+            $npmArgs = @()
+            $npmCache = Join-Path (Get-Location) ".npm-cache"
+            if (Test-Path $npmCache) {
+                $npmArgs += @("--cache", $npmCache, "--offline")
+            }
+            if (Test-Path "package-lock.json") {
+                npm ci --silent @npmArgs
+            } else {
+                npm install --silent @npmArgs
+            }
             npm run build
         } finally { Pop-Location }
         Write-Host "  OK frontend built"
@@ -1116,7 +1374,7 @@ $R.Add('')
 $R.Add('## Package contents')
 $R.Add('')
 $R.Add($tick3)
-$R.Add('client-deploy-' + $rName + '/')
+$R.Add('client-deploy-' + $pkgName + '/')
 $R.Add('|-- system/              <- Assembled system (backend + pre-built frontend + scripts)')
 $R.Add('|-- docker/              <- Dockerfiles + nginx config (Docker mode)')
 $R.Add('|   |-- backend.Dockerfile')
@@ -1134,13 +1392,27 @@ $R.Add('')
 $R.Add('### 1. Extract ZIP')
 $R.Add('')
 $R.Add($tick3 + 'bash')
-$R.Add('unzip client-deploy-' + $rName + '.zip')
-$R.Add('cd client-deploy-' + $rName)
+$R.Add('unzip ' + $pkgName + '.zip')
+$R.Add('cd client-deploy-' + $pkgName)
 $R.Add($tick3)
 $R.Add('')
 $R.Add('### 2. Install')
 $R.Add('')
-$R.Add('#### Option A — Web Install Wizard (recommended)')
+$R.Add('#### No Python yet? Run bootstrap first')
+$R.Add('')
+$R.Add('On a fresh VM without Python 3, run the bootstrap script — it installs Python 3 + pip (online via apt/dnf/yum/winget, or offline from ' + $tick1 + 'installers/' + $tick1 + '), then launches the wizard:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('bash bootstrap.sh          # Linux / macOS')
+$R.Add($tick3)
+$R.Add('')
+$R.Add($tick3 + 'powershell')
+$R.Add('.\bootstrap.ps1            # Windows')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('> Offline machines: drop the Python installer into ' + $tick1 + 'installers/' + $tick1 + ' before transfer (see ' + $tick1 + 'installers/README.txt' + $tick1 + '). ' + $tick1 + 'prepare-offline.ps1' + $tick1 + ' auto-bundles the Windows installer.')
+$R.Add('')
+$R.Add('#### Option A — Web Install Wizard (recommended, Python already installed)')
 $R.Add('')
 $R.Add('Interactive browser-based wizard. No extra dependencies — only Python 3 required.')
 $R.Add('')
@@ -1204,7 +1476,7 @@ $R.Add('1. Configures or validates ' + $tick1 + '.env' + $tick1 + ' (interactive
 $R.Add('2. Checks prerequisites (python3, pip3, node, npm)')
 $R.Add('3. Creates an isolated Python virtual environment at ' + $tick1 + 'system/.venv' + $tick1)
 $R.Add('4. Installs backend dependencies via ' + $tick1 + 'pip' + $tick1 + ' into the venv')
-$R.Add('5. Builds the frontend (' + $tick1 + 'npm install' + $tick1 + ' + ' + $tick1 + 'npm run build' + $tick1 + ')')
+$R.Add('5. Builds the frontend (' + $tick1 + 'npm ci' + $tick1 + ' when package-lock.json exists, then ' + $tick1 + 'npm run build' + $tick1 + ')')
 $R.Add('6. Runs database migrations (' + $tick1 + 'alembic upgrade head' + $tick1 + ' or ' + $tick1 + 'generated_db_bootstrap.py' + $tick1 + ')')
 $R.Add('')
 $R.Add('### 4. Start the backend')
@@ -1277,6 +1549,29 @@ $R.Add('bash deploy.sh --update-license=/path/to/new-license.lic')
 $R.Add($tick3)
 $R.Add('')
 $R.Add('The script copies the file to ' + $tick1 + 'system/license.lic' + $tick1 + ' and prints restart instructions if the backend is running.')
+$R.Add('')
+$R.Add('## Troubleshooting')
+$R.Add('')
+$R.Add('### Manager account won' + $sq + 't log in (even with the username/password you set in the installer)')
+$R.Add('')
+$R.Add('The installer writes ' + $tick1 + 'BOOTSTRAP_MANAGER_USERNAME' + $tick1 + '/' + $tick1 + 'BOOTSTRAP_MANAGER_PASSWORD' + $tick1 + ' into ' + $tick1 + '.env' + $tick1 + ', but the backend only uses them to *create* the manager account on ' + $sq + 'first ever' + $sq + ' startup. If a manager account with that username already exists (e.g. from an earlier install attempt against the same database), changing ' + $tick1 + '.env' + $tick1 + ' afterwards has no effect: the stored password is never overwritten.')
+$R.Add('')
+$R.Add('Reset it directly with the break-glass script:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('cd system/backend')
+$R.Add('../.venv/bin/python scripts/reset-manager-password.py --username manager')
+$R.Add('# or non-interactively:')
+$R.Add('../.venv/bin/python scripts/reset-manager-password.py --username manager --new-password ' + $sq + 'NewP@ssw0rd' + $sq)
+$R.Add($tick3)
+$R.Add('')
+$R.Add('To list existing manager/admin accounts without changing anything:')
+$R.Add('')
+$R.Add($tick3 + 'bash')
+$R.Add('../.venv/bin/python scripts/reset-manager-password.py --list')
+$R.Add($tick3)
+$R.Add('')
+$R.Add('The script reads ' + $tick1 + 'DATABASE_URL' + $tick1 + ' from ' + $tick1 + '.env' + $tick1 + ' and connects with the same async driver the backend uses, so there is no separate DB client to set up. New passwords must be at least 8 characters, and the account is flagged to prompt a password change on next login.')
 $R.Add('')
 $R.Add('## Production security checklist')
 $R.Add('')
@@ -1361,6 +1656,11 @@ services:
       AUTH_MODE: ${AUTH_MODE:-api_key}
       ADMIN_API_KEYS: ${ADMIN_API_KEYS:-changeme-replace-before-production}
       ENVIRONMENT: ${ENVIRONMENT:-production}
+      BOOTSTRAP_MANAGER_ENABLED: ${BOOTSTRAP_MANAGER_ENABLED:-false}
+      BOOTSTRAP_MANAGER_USERNAME: ${BOOTSTRAP_MANAGER_USERNAME:-}
+      BOOTSTRAP_MANAGER_PASSWORD: ${BOOTSTRAP_MANAGER_PASSWORD:-}
+      BOOTSTRAP_MANAGER_TENANT_CODE: ${BOOTSTRAP_MANAGER_TENANT_CODE:-}
+      USE_GENERIC_SCHEMA: ${USE_GENERIC_SCHEMA:-false}
     ports:
       - "8000:8000"
     depends_on:
@@ -1393,6 +1693,7 @@ WORKDIR /app
 COPY system/backend/requirements.txt ./requirements.txt
 RUN pip install --no-cache-dir -r requirements.txt
 COPY system/backend/ .
+COPY system/kits/ ./kits/
 COPY system/db-bootstrap-plan.json ./db-bootstrap-plan.json
 COPY license.lic /app/license.lic
 CMD ["python", "-m", "uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
@@ -1408,7 +1709,10 @@ $frontendDockerfileContent = @'
 FROM node:20-slim AS builder
 WORKDIR /app
 COPY system/frontend/ .
-RUN npm install --silent && npm run build
+RUN NPM_CACHE_ARGS=""; \
+    if [ -d .npm-cache ]; then NPM_CACHE_ARGS="--cache .npm-cache --offline"; fi; \
+    if [ -f package-lock.json ]; then npm ci --silent $NPM_CACHE_ARGS; else npm install --silent $NPM_CACHE_ARGS; fi; \
+    npm run build
 
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -1430,6 +1734,12 @@ server {
 
     location / {
         try_files $uri $uri/ /index.html;
+    }
+
+    location /api/healthz {
+        proxy_pass http://backend:8000/healthz;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
     }
 
     location /api/ {
@@ -1476,13 +1786,20 @@ $nginxStandaloneContent = @'
 # 2. sudo cp nginx.conf /etc/nginx/sites-available/form-system
 # 3. sudo ln -s /etc/nginx/sites-available/form-system /etc/nginx/sites-enabled/
 # 4. sudo nginx -t && sudo systemctl reload nginx
+#
+# IMPORTANT: if you extract the deploy package under a user's home directory
+# (e.g. /home/<user>/...) instead of /opt, the nginx worker (www-data) will
+# likely get "Permission denied" traversing into it (home dirs default to
+# 750/770). Either keep the deploy under /opt as shown below, or copy
+# system/frontend/dist to a world-readable path (e.g. /var/www/form-system)
+# and point "root" there instead.
 
 server {
     listen 80;
     server_name _;
 
     # Update to the absolute path where you extracted the deploy package
-    root /opt/form-system/client-deploy-__RNAME__/system/frontend/dist;
+    root /opt/form-system/client-deploy-__PKGNAME__/system/frontend/dist;
     index index.html;
 
     location / {
@@ -1497,7 +1814,7 @@ server {
     }
 }
 '@
-$nginxStandaloneContent = $nginxStandaloneContent.Replace('__RNAME__', $rName) -replace "`r`n", "`n"
+$nginxStandaloneContent = $nginxStandaloneContent.Replace('__PKGNAME__', $pkgName).Replace('__RNAME__', $rName) -replace "`r`n", "`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $stageDir 'nginx.conf'),
     $nginxStandaloneContent,
@@ -1525,6 +1842,305 @@ if (Test-Path $wizardExe) {
     Write-Host 'SKIP install-wizard.exe (run tools\build-wizard-exe.ps1 to pre-build)'
 }
 
+# Generate startup scripts (Phase 2) ----------------------------------------
+Write-Host 'Generating startup scripts...'
+$startShContent = @'
+#!/usr/bin/env bash
+# Start __PKGNAME__
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd)"
+
+if command -v docker >/dev/null 2>&1 && [ -f "${SCRIPT_DIR}/docker-compose.yml" ]; then
+    docker compose -f "${SCRIPT_DIR}/docker-compose.yml" up -d
+    echo "  Services started.  Frontend: http://localhost"
+    exit 0
+fi
+
+SYS_ROOT="${SCRIPT_DIR}/system"
+[ -d "${SYS_ROOT}" ] || { echo "[ERROR] system/ not found — run deploy.sh first" >&2; exit 1; }
+VENV="${SYS_ROOT}/.venv"
+[ -f "${VENV}/bin/python" ] || { echo "[ERROR] venv not found — run deploy.sh first" >&2; exit 1; }
+mkdir -p "${SYS_ROOT}/logs" "${SYS_ROOT}/runtime"
+
+# Stop a stale backend left over from a previous run, so port 8000 is free
+# before we start a new one. Only kill it if the PID is still alive AND is
+# actually our uvicorn process. Never touch an unrelated PID that got reused.
+PID_FILE="${SYS_ROOT}/runtime/backend.pid"
+if [ -f "${PID_FILE}" ]; then
+    OLD_PID="$(cat "${PID_FILE}" 2>/dev/null || true)"
+    if [ -n "${OLD_PID}" ] && kill -0 "${OLD_PID}" 2>/dev/null \
+       && ps -p "${OLD_PID}" -o args= 2>/dev/null | grep -q "uvicorn app.main:app"; then
+        echo "  Stopping previous backend (PID ${OLD_PID})..."
+        kill "${OLD_PID}" 2>/dev/null || true
+        for _ in 1 2 3 4 5 6 7 8 9 10; do
+            kill -0 "${OLD_PID}" 2>/dev/null || break
+            sleep 0.5
+        done
+        kill -0 "${OLD_PID}" 2>/dev/null && kill -9 "${OLD_PID}" 2>/dev/null || true
+    fi
+    rm -f "${PID_FILE}"
+fi
+
+# This VM is dedicated to running this system, so unlike the pidfile check
+# above (which never touches a PID it can't verify is our own uvicorn),
+# anything still squatting on port 8000 at this point is assumed safe to
+# kill outright.
+if command -v ss >/dev/null 2>&1 && ss -tln 2>/dev/null | grep -q ':8000 '; then
+    echo "  Port 8000 is occupied; this VM is dedicated to this system, freeing it..."
+    OCCUPANT_PIDS="$(ss -tlnp 2>/dev/null | grep ':8000 ' | sed -n 's/.*pid=\([0-9]*\).*/\1/p' | sort -u)"
+    for _p in ${OCCUPANT_PIDS}; do
+        echo "  Killing PID ${_p} holding port 8000..."
+        kill "${_p}" 2>/dev/null || true
+    done
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        ss -tln 2>/dev/null | grep -q ':8000 ' || break
+        sleep 0.5
+    done
+    if ss -tln 2>/dev/null | grep -q ':8000 '; then
+        for _p in ${OCCUPANT_PIDS}; do
+            kill -9 "${_p}" 2>/dev/null || true
+        done
+        sleep 0.5
+    fi
+    if ss -tln 2>/dev/null | grep -q ':8000 '; then
+        echo "[ERROR] Port 8000 is still in use after attempting to free it." >&2
+        echo "        Check: sudo ss -tlnp | grep :8000" >&2
+        exit 1
+    fi
+fi
+
+(
+    cd "${SYS_ROOT}/backend"
+    exec nohup "${VENV}/bin/python" -m uvicorn app.main:app \
+        --host 127.0.0.1 --port 8000 \
+        </dev/null >"${SYS_ROOT}/logs/backend.log" 2>&1
+) &
+echo "$!" >"${PID_FILE}"
+echo "  Backend started.  API: http://127.0.0.1:8000"
+
+# Bring up nginx too (frontend + /api/ reverse proxy), if it was configured
+# by the install wizard / deploy.sh. Best-effort: a start script failure
+# here should not be treated as the backend failing to start.
+if command -v nginx >/dev/null 2>&1 && [ -f /etc/nginx/sites-available/form-system ]; then
+    if systemctl is-active --quiet nginx 2>/dev/null; then
+        echo "  Frontend:         http://localhost  (nginx already running)"
+    elif sudo systemctl start nginx 2>/dev/null; then
+        echo "  Frontend:         http://localhost  (nginx started)"
+    else
+        echo "  [WARN] nginx is configured but could not be started automatically."
+        echo "         Run: sudo systemctl start nginx"
+    fi
+else
+    echo "  Frontend:         http://localhost  (nginx not configured yet, see README.md Troubleshooting, or re-run the install wizard)"
+fi
+'@
+$startShContent = $startShContent.Replace('__PKGNAME__', $pkgName) -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'start-form-manager.sh'),
+    $startShContent,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$startPs1Content = @'
+#Requires -Version 5.1
+# Start __PKGNAME__
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+if ((Get-Command docker -ErrorAction SilentlyContinue) -and (Test-Path "$ScriptDir\docker-compose.yml")) {
+    docker compose -f "$ScriptDir\docker-compose.yml" up -d
+    Write-Host "  Services started.  Frontend: http://localhost"
+    exit 0
+}
+
+$SysRoot = "$ScriptDir\system"
+if (-not (Test-Path $SysRoot)) { throw "system/ not found — run deploy.ps1 first" }
+$Python = "$SysRoot\.venv\Scripts\python.exe"
+if (-not (Test-Path $Python)) { throw "venv not found — run deploy.ps1 first" }
+New-Item -ItemType Directory -Force "$SysRoot\logs","$SysRoot\runtime" | Out-Null
+$proc = Start-Process $Python `
+    -ArgumentList @("-m","uvicorn","app.main:app","--host","127.0.0.1","--port","8000") `
+    -WorkingDirectory "$SysRoot\backend" -WindowStyle Hidden `
+    -RedirectStandardOutput "$SysRoot\logs\backend.out.log" `
+    -RedirectStandardError  "$SysRoot\logs\backend.err.log" `
+    -PassThru
+[string]$proc.Id | Set-Content -Encoding UTF8 "$SysRoot\runtime\backend.pid"
+Write-Host "  Backend started (PID=$($proc.Id)).  API: http://127.0.0.1:8000"
+Write-Host "  Frontend: http://localhost  (requires nginx)"
+'@
+$startPs1Content = $startPs1Content.Replace('__PKGNAME__', $pkgName) -replace "`r`n", "`n" -replace "`n", "`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'start-form-manager.ps1'),
+    $startPs1Content,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$startupCmd = [ordered]@{
+    systemName = $pkgName
+    mode       = 'auto'
+    commands   = [ordered]@{
+        windows = '.\start-form-manager.ps1'
+        linux   = './start-form-manager.sh'
+    }
+    urls       = [ordered]@{
+        frontend      = 'http://localhost'
+        backendHealth = 'http://localhost:8000/healthz'
+    }
+}
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'startup-command.json'),
+    (($startupCmd | ConvertTo-Json -Depth 4) -replace "`r`n", "`n"),
+    (New-Object System.Text.UTF8Encoding $false)
+)
+Write-Host '  OK start-form-manager.sh / .ps1 / startup-command.json'
+
+# Generate bootstrap scripts (ensure Python 3 before the wizard) ------------
+Write-Host 'Generating bootstrap scripts...'
+$bootstrapSh = @'
+#!/usr/bin/env bash
+# __PKGNAME__ — bootstrap: ensure Python 3 + pip, then launch the install wizard.
+# Run this FIRST on a fresh VM that may not have Python installed.
+#   bash bootstrap.sh
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "$0")" ; pwd)"
+
+info() { echo "  $*"; }
+die()  { echo "" >&2; echo "[ERROR] $*" >&2; exit 1; }
+
+install_python() {
+    # 1) Offline: install from bundled installers/ (drop .deb/.rpm there before transfer)
+    if compgen -G "${SCRIPT_DIR}/installers/*.deb" >/dev/null 2>&1; then
+        info "Installing Python from bundled .deb..."
+        sudo dpkg -i "${SCRIPT_DIR}/installers/"*.deb || sudo apt-get install -f -y
+        return
+    fi
+    if compgen -G "${SCRIPT_DIR}/installers/*.rpm" >/dev/null 2>&1; then
+        info "Installing Python from bundled .rpm..."
+        sudo rpm -Uvh --replacepkgs "${SCRIPT_DIR}/installers/"*.rpm || sudo yum localinstall -y "${SCRIPT_DIR}/installers/"*.rpm
+        return
+    fi
+    # 2) Online: OS package manager
+    if command -v apt-get >/dev/null 2>&1; then
+        info "Installing Python via apt-get..."
+        sudo apt-get update && sudo apt-get install -y python3 python3-pip python3-venv
+    elif command -v dnf >/dev/null 2>&1; then
+        info "Installing Python via dnf..."
+        sudo dnf install -y python3 python3-pip
+    elif command -v yum >/dev/null 2>&1; then
+        info "Installing Python via yum..."
+        sudo yum install -y python3 python3-pip
+    else
+        die "No bundled installer in installers/ and no package manager found. Install Python 3.11+ manually: https://www.python.org/downloads/"
+    fi
+}
+
+if ! command -v python3 >/dev/null 2>&1; then
+    info "Python 3 not found."
+    install_python
+    command -v python3 >/dev/null 2>&1 || die "Python install did not succeed. Install Python 3.11+ manually."
+fi
+info "Python: $(python3 --version 2>&1)"
+
+if ! python3 -m pip --version >/dev/null 2>&1; then
+    info "pip not found — bootstrapping with ensurepip..."
+    python3 -m ensurepip --upgrade || die "Could not install pip. Install python3-pip manually."
+fi
+info "pip: $(python3 -m pip --version 2>&1)"
+
+echo ""
+info "Launching install wizard..."
+exec python3 "${SCRIPT_DIR}/install-wizard.py"
+'@
+$bootstrapSh = $bootstrapSh.Replace('__PKGNAME__', $pkgName) -replace "`r`n", "`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'bootstrap.sh'),
+    $bootstrapSh,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+$bootstrapPs1 = @'
+#Requires -Version 5.1
+# __PKGNAME__ — bootstrap: ensure Python 3 + pip, then launch the install wizard.
+# Run this FIRST on a fresh VM that may not have Python installed.
+#   .\bootstrap.ps1
+$ErrorActionPreference = "Stop"
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+function Test-Python { [bool](Get-Command python -ErrorAction SilentlyContinue) }
+
+function Install-Python {
+    # 1) Offline: bundled installer in installers\ (drop .exe/.msi there before transfer)
+    $inst = Get-ChildItem -Path "$ScriptDir\installers" -Include *.exe,*.msi -File -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($inst) {
+        Write-Host "  Installing Python from bundled $($inst.Name)..."
+        if ($inst.Extension -eq ".msi") {
+            Start-Process msiexec.exe -ArgumentList "/i `"$($inst.FullName)`" /quiet InstallAllUsers=1 PrependPath=1" -Wait
+        } else {
+            Start-Process $inst.FullName -ArgumentList "/quiet InstallAllUsers=1 PrependPath=1 Include_test=0" -Wait
+        }
+        return
+    }
+    # 2) Online: winget
+    if (Get-Command winget -ErrorAction SilentlyContinue) {
+        Write-Host "  Installing Python via winget..."
+        winget install -e --id Python.Python.3.11 --silent --accept-package-agreements --accept-source-agreements
+        return
+    }
+    throw "No bundled installer in installers\ and winget unavailable. Install Python 3.11+ from https://www.python.org/downloads/"
+}
+
+if (-not (Test-Python)) {
+    Write-Host "  Python not found."
+    Install-Python
+    $env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+    if (-not (Test-Python)) {
+        throw "Python installed but not yet on PATH. Close and reopen PowerShell, then re-run bootstrap.ps1."
+    }
+}
+Write-Host "  Python: $(python --version 2>&1)"
+
+python -m pip --version *> $null
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  pip not found — bootstrapping with ensurepip..."
+    python -m ensurepip --upgrade
+}
+
+Write-Host ""
+Write-Host "  Launching install wizard..."
+python "$ScriptDir\install-wizard.py"
+'@
+$bootstrapPs1 = $bootstrapPs1.Replace('__PKGNAME__', $pkgName) -replace "`r`n", "`n" -replace "`n", "`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'bootstrap.ps1'),
+    $bootstrapPs1,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+
+# installers/ drop-in folder for offline Python (populated by prepare-offline.ps1) ---
+New-Item -ItemType Directory -Force (Join-Path $stageDir 'installers') | Out-Null
+$installersReadme = @'
+Offline Python installers
+=========================
+
+If the target machine has NO internet AND no Python 3, drop the matching
+Python installer here BEFORE transferring this package. bootstrap.sh /
+bootstrap.ps1 will detect and install from this folder automatically.
+
+  Windows       : python-3.11.x-amd64.exe (or .msi)
+                  https://www.python.org/downloads/windows/
+  Ubuntu/Debian : python3, python3-pip, python3-venv .deb files
+                  (on a same-version online box: apt-get download python3 python3-pip python3-venv)
+  RHEL/CentOS   : python3, python3-pip .rpm files
+
+If the machine HAS internet, ignore this folder — bootstrap installs Python
+via the OS package manager (apt/dnf/yum) or winget.
+'@
+[System.IO.File]::WriteAllText(
+    (Join-Path $stageDir 'installers\README.txt'),
+    ($installersReadme -replace "`r`n", "`n"),
+    (New-Object System.Text.UTF8Encoding $false)
+)
+Write-Host '  OK bootstrap.sh / bootstrap.ps1 / installers/'
+
 # Write .gitignore (protect sensitive files in deploy package) ---------------
 $gitignoreContent = @'
 # 由 deploy.sh 更新
@@ -1543,7 +2159,7 @@ Write-Host 'Generating form-system.service...'
 $systemdContent = @'
 [Unit]
 Description=Form System Backend
-After=network.target postgresql.service
+After=network.target postgresql.service swtpm.service
 
 [Service]
 Type=simple
